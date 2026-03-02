@@ -1,0 +1,463 @@
+// TicketSystem v1 — Master Schema (Prisma 6)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  REQUESTER
+  AGENT
+  MANAGER
+  ADMIN
+}
+
+enum TicketStatus {
+  NEW
+  TRIAGED
+  IN_PROGRESS
+  WAITING_ON_REQUESTER
+  WAITING_ON_VENDOR
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SubtaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+enum NotificationEventType {
+  TICKET_CREATED
+  TICKET_ASSIGNED
+  TICKET_REASSIGNED
+  TICKET_STATUS_CHANGED
+  TICKET_RESOLVED
+  TICKET_CLOSED
+  COMMENT_ADDED
+  MENTION_IN_COMMENT
+  SUBTASK_ASSIGNED
+  SUBTASK_COMPLETED
+  SUBTASK_BLOCKED
+  ATTACHMENT_ADDED
+}
+
+enum DeliveryChannel {
+  EMAIL
+  IN_APP
+  TEAMS
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+  DEAD_LETTERED
+}
+
+enum AuditAction {
+  CREATED
+  UPDATED
+  DELETED
+  STATUS_CHANGED
+  ASSIGNED
+  REASSIGNED
+  COMMENTED
+  ATTACHMENT_ADDED
+  SUBTASK_CREATED
+  SUBTASK_UPDATED
+  SUBTASK_COMPLETED
+}
+
+// ============================================================
+// ORGANIZATION STRUCTURE
+// ============================================================
+
+model Market {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studios   Studio[]
+  tickets   Ticket[]
+  users     User[]
+
+  @@map("markets")
+}
+
+model Studio {
+  id        String   @id @default(cuid())
+  name      String
+  marketId  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  market    Market   @relation(fields: [marketId], references: [id])
+  tickets   Ticket[]
+  users     User[]
+
+  @@unique([name, marketId])
+  @@index([marketId])
+  @@map("studios")
+}
+
+model Team {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  members     User[]
+  subtasks    Subtask[]
+
+  @@map("teams")
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  avatarUrl   String?
+  role        Role      @default(REQUESTER)
+  teamId      String?
+  studioId    String?
+  marketId    String?
+  ssoId       String?   @unique
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  team        Team?     @relation(fields: [teamId], references: [id])
+  studio      Studio?   @relation(fields: [studioId], references: [id])
+  market      Market?   @relation(fields: [marketId], references: [id])
+
+  submittedTickets    Ticket[]                 @relation("TicketRequester")
+  ownedTickets        Ticket[]                 @relation("TicketOwner")
+  comments            TicketComment[]
+  mentions            CommentMention[]
+  ownedSubtasks       Subtask[]
+  watchedTickets      TicketWatcher[]
+  attachmentsUploaded TicketAttachment[]
+  notifications       Notification[]
+  notificationPrefs   NotificationPreference[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([teamId])
+  @@map("users")
+}
+
+// ============================================================
+// CATEGORIES (admin-configurable)
+// ============================================================
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  color       String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets     Ticket[]
+
+  @@map("categories")
+}
+
+// ============================================================
+// TICKETS
+// ============================================================
+
+model Ticket {
+  id          String       @id @default(cuid())
+  title       String
+  description String
+  status      TicketStatus @default(NEW)
+  priority    Priority     @default(MEDIUM)
+  categoryId  String
+  studioId    String?
+  marketId    String?
+  requesterId String
+  ownerId     String?
+  resolvedAt  DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  category    Category     @relation(fields: [categoryId], references: [id])
+  studio      Studio?      @relation(fields: [studioId], references: [id])
+  market      Market?      @relation(fields: [marketId], references: [id])
+  requester   User         @relation("TicketRequester", fields: [requesterId], references: [id])
+  owner       User?        @relation("TicketOwner", fields: [ownerId], references: [id])
+
+  comments      TicketComment[]
+  attachments   TicketAttachment[]
+  subtasks      Subtask[]
+  tags          TicketTag[]
+  watchers      TicketWatcher[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([requesterId])
+  @@index([studioId])
+  @@index([marketId])
+  @@index([categoryId])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([status, categoryId])
+  @@index([status, ownerId])
+  @@map("tickets")
+}
+
+// ============================================================
+// COMMENTS + MENTIONS
+// ============================================================
+
+model TicketComment {
+  id         String    @id @default(cuid())
+  ticketId   String
+  authorId   String
+  body       String
+  isInternal Boolean   @default(false)
+  editedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  ticket   Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author   User             @relation(fields: [authorId], references: [id])
+  mentions CommentMention[]
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@map("ticket_comments")
+}
+
+model CommentMention {
+  id        String        @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime      @default(now())
+
+  comment TicketComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id])
+
+  @@unique([commentId, userId])
+  @@index([userId])
+  @@map("comment_mentions")
+}
+
+// ============================================================
+// ATTACHMENTS
+// ============================================================
+
+model TicketAttachment {
+  id           String   @id @default(cuid())
+  ticketId     String
+  uploadedById String
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  s3Key        String
+  s3Bucket     String
+  createdAt    DateTime @default(now())
+
+  ticket     Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation(fields: [uploadedById], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_attachments")
+}
+
+// ============================================================
+// SUBTASKS
+// ============================================================
+
+model Subtask {
+  id          String        @id @default(cuid())
+  ticketId    String
+  teamId      String
+  ownerId     String?
+  title       String
+  description String?
+  status      SubtaskStatus @default(TODO)
+  isRequired  Boolean       @default(true)
+  dueDate     DateTime?
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id])
+  owner  User?  @relation(fields: [ownerId], references: [id])
+
+  @@index([ticketId])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([status])
+  @@map("subtasks")
+}
+
+// ============================================================
+// TAGS
+// ============================================================
+
+model Tag {
+  id      String    @id @default(cuid())
+  name    String    @unique
+  color   String?
+  tickets TicketTag[]
+
+  @@map("tags")
+}
+
+model TicketTag {
+  ticketId  String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+  @@map("ticket_tags")
+}
+
+// ============================================================
+// WATCHERS
+// ============================================================
+
+model TicketWatcher {
+  ticketId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@id([ticketId, userId])
+  @@index([userId])
+  @@map("ticket_watchers")
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id        String                @id @default(cuid())
+  userId    String
+  ticketId  String?
+  eventType NotificationEventType
+  title     String
+  body      String
+  metadata  Json?
+  isRead    Boolean               @default(false)
+  readAt    DateTime?
+  createdAt DateTime              @default(now())
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticket     Ticket?                @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([ticketId])
+  @@map("notifications")
+}
+
+model NotificationDelivery {
+  id             String          @id @default(cuid())
+  notificationId String
+  channel        DeliveryChannel
+  status         DeliveryStatus  @default(PENDING)
+  idempotencyKey String          @unique
+  attemptCount   Int             @default(0)
+  lastAttemptAt  DateTime?
+  succeededAt    DateTime?
+  failedAt       DateTime?
+  errorMessage   String?
+  externalId     String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([status, lastAttemptAt])
+  @@index([notificationId])
+  @@map("notification_deliveries")
+}
+
+model NotificationPreference {
+  id              String                @id @default(cuid())
+  userId          String
+  eventType       NotificationEventType
+  channelEmail    Boolean               @default(true)
+  channelInApp    Boolean               @default(true)
+  channelTeams    Boolean               @default(false)
+  digestFrequency String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventType])
+  @@index([userId])
+  @@map("notification_preferences")
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  action     AuditAction
+  entityType String
+  entityId   String
+  ticketId   String?
+  oldValues  Json?
+  newValues  Json?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  actor  User    @relation(fields: [actorId], references: [id])
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([ticketId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

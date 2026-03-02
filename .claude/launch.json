@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:dev"],
+      "port": 3001,
+      "cwd": "/Users/michaelalfieri/TicketingSystem-CLAUDE/apps/api"
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "/Users/michaelalfieri/TicketingSystem-CLAUDE/apps/web"
+    }
+  ]
+}
