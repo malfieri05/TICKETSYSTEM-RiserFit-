@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Eye, Clock,
-  ChevronDown, Lock, Send, Plus, User
+  Lock, Send, Plus, User, Paperclip, Download, Trash2, Upload,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, usersApi } from '@/lib/api';
-import type { TicketStatus, SubtaskStatus } from '@/types';
+import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi } from '@/lib/api';
+import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge, SubtaskStatusBadge } from '@/components/ui/Badge';
+import { SlaBadge, SlaProgressBar } from '@/components/ui/SlaBadge';
 import { Button } from '@/components/ui/Button';
 import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,7 +37,10 @@ export default function TicketDetailPage() {
   const [commentBody, setCommentBody] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
-  const [activeTab, setActiveTab] = useState<'comments' | 'subtasks' | 'history'>('comments');
+  const [activeTab, setActiveTab] = useState<'comments' | 'subtasks' | 'attachments' | 'history'>('comments');
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ticketRes, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -99,6 +103,68 @@ export default function TicketDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
   });
 
+  // ── Attachments ────────────────────────────────────────────────────────────
+
+  const { data: attachmentsRes } = useQuery({
+    queryKey: ['ticket', id, 'attachments'],
+    queryFn: () => attachmentsApi.list(id),
+    enabled: activeTab === 'attachments',
+  });
+  const attachments: Attachment[] = attachmentsRes?.data ?? [];
+
+  const deleteAttachmentMut = useMutation({
+    mutationFn: (attachmentId: string) => attachmentsApi.delete(attachmentId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id, 'attachments'] }),
+  });
+
+  const handleFileUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      // Step 1: get presigned upload URL
+      const urlRes = await attachmentsApi.requestUploadUrl(id, {
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+      });
+      const { uploadUrl, s3Key } = urlRes.data;
+
+      // Step 2: upload directly to S3
+      await attachmentsApi.uploadToS3(uploadUrl, file);
+
+      // Step 3: confirm with API to save DB record
+      await attachmentsApi.confirmUpload(id, {
+        s3Key,
+        filename: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        sizeBytes: file.size,
+      });
+
+      qc.invalidateQueries({ queryKey: ['ticket', id, 'attachments'] });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
+      setUploadError(msg);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDownload = async (attachment: Attachment) => {
+    try {
+      const res = await attachmentsApi.getDownloadUrl(attachment.id);
+      window.open(res.data.downloadUrl, '_blank');
+    } catch {
+      // no-op: presigned URL fetch failed
+    }
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -152,37 +218,65 @@ export default function TicketDetailPage() {
             {/* Tabs */}
             <div className="border-b border-gray-200">
               <nav className="flex gap-6">
-                {(['comments', 'subtasks', 'history'] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={cn(
-                      'pb-3 text-sm font-medium capitalize border-b-2 transition-colors',
-                      activeTab === tab
-                        ? 'border-indigo-600 text-indigo-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700',
-                    )}
-                  >
-                    {tab === 'comments' && (
-                      <span className="flex items-center gap-1.5">
-                        <MessageSquare className="h-4 w-4" />
-                        Comments ({ticket.comments.length})
-                      </span>
-                    )}
-                    {tab === 'subtasks' && (
-                      <span className="flex items-center gap-1.5">
-                        <CheckSquare className="h-4 w-4" />
-                        Subtasks ({ticket.subtasks.length})
-                      </span>
-                    )}
-                    {tab === 'history' && (
-                      <span className="flex items-center gap-1.5">
-                        <Clock className="h-4 w-4" />
-                        History
-                      </span>
-                    )}
-                  </button>
-                ))}
+                <button
+                  onClick={() => setActiveTab('comments')}
+                  className={cn(
+                    'pb-3 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'comments'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <MessageSquare className="h-4 w-4" />
+                    Comments ({ticket.comments.length})
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('subtasks')}
+                  className={cn(
+                    'pb-3 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'subtasks'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <CheckSquare className="h-4 w-4" />
+                    Subtasks ({ticket.subtasks.length})
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('attachments')}
+                  className={cn(
+                    'pb-3 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'attachments'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4" />
+                    Attachments
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className={cn(
+                    'pb-3 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'history'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-4 w-4" />
+                    History
+                  </span>
+                </button>
               </nav>
             </div>
 
@@ -314,6 +408,89 @@ export default function TicketDetailPage() {
               </div>
             )}
 
+            {/* Attachments tab */}
+            {activeTab === 'attachments' && (
+              <div className="space-y-4">
+                {/* Upload area */}
+                <div
+                  className="bg-white rounded-xl border-2 border-dashed border-gray-200 p-8 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+                  onClick={() => !uploading && fileInputRef.current?.click()}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files[0];
+                    if (file) handleFileUpload(file);
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                  />
+                  {uploading ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="animate-spin h-8 w-8 rounded-full border-4 border-indigo-600 border-t-transparent" />
+                      <p className="text-sm text-indigo-600 font-medium">Uploading…</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-8 w-8 text-gray-300" />
+                      <p className="text-sm font-medium text-gray-600">
+                        Click to upload or drag &amp; drop
+                      </p>
+                      <p className="text-xs text-gray-400">Any file type · Max 25 MB</p>
+                    </div>
+                  )}
+                </div>
+
+                {uploadError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 text-sm text-red-700">
+                    {uploadError}
+                  </div>
+                )}
+
+                {/* File list */}
+                {attachments.length === 0 && !uploading ? (
+                  <p className="text-sm text-gray-400 text-center py-4">No attachments yet.</p>
+                ) : (
+                  <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+                    {attachments.map((att) => (
+                      <div key={att.id} className="flex items-center gap-3 px-4 py-3">
+                        <Paperclip className="h-4 w-4 text-gray-400 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-800 truncate">{att.filename}</p>
+                          <p className="text-xs text-gray-400">
+                            {formatBytes(att.sizeBytes)} · uploaded by {att.uploadedBy.name}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleDownload(att)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-600 rounded hover:bg-indigo-50 transition-colors"
+                          title="Download"
+                        >
+                          <Download className="h-4 w-4" />
+                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => deleteAttachmentMut.mutate(att.id)}
+                            disabled={deleteAttachmentMut.isPending}
+                            className="p-1.5 text-gray-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* History tab */}
             {activeTab === 'history' && (
               <div className="space-y-2">
@@ -373,6 +550,24 @@ export default function TicketDetailPage() {
                     <option key={a.id} value={a.id}>{a.displayName}</option>
                   ))}
                 </Select>
+              </div>
+            )}
+
+            {/* SLA Status */}
+            {ticket.sla && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">SLA</p>
+                  <SlaBadge sla={ticket.sla} showTime={ticket.sla.status !== 'RESOLVED'} />
+                </div>
+                <SlaProgressBar sla={ticket.sla} />
+                <div className="text-xs text-gray-400 space-y-0.5">
+                  <div>Target: {ticket.sla.targetHours}h resolution</div>
+                  <div>Elapsed: {ticket.sla.elapsedHours.toFixed(1)}h</div>
+                  {ticket.sla.status !== 'RESOLVED' && ticket.sla.remainingHours > 0 && (
+                    <div>Remaining: {ticket.sla.remainingHours.toFixed(1)}h</div>
+                  )}
+                </div>
               </div>
             )}
 

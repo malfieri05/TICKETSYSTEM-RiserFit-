@@ -9,6 +9,7 @@ import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketStatus, TicketPriority } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
+import { SlaBadge } from '@/components/ui/SlaBadge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -138,6 +139,7 @@ export default function TicketsPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Title</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Priority</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">SLA</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Requester</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
@@ -159,6 +161,13 @@ export default function TicketsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <PriorityBadge priority={ticket.priority} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {ticket.sla && ticket.sla.status !== 'RESOLVED' ? (
+                        <SlaBadge sla={ticket.sla} showTime />
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-600">{ticket.requester.displayName}</td>
                     <td className="px-4 py-3 text-gray-600">{ticket.owner?.displayName ?? '—'}</td>

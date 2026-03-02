@@ -2,6 +2,7 @@ export const QUEUES = {
   NOTIFICATION_FANOUT: 'notification-fanout',
   NOTIFICATION_DISPATCH: 'notification-dispatch',
   DEAD_LETTER: 'dead-letter',
+  SCHEDULED: 'scheduled-jobs',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];

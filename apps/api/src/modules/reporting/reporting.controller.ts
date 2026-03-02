@@ -1,0 +1,66 @@
+import { Controller, Get, Query, Res, Header } from '@nestjs/common';
+import { Response } from 'express';
+import { ReportingService } from './reporting.service';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
+
+@Controller('reporting')
+@Roles(Role.ADMIN, Role.MANAGER)
+export class ReportingController {
+  constructor(private readonly reportingService: ReportingService) {}
+
+  // GET /api/reporting/summary
+  // Total tickets, open, resolved, avg resolution time
+  @Get('summary')
+  getSummary() {
+    return this.reportingService.getSummary();
+  }
+
+  // GET /api/reporting/volume?days=30
+  // Ticket volume per day over last N days
+  @Get('volume')
+  getVolumeByDay(@Query('days') days?: string) {
+    return this.reportingService.getVolumeByDay(days ? parseInt(days, 10) : 30);
+  }
+
+  // GET /api/reporting/by-status
+  @Get('by-status')
+  getByStatus() {
+    return this.reportingService.getByStatus();
+  }
+
+  // GET /api/reporting/by-priority
+  @Get('by-priority')
+  getByPriority() {
+    return this.reportingService.getByPriority();
+  }
+
+  // GET /api/reporting/by-category
+  @Get('by-category')
+  getByCategory() {
+    return this.reportingService.getByCategory();
+  }
+
+  // GET /api/reporting/by-market
+  @Get('by-market')
+  getByMarket() {
+    return this.reportingService.getByMarket();
+  }
+
+  // GET /api/reporting/resolution-time
+  // Average resolution time in hours, broken down by category
+  @Get('resolution-time')
+  getResolutionTimeByCategory() {
+    return this.reportingService.getResolutionTimeByCategory();
+  }
+
+  // GET /api/reporting/export
+  // Download all tickets as a CSV file
+  @Get('export')
+  @Header('Content-Type', 'text/csv')
+  @Header('Content-Disposition', 'attachment; filename="tickets-export.csv"')
+  async exportCsv(@Res() res: Response) {
+    const csv = await this.reportingService.exportTicketsCsv();
+    res.send(csv);
+  }
+}

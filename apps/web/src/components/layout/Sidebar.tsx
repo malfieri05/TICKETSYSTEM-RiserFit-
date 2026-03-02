@@ -8,7 +8,9 @@ import {
   Bell,
   Settings,
   LogOut,
-  ChevronDown,
+  BarChart2,
+  Bot,
+  BookOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,12 +19,15 @@ import { useRouter } from 'next/navigation';
 const navItems = [
   { href: '/tickets', label: 'Tickets', icon: Ticket },
   { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/assistant', label: 'AI Assistant', icon: Bot },
 ];
 
 const adminItems = [
   { href: '/admin/categories', label: 'Categories', icon: LayoutDashboard },
   { href: '/admin/markets', label: 'Markets & Studios', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: Settings },
+  { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
+  { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
 ];
 
 export function Sidebar() {

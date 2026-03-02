@@ -14,6 +14,7 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { assertValidTransition } from './ticket-state-machine';
 import { Role, TicketStatus, Prisma } from '@prisma/client';
+import { SlaService } from '../sla/sla.service';
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -81,6 +82,7 @@ export class TicketsService {
     private prisma: PrismaService,
     private auditLog: AuditLogService,
     private domainEvents: DomainEventsService,
+    private sla: SlaService,
   ) {}
 
   // ─── CREATE ─────────────────────────────────────────────────────────────────
@@ -214,8 +216,11 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
 
+    // Annotate with SLA status (computed from priority + createdAt, no extra DB query)
+    const annotated = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
+
     return {
-      data: tickets,
+      data: annotated,
       total,
       page,
       limit,
@@ -233,7 +238,7 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
 
-    return ticket;
+    return { ...ticket, sla: this.sla.compute(ticket) };
   }
 
   // ─── UPDATE ──────────────────────────────────────────────────────────────────

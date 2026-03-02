@@ -56,6 +56,7 @@ enum NotificationEventType {
   SUBTASK_COMPLETED
   SUBTASK_BLOCKED
   ATTACHMENT_ADDED
+  TICKET_SLA_BREACHED
 }
 
 enum DeliveryChannel {
@@ -163,10 +164,11 @@ model User {
   mentions            CommentMention[]
   ownedSubtasks       Subtask[]
   watchedTickets      TicketWatcher[]
-  attachmentsUploaded TicketAttachment[]
-  notifications       Notification[]
-  notificationPrefs   NotificationPreference[]
-  auditLogs           AuditLog[]
+  attachmentsUploaded  TicketAttachment[]
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference[]
+  auditLogs            AuditLog[]
+  knowledgeDocs        KnowledgeDocument[]
 
   @@index([email])
   @@index([role])
@@ -434,6 +436,47 @@ model NotificationPreference {
   @@unique([userId, eventType])
   @@index([userId])
   @@map("notification_preferences")
+}
+
+// ============================================================
+// AI KNOWLEDGE BASE (pgvector RAG)
+// ============================================================
+
+model KnowledgeDocument {
+  id          String   @id @default(cuid())
+  title       String
+  sourceType  String   @default("manual") // "manual" | "url" | "file"
+  sourceUrl   String?
+  s3Key       String?  // populated when sourceType = "file"
+  mimeType    String?
+  sizeBytes   Int?
+  isActive    Boolean  @default(true)
+  uploadedById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  uploadedBy User            @relation(fields: [uploadedById], references: [id])
+  chunks     DocumentChunk[]
+
+  @@index([uploadedById])
+  @@index([isActive])
+  @@map("knowledge_documents")
+}
+
+model DocumentChunk {
+  id         String   @id @default(cuid())
+  documentId String
+  chunkIndex Int
+  content    String   // raw text of this chunk
+  // embedding stored as pgvector — queried via $queryRaw
+  embedding  Unsupported("vector(1536)")?
+  tokenCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("document_chunks")
 }
 
 // ============================================================

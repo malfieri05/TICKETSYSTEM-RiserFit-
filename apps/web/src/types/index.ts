@@ -41,20 +41,40 @@ export interface Category {
 export interface Market {
   id: string;
   name: string;
-  code: string;
 }
 
 export interface Studio {
   id: string;
   name: string;
-  code: string;
   marketId: string;
   market?: Market;
+}
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  s3Key: string;
+  createdAt: string;
+  uploadedBy: { id: string; name: string };
 }
 
 export interface Team {
   id: string;
   name: string;
+}
+
+// ─── SLA ───────────────────────────────────────────────────────────────────
+
+export type SlaStatusValue = 'OK' | 'AT_RISK' | 'BREACHED' | 'RESOLVED';
+
+export interface SlaStatus {
+  status: SlaStatusValue;
+  targetHours: number;
+  elapsedHours: number;
+  remainingHours: number;
+  percentUsed: number;
 }
 
 // ─── Tickets ───────────────────────────────────────────────────────────────
@@ -71,7 +91,8 @@ export interface TicketListItem {
   category?: { id: string; name: string };
   studio?: { id: string; name: string };
   market?: { id: string; name: string };
-  _count?: { comments: number; subtasks: number };
+  _count?: { comments: number; subtasks: number; attachments: number };
+  sla?: SlaStatus;
 }
 
 export interface TicketDetail extends TicketListItem {

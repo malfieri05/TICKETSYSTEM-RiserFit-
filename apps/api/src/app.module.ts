@@ -14,6 +14,10 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { SubtasksModule } from './modules/subtasks/subtasks.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WorkersModule } from './workers/workers.module';
+import { AdminModule } from './modules/admin/admin.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
+import { AiModule } from './modules/ai/ai.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -49,6 +53,18 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     CommentsModule,
     SubtasksModule,
     NotificationsModule,
+
+    // ── Admin ─────────────────────────────────────────────────────────────────
+    AdminModule,
+
+    // ── Attachments ───────────────────────────────────────────────────────────
+    AttachmentsModule,
+
+    // ── Reporting ─────────────────────────────────────────────────────────────
+    ReportingModule,
+
+    // ── AI Assistant (RAG + pgvector) ─────────────────────────────────────────
+    AiModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,

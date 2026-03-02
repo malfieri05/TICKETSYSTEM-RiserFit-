@@ -167,89 +167,103 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 | **Phase 0** | Foundations: repo, auth scaffold, DB schema, migrations | ✅ COMPLETE |
 | **Phase 1** | Core Spine: tickets CRUD, comments, mentions, assignment, state machine, subtasks, audit logs, notifications | ✅ COMPLETE |
 | **Phase 2** | Frontend UI: auth, ticket list/detail/create, notifications, admin panel | ✅ COMPLETE (frontend core) |
-| **Phase 3** | Advanced Service Ops: SLA engine, escalations, scheduled reminders, export enhancements | NOT STARTED |
-| **Phase 4** | AI Assistant: RAG chatbot ingesting RiserU docs + pgvector | NOT STARTED |
+| **Phase 3** | Advanced Service Ops: SLA engine, escalations, scheduled reminders, export enhancements | ✅ COMPLETE |
+| **Phase 4** | AI Assistant: RAG chatbot ingesting RiserU docs + pgvector | ✅ COMPLETE |
 
 ---
 
 ## 9. Current State (Where We Left Off)
 
-**Phase 0 is 100% COMPLETE ✅**
+### Phases 0–3: ALL COMPLETE ✅
 
-The API boots cleanly:
-```
-✅ 0 TypeScript errors
-✅ Database connected (Neon PostgreSQL via @prisma/adapter-pg)
-✅ Nest application successfully started
-✅ All auth + user routes registered
-```
+**Phases 0–1 (Foundations + Core Spine) ✅**
+- API boots clean: 0 TS errors, Neon DB connected, 54+ routes, BullMQ workers active
+- Prisma 7 pattern: `@prisma/adapter-pg` / `PrismaPg` — do NOT revert
+- All backend modules live: Auth, Users, Tickets (state machine), Comments (@mentions), Subtasks (resolution gate), Attachments, Notifications (SSE + fan-out + dispatch), Workers (BullMQ), Events, Admin, Reporting, SLA
+- Redis live: Upstash `set-ocelot-61422.upstash.io:6379` (TLS, eviction OFF)
 
-**Important Prisma 7 note:** Prisma 7 requires a Driver Adapter — no more `datasourceUrl` in constructor.
-`PrismaService` uses `@prisma/adapter-pg` with `PrismaPg`. Do NOT revert this pattern.
+**Phase 2 (Frontend) ✅**
+- Full Next.js UI at `apps/web/src/`
+- Routes: `/login`, `/tickets`, `/tickets/new`, `/tickets/[id]`, `/notifications`, `/admin/categories`, `/admin/markets`, `/admin/users`, `/admin/reporting`
+- Auth: JWT in localStorage → injected on every axios request → 401 auto-redirects
+- SSE: `useNotificationStream()` auto-connects, invalidates cache on events
+- Attachments: drag-drop upload → presigned S3 PutObject → confirm-upload; GetObject presigned download
+- Reporting: KPI cards, 30-day volume chart (CSS bars), by-status/priority/category/market breakdowns, avg resolution table, CSV export
+- Teams channel: Adaptive Card v1.2 via incoming webhook, dev-mode fallback
 
-**Phase 1 is 100% COMPLETE ✅**
+**Phase 3 (Advanced Service Ops) ✅**
+- SLA engine: pure computation (`SlaService`) — `OK | AT_RISK | BREACHED | RESOLVED`; targets URGENT=4h, HIGH=24h, MEDIUM=72h, LOW=168h; AT_RISK = <20% remaining
+- Every `findAll` / `findById` ticket response includes `sla: SlaStatus`
+- Stale-ticket cron: hourly BullMQ repeatable job → `StaleTicketProcessor` → sends `TICKET_SLA_BREACHED` to owner + all ADMINs (idempotent: skips if notified in last 23h)
+- SLA UI: `<SlaBadge>` + `<SlaProgressBar>` in ticket list and detail sidebar
+- **⚠️ Required migration:** `cd apps/api && npx prisma migrate deploy` (adds `TICKET_SLA_BREACHED` enum value)
 
-All Phase 1 modules built and booting cleanly:
-- ✅ TicketsModule: CRUD, state machine, assignment, resolution gate, watchers, audit history
-- ✅ CommentsModule: create/list/edit, @mention parsing, internal notes
-- ✅ SubtasksModule: create/list/update, status transitions, resolution gate enforcement
-- ✅ AuditLogModule: every mutation logged with old/new values
-- ✅ NotificationsModule: SSE real-time stream, REST endpoints, user preferences
-- ✅ WorkersModule: BullMQ fan-out + dispatch processors, Postmark email channel
-- ✅ EventsModule: DomainEventsService enqueues to BullMQ after every mutation
-
-**Redis is live ✅**
-- Upstash Redis provisioned: `set-ocelot-61422.upstash.io:6379` (N. Virginia, TLS enabled, eviction OFF)
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` set in `apps/api/.env`
-- BullMQ connects cleanly on boot — no Redis errors in logs
-- Full API boot confirmed: all modules + 54+ routes registered, Neon DB connected, BullMQ workers active
-
-**Phase 2 Frontend is COMPLETE ✅**
-
-Full Next.js UI built at `apps/web/src/`:
-
-**Routes live:**
-- `/login` — email login form, JWT stored in localStorage, redirects to `/tickets`
-- `/tickets` — paginated ticket list, status/priority/search filters, "mine" toggle
-- `/tickets/new` — create ticket form (title, description, priority, assign)
-- `/tickets/[id]` — full ticket detail: comments tab, subtasks tab, history tab, sidebar (status transitions, assignment, watchers, details)
-- `/notifications` — notification list, mark read / mark all read
-- `/admin/categories` — add/enable/disable categories (data-driven, no code deploy needed)
-- `/admin/markets` — add markets, drill into studios per market
-- `/admin/users` — manage user roles, deactivate users
-
-**Architecture:**
-- `AuthProvider` — JWT in localStorage, injected on every axios request, 401 auto-redirects to `/login`
-- `QueryProvider` — React Query for all data fetching + caching
-- `useNotificationStream()` — SSE auto-connects on login, invalidates notification cache on new events
-- `(app)/layout.tsx` — protected route group; redirects unauthenticated users to `/login`
-- Role-aware UI — admin/agent see extra controls (status transitions, assignment, internal notes, subtask management, admin nav)
-
-**Key fixes applied:**
-- `devLogin` now returns `{ access_token, user }` (frontend-compatible shape)
-- Backend maps DB field `name` → `displayName` in all auth responses
-- `RequestUser` interface updated to use `displayName`
-- `AuthProvider` hardened against bad localStorage values (`"undefined"`, `"null"`)
-- Removed invalid `@nestjs/sse` package from api/package.json (SSE is built into `@nestjs/common`)
-
-**Seeded user:**
-- `malfieri05@gmail.com` — role: ADMIN — use this to log in via dev-login
+**Seeded login:**
+- `malfieri05@gmail.com` — role: ADMIN
 
 **To run locally:**
 ```bash
-# Terminal 1 (Cursor) — API
+# Terminal 1 — API
 cd apps/api && npx ts-node --transpile-only src/main.ts
 
-# Terminal 2 (Cursor) — Frontend
+# Terminal 2 — Frontend
 cd apps/web && npx next dev
 ```
 Then open http://localhost:3000
 
-**Next up (remaining Phase 2 items):**
-1. S3 attachments (presigned upload, file display in ticket detail)
-2. Reporting dashboard (ticket volumes, resolution times, by category/market)
-3. MS Teams webhook notifications (Phase 2 backend)
-4. Admin module backend endpoints (categories/markets/studios CRUD) — needed for admin UI to fully function
+**Required env vars (apps/api/.env):**
+```
+# S3 Attachments
+S3_BUCKET=your-bucket
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=...
+S3_SECRET_ACCESS_KEY=...
+S3_ENDPOINT=           # blank for AWS; set for R2/MinIO
+
+# MS Teams (optional — logs in dev if unset)
+TEAMS_WEBHOOK_URL=https://yourcompany.webhook.office.com/...
+
+# SLA thresholds (all optional, defaults shown)
+SLA_URGENT_HOURS=4
+SLA_HIGH_HOURS=24
+SLA_MEDIUM_HOURS=72
+SLA_LOW_HOURS=168
+SLA_CHECK_INTERVAL_MS=3600000
+
+# AI Assistant (Phase 4)
+OPENAI_API_KEY=sk-...
+```
+
+---
+
+### Phase 4: AI Assistant — COMPLETE ✅
+
+**Backend (`apps/api/src/modules/ai/`):**
+- `ingestion.service.ts` — splits docs into overlapping 1200-char chunks, embeds batches via `text-embedding-3-small`, stores in `document_chunks` via raw SQL (pgvector `vector(1536)`)
+- `ai.service.ts` — RAG: embeds user query → cosine similarity search (`<=>`, threshold 0.4, top-5) → GPT-4o-mini with retrieved context + source citations; graceful fallback when no relevant docs found
+- `ai.controller.ts` — `POST /ai/chat` (all users), `POST /ai/ingest/text`, `POST /ai/ingest/file` (.txt/.md up to 10MB), `GET /ai/documents`, `PATCH /ai/documents/:id/toggle`, `DELETE /ai/documents/:id` (ADMIN only)
+
+**DB changes:**
+- `knowledge_documents` + `document_chunks` tables with IVFFlat index on embedding column
+- Migration: `20260302210000_add_ai_knowledge_base/migration.sql`
+- **⚠️ Required:** `cd apps/api && npx prisma migrate deploy` (also enables `pgvector` extension on Neon)
+
+**Frontend:**
+- `/assistant` — full chat UI: message thread, avatar bubbles, source citation pills, auto-scroll, Shift+Enter multiline, AI disclaimer
+- `/admin/knowledge-base` — paste-text and file-upload ingest modes, document table (chunks count, toggle active/inactive, delete)
+- Sidebar: "AI Assistant" in main nav (all users), "Knowledge Base" in Admin section
+
+**Required env var (add to apps/api/.env):**
+```
+OPENAI_API_KEY=sk-...
+```
+
+**Key design decisions:**
+- Chunk: 1200 chars / 150-char overlap — balances context vs token cost
+- Embedding: `text-embedding-3-small` (1536 dims, cheap & accurate)
+- Chat: `gpt-4o-mini` (fast + cheap for internal tool, temp=0.2 for factual answers)
+- Similarity threshold: cosine distance < 0.4 (strict — only truly relevant chunks retrieved)
+- No streaming yet — single round-trip sufficient at this scale
 
 ---
 
@@ -308,4 +322,4 @@ Then open http://localhost:3000
 - Build must comfortably handle 400–500 daily active users with zero unplanned downtime
 
 ---
-*Last updated: Phase 2 frontend complete. Next: admin backend endpoints, S3 attachments, reporting dashboard.*
+*Last updated: All Phases 0–4 complete. Full system built and ready for deployment.*

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../common/database/prisma.service';
 import { EmailChannel } from '../../modules/notifications/channels/email.channel';
+import { TeamsChannel } from '../../modules/notifications/channels/teams.channel';
 import { QUEUES, DispatchJobData } from '../../common/queue/queue.constants';
 
 /**
@@ -20,6 +21,7 @@ export class NotificationDispatchProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
     private emailChannel: EmailChannel,
+    private teamsChannel: TeamsChannel,
   ) {
     super();
   }
@@ -74,8 +76,12 @@ export class NotificationDispatchProcessor extends WorkerHost {
         break;
 
       case 'TEAMS':
-        // Phase 2: MS Teams webhook integration
-        this.logger.warn('Teams channel not yet implemented — skipping');
+        await this.teamsChannel.send({
+          title: notification.title,
+          body: notification.body,
+          ticketId: notification.ticketId,
+          notificationDeliveryId,
+        });
         break;
 
       case 'IN_APP':

@@ -97,6 +97,140 @@ export const notificationsApi = {
   markAllRead: () => api.post('/notifications/read-all'),
 };
 
+// ─── Attachments ───────────────────────────────────────────────────────────
+
+export const attachmentsApi = {
+  // Step 1: get a presigned upload URL
+  requestUploadUrl: (
+    ticketId: string,
+    data: { filename: string; mimeType: string; sizeBytes: number },
+  ) =>
+    api.post<{ uploadUrl: string; s3Key: string; expiresIn: number }>(
+      `/tickets/${ticketId}/attachments/upload-url`,
+      data,
+    ),
+
+  // Step 1b: upload the file directly to S3 using the presigned URL
+  // This does NOT go through our API — it hits S3/R2 directly
+  uploadToS3: async (uploadUrl: string, file: File): Promise<void> => {
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type },
+      body: file,
+    });
+    if (!res.ok) {
+      throw new Error(`S3 upload failed: ${res.status} ${res.statusText}`);
+    }
+  },
+
+  // Step 2: confirm upload is done → API saves DB record
+  confirmUpload: (
+    ticketId: string,
+    data: { s3Key: string; filename: string; mimeType: string; sizeBytes: number },
+  ) =>
+    api.post<import('@/types').Attachment>(
+      `/tickets/${ticketId}/attachments/confirm`,
+      data,
+    ),
+
+  // List all attachments for a ticket
+  list: (ticketId: string) =>
+    api.get<import('@/types').Attachment[]>(`/tickets/${ticketId}/attachments`),
+
+  // Get a short-lived presigned download URL
+  getDownloadUrl: (attachmentId: string) =>
+    api.get<{ downloadUrl: string; filename: string; expiresIn: number }>(
+      `/attachments/${attachmentId}/download-url`,
+    ),
+
+  // Delete from S3 + DB
+  delete: (attachmentId: string) =>
+    api.delete<{ deleted: boolean }>(`/attachments/${attachmentId}`),
+};
+
+// ─── Reporting ─────────────────────────────────────────────────────────────
+
+export const reportingApi = {
+  summary: () =>
+    api.get<{
+      total: number;
+      open: number;
+      resolved: number;
+      avgResolutionHours: number | null;
+    }>('/reporting/summary'),
+
+  volumeByDay: (days = 30) =>
+    api.get<{ date: string; count: number }[]>(`/reporting/volume?days=${days}`),
+
+  byStatus: () =>
+    api.get<{ status: string; count: number }[]>('/reporting/by-status'),
+
+  byPriority: () =>
+    api.get<{ priority: string; count: number }[]>('/reporting/by-priority'),
+
+  byCategory: () =>
+    api.get<{ categoryId: string | null; categoryName: string; count: number }[]>(
+      '/reporting/by-category',
+    ),
+
+  byMarket: () =>
+    api.get<{ marketId: string | null; marketName: string; count: number }[]>(
+      '/reporting/by-market',
+    ),
+
+  resolutionTime: () =>
+    api.get<{ categoryName: string; avgHours: number; ticketCount: number }[]>(
+      '/reporting/resolution-time',
+    ),
+};
+
+// ─── AI Assistant ───────────────────────────────────────────────────────────
+
+export const aiApi = {
+  /** Ask the AI assistant a question */
+  chat: (message: string) =>
+    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string }[]; usedContext: boolean }>(
+      '/ai/chat',
+      { message },
+    ),
+
+  /** List all knowledge base documents (admin) */
+  listDocuments: () =>
+    api.get<{
+      id: string;
+      title: string;
+      sourceType: string;
+      sourceUrl: string | null;
+      mimeType: string | null;
+      sizeBytes: number | null;
+      isActive: boolean;
+      createdAt: string;
+      uploadedBy: { id: string; name: string };
+      _count: { chunks: number };
+    }[]>('/ai/documents'),
+
+  /** Ingest raw text (admin) */
+  ingestText: (title: string, content: string) =>
+    api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/text', { title, content }),
+
+  /** Upload a .txt / .md file for ingestion (admin) */
+  ingestFile: (title: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', title);
+    return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/file', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** Enable / disable a document */
+  toggleDocument: (id: string, isActive: boolean) =>
+    api.patch(`/ai/documents/${id}/toggle`, { isActive }),
+
+  /** Permanently delete a document and its chunks */
+  deleteDocument: (id: string) => api.delete(`/ai/documents/${id}`),
+};
+
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
 export const usersApi = {
