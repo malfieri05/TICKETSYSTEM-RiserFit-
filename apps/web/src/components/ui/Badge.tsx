@@ -7,8 +7,8 @@ const statusColors: Record<TicketStatus, string> = {
   IN_PROGRESS:            'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/30',
   WAITING_ON_REQUESTER:   'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/30',
   WAITING_ON_VENDOR:      'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30',
-  RESOLVED:               'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
-  CLOSED:                 'bg-neutral-800 text-neutral-500 ring-1 ring-neutral-700/50',
+  RESOLVED:               'bg-green-500/20 text-green-300 ring-1 ring-green-500/30',
+  CLOSED:                 'bg-green-500/20 text-green-300 ring-1 ring-green-500/30',
 };
 
 const statusLabels: Record<TicketStatus, string> = {
@@ -43,9 +43,11 @@ export function StatusBadge({ status }: { status: TicketStatus }) {
   );
 }
 
-export function PriorityBadge({ priority }: { priority: TicketPriority }) {
+const priorityMuted = 'bg-neutral-800 text-neutral-500 ring-1 ring-neutral-700/50';
+
+export function PriorityBadge({ priority, muted = false }: { priority: TicketPriority; muted?: boolean }) {
   return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', priorityColors[priority])}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', muted ? priorityMuted : priorityColors[priority])}>
       {priority}
     </span>
   );

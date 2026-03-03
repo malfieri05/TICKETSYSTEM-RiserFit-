@@ -48,21 +48,24 @@ export class ReportingService {
 
   // ── Ticket volume over last N days ────────────────────────────────────────
   async getVolumeByDay(days = 30) {
-    const rows = await this.prisma.$queryRaw<
-      { date: Date; count: bigint }[]
-    >`
-      SELECT DATE_TRUNC('day', created_at) AS date,
-             COUNT(*)::int                 AS count
-      FROM   tickets
-      WHERE  created_at >= NOW() - INTERVAL '${days} days'
-      GROUP  BY DATE_TRUNC('day', created_at)
-      ORDER  BY date ASC
-    `;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
 
-    return rows.map((r) => ({
-      date: r.date.toISOString().slice(0, 10),
-      count: Number(r.count),
-    }));
+    const tickets = await this.prisma.ticket.findMany({
+      where: { createdAt: { gte: since } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const byDay = new Map<string, number>();
+    for (const t of tickets) {
+      const key = t.createdAt.toISOString().slice(0, 10); // YYYY-MM-DD
+      byDay.set(key, (byDay.get(key) ?? 0) + 1);
+    }
+
+    return Array.from(byDay.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, count]) => ({ date, count }));
   }
 
   // ── Breakdown by status ───────────────────────────────────────────────────
@@ -167,6 +170,33 @@ export class ReportingService {
       avgHours: Number(r.avg_hours),
       ticketCount: Number(r.ticket_count),
     }));
+  }
+
+  // ── Completion time by owner (avg hours) ───────────────────────────────────
+  async getCompletionTimeByOwner() {
+    const rows = await this.prisma.$queryRaw<
+      { user_id: string; user_name: string; avg_hours: number | null; closed_count: bigint }[]
+    >`
+      SELECT
+        u.id                                        AS user_id,
+        u.name                                      AS user_name,
+        AVG(EXTRACT(EPOCH FROM (COALESCE(t.closed_at, t.resolved_at) - t.created_at)) / 3600)
+          FILTER (WHERE t.closed_at IS NOT NULL OR t.resolved_at IS NOT NULL) AS avg_hours,
+        COUNT(*) FILTER (WHERE t.status IN ('RESOLVED','CLOSED'))             AS closed_count
+      FROM tickets t
+      JOIN users   u ON u.id = t.owner_id
+      GROUP BY u.id, u.name
+      ORDER BY avg_hours NULLS LAST
+    `;
+
+    return rows
+      .filter((r) => r.avg_hours !== null)
+      .map((r) => ({
+        userId: r.user_id,
+        userName: r.user_name,
+        avgHours: r.avg_hours ? Number(r.avg_hours.toFixed(1)) : null,
+        closedCount: Number(r.closed_count),
+      }));
   }
 
   // ── CSV export of all tickets ─────────────────────────────────────────────

@@ -17,16 +17,16 @@ const USERS = [
   // Admin
   { email: 'malfieri05@gmail.com',      name: 'Michael Alfieri',   role: 'ADMIN'      as const },
   // Agents (work the tickets)
-  { email: 'sarah.johnson@helpdesk.dev', name: 'Sarah Johnson',     role: 'AGENT'      as const },
-  { email: 'marcus.chen@helpdesk.dev',   name: 'Marcus Chen',       role: 'AGENT'      as const },
-  { email: 'priya.patel@helpdesk.dev',   name: 'Priya Patel',       role: 'AGENT'      as const },
-  { email: 'tom.wright@helpdesk.dev',    name: 'Tom Wright',        role: 'AGENT'      as const },
+  { email: 'sarah.johnson@riserfitness.dev', name: 'Sarah Johnson',     role: 'AGENT'      as const },
+  { email: 'marcus.chen@riserfitness.dev',   name: 'Marcus Chen',       role: 'AGENT'      as const },
+  { email: 'priya.patel@riserfitness.dev',   name: 'Priya Patel',       role: 'AGENT'      as const },
+  { email: 'tom.wright@riserfitness.dev',    name: 'Tom Wright',        role: 'AGENT'      as const },
   // Requesters (employees submitting tickets)
-  { email: 'emma.davis@helpdesk.dev',    name: 'Emma Davis',        role: 'REQUESTER'  as const },
-  { email: 'james.miller@helpdesk.dev',  name: 'James Miller',      role: 'REQUESTER'  as const },
-  { email: 'lisa.nguyen@helpdesk.dev',   name: 'Lisa Nguyen',       role: 'REQUESTER'  as const },
-  { email: 'carlos.ruiz@helpdesk.dev',   name: 'Carlos Ruiz',       role: 'REQUESTER'  as const },
-  { email: 'ashley.kim@helpdesk.dev',    name: 'Ashley Kim',        role: 'REQUESTER'  as const },
+  { email: 'emma.davis@riserfitness.dev',    name: 'Emma Davis',        role: 'REQUESTER'  as const },
+  { email: 'james.miller@riserfitness.dev',  name: 'James Miller',      role: 'REQUESTER'  as const },
+  { email: 'lisa.nguyen@riserfitness.dev',   name: 'Lisa Nguyen',       role: 'REQUESTER'  as const },
+  { email: 'carlos.ruiz@riserfitness.dev',   name: 'Carlos Ruiz',       role: 'REQUESTER'  as const },
+  { email: 'ashley.kim@riserfitness.dev',    name: 'Ashley Kim',        role: 'REQUESTER'  as const },
 ];
 
 const CATEGORIES = [

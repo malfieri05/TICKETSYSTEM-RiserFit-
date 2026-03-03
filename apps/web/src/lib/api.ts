@@ -194,6 +194,11 @@ export const reportingApi = {
     api.get<{ categoryName: string; avgHours: number; ticketCount: number }[]>(
       '/reporting/resolution-time',
     ),
+
+  completionByOwner: () =>
+    api.get<{ userId: string; userName: string; avgHours: number | null; closedCount: number }[]>(
+      '/reporting/completion-time/owners',
+    ),
 };
 
 // ─── AI Assistant ───────────────────────────────────────────────────────────

@@ -1,12 +1,20 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
-import {
-  Bot, X, Send, User, BookOpen, Loader2, AlertCircle, Minimize2,
-  Zap, HelpCircle, CheckCircle2, XCircle, Shield, Globe,
-} from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle, Globe } from 'lucide-react';
 import { agentApi, type AgentResponse, type AgentActionPlan } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+function stripConfirmCancelPhrase(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  return text
+    .replace(/\n*\nClick \*\*Confirm\*\* to proceed or \*\*Cancel\*\* to stop\.?/gi, '')
+    .replace(/\n*Click \*\*Confirm\*\* to proceed or \*\*Cancel\*\* to stop\.?/gi, '')
+    .replace(/\n*Click Confirm to proceed or Cancel to stop\.?/gi, '')
+    .replace(/\n*Confirm to proceed or Cancel to stop\.?/gi, '')
+    .trimEnd();
+}
 
 interface Message {
   id: string;
@@ -21,16 +29,18 @@ interface Message {
   // for confirmation tracking
   conversationId?: string;
   messageId?: string;
+  confirmed?: boolean; // true after user clicked Confirm and action completed
 }
 
 const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    "Hi! I'm your AI assistant. I can **answer questions** about tickets, metrics, and company knowledge — and I can also **take actions** like creating tickets, updating status, and assigning work.\n\nJust ask me anything.",
+    "Hi! I have access to all tickets, knowledge base, and reporting. Ask me anything or ask me to do something — like create a ticket, update status, or assign work.",
 };
 
 export function AiChatWidget() {
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState('');
@@ -109,7 +119,17 @@ export function AiChatWidget() {
         mode: 'DO',
         toolResults: data.toolResults,
       };
-      setMessages((prev) => prev.map((m) => (m.isLoading ? confirmMsg : m)));
+      const confirmedMessageId = msg.id;
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.isLoading) return confirmMsg;
+          if (m.id === confirmedMessageId) return { ...m, confirmed: true };
+          return m;
+        }),
+      );
+      // Refresh tickets list and dashboard so the new ticket appears without manual refresh
+      qc.invalidateQueries({ queryKey: ['tickets'] });
+      qc.invalidateQueries({ queryKey: ['my-summary'] });
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
@@ -151,12 +171,6 @@ export function AiChatWidget() {
     setMessages([WELCOME]);
   };
 
-  const riskColor = (level: string) => {
-    if (level === 'HIGH') return { bg: 'rgba(239,68,68,0.15)', border: 'rgba(239,68,68,0.35)', text: '#f87171' };
-    if (level === 'MEDIUM') return { bg: 'rgba(234,179,8,0.15)', border: 'rgba(234,179,8,0.35)', text: '#facc15' };
-    return { bg: 'rgba(34,197,94,0.15)', border: 'rgba(34,197,94,0.35)', text: '#4ade80' };
-  };
-
   return (
     <>
       {/* Chat panel */}
@@ -172,8 +186,8 @@ export function AiChatWidget() {
                 <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">AI Agent</p>
-                <p className="text-[10px]" style={{ color: '#666666' }}>Ask questions or take actions</p>
+                <p className="text-sm font-semibold text-white">Assistant</p>
+                <p className="text-[10px]" style={{ color: '#666666' }}>Chat · has access to your system</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -211,21 +225,6 @@ export function AiChatWidget() {
                 </div>
 
                 <div className={cn('flex flex-col gap-1.5 max-w-[80%]', msg.role === 'user' ? 'items-end' : 'items-start')}>
-                  {/* Mode badge */}
-                  {msg.mode && msg.role === 'assistant' && !msg.isLoading && (
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded"
-                        style={msg.mode === 'DO'
-                          ? { color: '#facc15', background: 'rgba(234,179,8,0.12)' }
-                          : { color: '#60a5fa', background: 'rgba(96,165,250,0.12)' }}
-                      >
-                        {msg.mode === 'DO' ? <Zap className="h-2.5 w-2.5" /> : <HelpCircle className="h-2.5 w-2.5" />}
-                        {msg.mode}
-                      </span>
-                    </div>
-                  )}
-
                   {/* Message bubble */}
                   <div
                     className={cn(
@@ -249,46 +248,38 @@ export function AiChatWidget() {
                         {msg.content}
                       </div>
                     ) : (
-                      <div className="whitespace-pre-wrap">{msg.content}</div>
+                      <div className="whitespace-pre-wrap">{stripConfirmCancelPhrase(msg.content)}</div>
                     )}
                   </div>
 
-                  {/* Action Plan card */}
+                  {/* Simple confirm/cancel when assistant wants to run an action */}
                   {msg.actionPlan?.requires_confirmation && (
-                    <div
-                      className="w-full rounded-xl p-3 space-y-2.5"
-                      style={{ background: '#1e1e1e', border: `1px solid ${riskColor(msg.actionPlan.risk_level).border}` }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Shield className="h-3.5 w-3.5 shrink-0" style={{ color: riskColor(msg.actionPlan.risk_level).text }} />
-                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: riskColor(msg.actionPlan.risk_level).text }}>
-                          {msg.actionPlan.risk_level} Risk — Confirmation Required
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {msg.confirmed ? (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-default opacity-60"
+                          style={{ color: '#9ca3af', background: '#252525' }}
+                        >
+                          <CheckCircle2 className="h-3 w-3" /> Confirmed
                         </span>
-                      </div>
-                      <div className="space-y-1">
-                        {msg.actionPlan.actions.map((a, i) => (
-                          <div key={i} className="flex items-start gap-2 text-xs" style={{ color: '#cccccc' }}>
-                            <Zap className="h-3 w-3 mt-0.5 shrink-0" style={{ color: '#facc15' }} />
-                            <span><strong style={{ color: '#e0e0e0' }}>{a.tool.replace(/_/g, ' ')}</strong>: {JSON.stringify(a.args).slice(0, 100)}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => handleConfirm(msg)}
-                          disabled={isLoading}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Confirm
-                        </button>
-                        <button
-                          onClick={() => handleCancel(msg.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                          style={{ color: '#aaaaaa', background: '#2a2a2a' }}
-                        >
-                          <XCircle className="h-3.5 w-3.5" /> Cancel
-                        </button>
-                      </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleConfirm(msg)}
+                            disabled={isLoading}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                          >
+                            <CheckCircle2 className="h-3 w-3" /> Confirm
+                          </button>
+                          <button
+                            onClick={() => handleCancel(msg.id)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+                            style={{ color: '#888888', background: '#252525' }}
+                          >
+                            <XCircle className="h-3 w-3" /> Cancel
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -356,7 +347,7 @@ export function AiChatWidget() {
                 value={input}
                 onChange={handleTextareaChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask a question or request an action…"
+                placeholder="Ask anything or request an action…"
                 rows={1}
                 className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 overflow-hidden"
                 style={{ minHeight: '42px', background: '#111111', border: '1px solid #2a2a2a' }}

@@ -311,7 +311,7 @@ model TicketAttachment {
 model Subtask {
   id          String        @id @default(cuid())
   ticketId    String
-  teamId      String
+  teamId      String?
   ownerId     String?
   title       String
   description String?
@@ -322,9 +322,9 @@ model Subtask {
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  team   Team   @relation(fields: [teamId], references: [id])
-  owner  User?  @relation(fields: [ownerId], references: [id])
+  ticket Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  team   Team?   @relation(fields: [teamId], references: [id])
+  owner  User?   @relation(fields: [ownerId], references: [id])
 
   @@index([ticketId])
   @@index([ownerId])

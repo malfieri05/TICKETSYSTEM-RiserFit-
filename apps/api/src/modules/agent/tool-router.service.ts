@@ -280,14 +280,14 @@ export class ToolRouterService {
       throw new ForbiddenException('You do not have permission to create subtasks');
     }
 
-    // Need a team — use the actor's team or the first available
-    const teamId = (actor as any).teamId ?? await this.getDefaultTeamId();
+    // Optional: use actor's team or first available (subtasks can exist without a team)
+    const teamId = (actor as any).teamId ?? await this.getDefaultTeamId().catch(() => undefined);
 
     const subtask = await this.prisma.subtask.create({
       data: {
         ticketId: String(args.ticket_id),
         title: String(args.title),
-        teamId,
+        ...(teamId && { teamId }),
         ownerId: args.owner_user_id ? String(args.owner_user_id) : null,
         isRequired: args.is_required !== false,
       },
@@ -324,43 +324,66 @@ export class ToolRouterService {
   // ── get_ticket_metrics ──────────────────────────────────────────────────────
 
   private async getMetrics(args: Record<string, unknown>, _actor: RequestUser) {
-    const groupBy = String(args.group_by);
-    const statusFilter = Array.isArray(args.status) ? (args.status as TicketStatus[]) : undefined;
+    try {
+      const groupBy = String(args?.group_by ?? 'status').toLowerCase().trim();
+      const statusFilter = Array.isArray(args?.status) ? (args.status as TicketStatus[]).filter(Boolean) : undefined;
+      const priorityFilter = Array.isArray(args?.priority) ? (args.priority as Priority[]).filter(Boolean) : undefined;
 
-    const where: Prisma.TicketWhereInput = {};
-    if (statusFilter?.length) where.status = { in: statusFilter };
+      const where: Prisma.TicketWhereInput = {};
+      if (statusFilter?.length) where.status = { in: statusFilter };
+      if (priorityFilter?.length) where.priority = { in: priorityFilter };
 
-    let groupField: 'status' | 'priority' | 'categoryId' | 'marketId';
-    switch (groupBy) {
-      case 'status':   groupField = 'status'; break;
-      case 'priority': groupField = 'priority'; break;
-      case 'category': groupField = 'categoryId'; break;
-      case 'market':   groupField = 'marketId'; break;
-      default:         groupField = 'status';
+      const groupField: 'status' | 'priority' | 'categoryId' | 'marketId' =
+        groupBy === 'priority' ? 'priority'
+          : groupBy === 'category' ? 'categoryId'
+          : groupBy === 'market' ? 'marketId'
+          : 'status';
+
+      const groups = await this.prisma.ticket.groupBy({
+        by: [groupField],
+        where,
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+      });
+
+      if (groupBy === 'category') {
+        const catIds = groups.map((g) => (g as { categoryId?: string }).categoryId).filter((id): id is string => Boolean(id));
+        const cats = catIds.length
+          ? await this.prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } })
+          : [];
+        const catMap = Object.fromEntries(cats.map((c) => [c.id, c.name]));
+        return {
+          counts: groups.map((g) => ({
+            group: catMap[(g as { categoryId?: string }).categoryId ?? ''] ?? 'Unknown',
+            count: g._count.id,
+          })),
+        };
+      }
+      if (groupBy === 'market') {
+        const mktIds = groups.map((g) => (g as { marketId?: string }).marketId).filter((id): id is string => Boolean(id));
+        const mkts = mktIds.length
+          ? await this.prisma.market.findMany({ where: { id: { in: mktIds } }, select: { id: true, name: true } })
+          : [];
+        const mktMap = Object.fromEntries(mkts.map((m) => [m.id, m.name]));
+        return {
+          counts: groups.map((g) => ({
+            group: mktMap[(g as { marketId?: string }).marketId ?? ''] ?? 'Unknown',
+            count: g._count.id,
+          })),
+        };
+      }
+
+      return {
+        counts: groups.map((g) => ({
+          group: String((g as Record<string, unknown>)[groupField] ?? ''),
+          count: g._count.id,
+        })),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Metrics query failed';
+      this.logger.warn(`get_ticket_metrics failed: ${msg}`);
+      return { counts: [], error: msg };
     }
-
-    const groups = await this.prisma.ticket.groupBy({
-      by: [groupField],
-      where,
-      _count: { id: true },
-      orderBy: { _count: { id: 'desc' } },
-    });
-
-    // Enrich category/market names
-    if (groupBy === 'category') {
-      const catIds = groups.map((g) => (g as any).categoryId).filter(Boolean);
-      const cats = await this.prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } });
-      const catMap = Object.fromEntries(cats.map((c) => [c.id, c.name]));
-      return { counts: groups.map((g) => ({ group: catMap[(g as any).categoryId] ?? 'Unknown', count: g._count.id })) };
-    }
-    if (groupBy === 'market') {
-      const mktIds = groups.map((g) => (g as any).marketId).filter(Boolean);
-      const mkts = await this.prisma.market.findMany({ where: { id: { in: mktIds } }, select: { id: true, name: true } });
-      const mktMap = Object.fromEntries(mkts.map((m) => [m.id, m.name]));
-      return { counts: groups.map((g) => ({ group: mktMap[(g as any).marketId] ?? 'Unknown', count: g._count.id })) };
-    }
-
-    return { counts: groups.map((g) => ({ group: (g as any)[groupField], count: g._count.id })) };
   }
 
   // ── knowledge_search ────────────────────────────────────────────────────────

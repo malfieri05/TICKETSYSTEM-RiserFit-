@@ -7,7 +7,7 @@ import { AuthProvider } from '@/components/providers/AuthProvider';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'Ticketing System',
+  title: 'Riser Fitness',
   description: 'Internal support ticketing system',
 };
 

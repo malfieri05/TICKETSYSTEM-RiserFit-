@@ -54,6 +54,13 @@ export class ReportingController {
     return this.reportingService.getResolutionTimeByCategory();
   }
 
+  // GET /api/reporting/completion-time/owners
+  // Average completion time (created -> closed/resolved) grouped by ticket owner
+  @Get('completion-time/owners')
+  getCompletionTimeByOwner() {
+    return this.reportingService.getCompletionTimeByOwner();
+  }
+
   // GET /api/reporting/export
   // Download all tickets as a CSV file
   @Get('export')

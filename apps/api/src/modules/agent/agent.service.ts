@@ -44,7 +44,7 @@ CONFIRMATION FLOW (CRITICAL):
   2) Include those tool calls in your response.
   3) Provide a short natural-language summary of what you plan to do.
 - You MUST NOT ask the user to type "yes", "confirm", or similar in free text.
-- The UI will show **Confirm / Cancel buttons** based on your tool calls. Your job is to produce the Action Plan (tools + args), not to collect a yes/no string.
+- The UI will show Confirm/Cancel buttons automatically. Do NOT add phrases like "Click Confirm to proceed" or "Click Cancel to stop" in your summary — the buttons are self-explanatory.
 
 RULES:
 1. Use tools to get data before answering questions. Don't guess.
@@ -56,11 +56,12 @@ RULES:
 7. If asked about something not in your scope, say so and suggest submitting a ticket.
 
 TOOL USAGE:
-- To look up tickets: use search_tickets or get_ticket
-- To answer "how many" / reporting: use get_ticket_metrics
-- To answer policy/process questions: use knowledge_search
-- To create/modify: use the appropriate mutation tool
-- To find categories or assignees: use list_categories or list_users
+- "How many [urgent/high/medium/low] tickets?" → ALWAYS use get_ticket_metrics with group_by: "priority". Optionally pass priority: ["URGENT"] (or HIGH, etc.) to filter. Then answer with the number(s) from the returned counts.
+- "How many tickets by status/category/market?" → use get_ticket_metrics with the right group_by.
+- To look up specific tickets: use search_tickets or get_ticket.
+- Policy/process questions: use knowledge_search.
+- Create/modify tickets: use the appropriate mutation tool.
+- Find categories or assignees: use list_categories or list_users.
 
 FORMAT:
 - Keep responses under 300 words unless the user explicitly asks for detail.
@@ -206,8 +207,9 @@ export class AgentService {
 
     if (needsConfirmation) {
       // Build an action plan and return it for confirmation
+      const rawSummary = assistantMessage.content ?? 'The following actions will be performed:';
       const plan: ActionPlan = {
-        summary: assistantMessage.content ?? 'The following actions will be performed:',
+        summary: this.stripConfirmCancelPhrase(rawSummary),
         actions: toolCalls.map((tc) => ({
           tool: tc.function.name,
           args: JSON.parse(tc.function.arguments),
@@ -219,7 +221,7 @@ export class AgentService {
         data: {
           conversationId: convo.id,
           role: 'assistant',
-          content: assistantMessage.content,
+          content: plan.summary,
           mode: 'DO',
           toolCalls: JSON.parse(JSON.stringify(toolCalls)),
           actionPlan: JSON.parse(JSON.stringify(plan)),
@@ -422,6 +424,17 @@ export class AgentService {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
+  /** Remove redundant "Click Confirm to proceed or Cancel to stop" (and variants) from action summaries. */
+  private stripConfirmCancelPhrase(text: string): string {
+    if (!text || typeof text !== 'string') return text;
+    return text
+      .replace(/\n*Click \*\*Confirm\*\* to proceed or \*\*Cancel\*\* to stop\.?/gi, '')
+      .replace(/\n*Click Confirm to proceed or Cancel to stop\.?/gi, '')
+      .replace(/\n*Confirm to proceed or Cancel to stop\.?/gi, '')
+      .replace(/\n*\(Click Confirm or Cancel below\.?\)/gi, '')
+      .trimEnd();
+  }
+
   private requiresConfirmation(
     toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
     actor: RequestUser,
@@ -514,8 +527,7 @@ export class AgentService {
         `I can create this ticket now.\n\n` +
         `- **Category**: ${matchedCategory.name}\n` +
         `- **Priority**: ${priority}\n` +
-        (location ? `- **Location**: ${location}\n` : '') +
-        `\nClick **Confirm** to proceed or **Cancel** to stop.`,
+        (location ? `- **Location**: ${location}` : ''),
       risk_level: 'LOW',
       actions: [
         {

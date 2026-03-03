@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ticketsApi } from '@/lib/api';
+import { ticketsApi, adminApi, usersApi } from '@/lib/api';
 import type { TicketFilters, TicketStatus, TicketPriority } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
@@ -43,12 +43,47 @@ export default function TicketsPage() {
 
   const allTickets = data?.data.data ?? [];
 
+  // Categories for filter dropdown
+  const { data: categoriesRes } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => adminApi.listCategories(),
+  });
+  const categories = categoriesRes?.data ?? [];
+
+  // Departments (teams) derived from users list
+  const { data: usersRes } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => usersApi.list(),
+  });
+  const users = usersRes?.data ?? [];
+  const departments = Array.from(
+    new Map(
+      users
+        .filter((u) => u.teamId && u.teamName)
+        .map((u) => [u.teamId as string, u.teamName as string]),
+    ).entries(),
+  ).map(([id, name]) => ({ id, name }));
+
+  const usersById = new Map(users.map((u) => [u.id, u]));
+
   // Live counts for Active / Completed tabs based on the currently loaded set.
   // This automatically respects search + filter controls and updates as results change.
-  const activeCount = allTickets.filter((t) => ACTIVE_STATUSES.includes(t.status as TicketStatus)).length;
-  const completedCount = allTickets.filter((t) => COMPLETED_STATUSES.includes(t.status as TicketStatus)).length;
+  const matchesDepartment = (ticket: typeof allTickets[number]) => {
+    if (!filters.teamId) return true;
+    const requester = usersById.get(ticket.requester.id);
+    const owner = ticket.owner ? usersById.get(ticket.owner.id) : undefined;
+    return (
+      (requester?.teamId && requester.teamId === filters.teamId) ||
+      (owner?.teamId && owner.teamId === filters.teamId)
+    );
+  };
 
-  const tickets = allTickets.filter((t) =>
+  const ticketsByDept = allTickets.filter(matchesDepartment);
+
+  const activeCount = ticketsByDept.filter((t) => ACTIVE_STATUSES.includes(t.status as TicketStatus)).length;
+  const completedCount = ticketsByDept.filter((t) => COMPLETED_STATUSES.includes(t.status as TicketStatus)).length;
+
+  const tickets = ticketsByDept.filter((t) =>
     filters.status
       ? true // if user picked a specific status from dropdown, don't override
       : viewTab === 'active'
@@ -133,7 +168,33 @@ export default function TicketsPage() {
             <option value="LOW">Low</option>
           </Select>
 
-          {(filters.status || filters.priority || filters.search) && (
+          <Select
+            value={filters.categoryId ?? ''}
+            onChange={(e) => setFilter('categoryId', e.target.value)}
+            className="w-48"
+          >
+            <option value="">All Categories</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+
+          <Select
+            value={filters.teamId ?? ''}
+            onChange={(e) => setFilter('teamId', e.target.value)}
+            className="w-48"
+          >
+            <option value="">All Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Select>
+
+          {(filters.status || filters.priority || filters.categoryId || filters.teamId || filters.search) && (
             <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
               Clear filters
             </Button>
@@ -190,7 +251,7 @@ export default function TicketsPage() {
                       {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
-                    <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} /></td>
+                    <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} muted={COMPLETED_STATUSES.includes(ticket.status as TicketStatus)} /></td>
                     <td className="px-4 py-3">
                       {ticket.sla && ticket.sla.status !== 'RESOLVED'
                         ? <SlaBadge sla={ticket.sla} showTime />

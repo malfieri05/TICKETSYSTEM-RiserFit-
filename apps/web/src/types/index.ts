@@ -27,6 +27,7 @@ export interface User {
   avatarUrl?: string;
   isActive: boolean;
   teamId?: string;
+  teamName?: string | null;
   studioId?: string;
   marketId?: string;
 }
@@ -165,6 +166,7 @@ export interface TicketFilters {
   marketId?: string;
   ownerId?: string;
   requesterId?: string;
+   teamId?: string;
   search?: string;
   page?: number;
   limit?: number;

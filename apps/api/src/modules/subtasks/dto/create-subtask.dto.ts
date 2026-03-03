@@ -17,9 +17,9 @@ export class CreateSubtaskDto {
   @IsString()
   description?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  teamId: string;
+  teamId?: string;
 
   @IsOptional()
   @IsString()

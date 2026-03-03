@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download } from 'lucide-react';
 import { reportingApi, api } from '@/lib/api';
@@ -113,14 +114,18 @@ const PRIORITY_COLORS: Record<string, string> = {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function ReportingPage() {
+  const [volumeRange, setVolumeRange] = useState<'1d' | '7d' | '30d' | 'all'>('30d');
+
+  const volumeDays = volumeRange === '1d' ? 1 : volumeRange === '7d' ? 7 : volumeRange === '30d' ? 30 : 365;
+
   const { data: summaryRes, isLoading: summaryLoading } = useQuery({
     queryKey: ['reporting', 'summary'],
     queryFn: () => reportingApi.summary(),
   });
 
   const { data: volumeRes } = useQuery({
-    queryKey: ['reporting', 'volume'],
-    queryFn: () => reportingApi.volumeByDay(30),
+    queryKey: ['reporting', 'volume', volumeDays],
+    queryFn: () => reportingApi.volumeByDay(volumeDays),
   });
 
   const { data: statusRes } = useQuery({
@@ -148,6 +153,11 @@ export default function ReportingPage() {
     queryFn: () => reportingApi.resolutionTime(),
   });
 
+  const { data: completionOwnerRes } = useQuery({
+    queryKey: ['reporting', 'completion-time', 'owners'],
+    queryFn: () => reportingApi.completionByOwner(),
+  });
+
   const summary = summaryRes?.data;
   const volume = volumeRes?.data ?? [];
   const byStatus = statusRes?.data ?? [];
@@ -155,6 +165,7 @@ export default function ReportingPage() {
   const byCategory = categoryRes?.data ?? [];
   const byMarket = marketRes?.data ?? [];
   const resolutionTime = resolutionRes?.data ?? [];
+  const completionByOwner = completionOwnerRes?.data ?? [];
 
   const maxStatus = Math.max(...byStatus.map((r) => r.count), 1);
   const maxPriority = Math.max(...byPriority.map((r) => r.count), 1);
@@ -242,9 +253,41 @@ export default function ReportingPage() {
 
         {/* ── Volume chart ───────────────────────────────────────────────────── */}
         <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart2 className="h-4 w-4 text-gray-400" />
-            <h3 className="text-sm font-semibold text-gray-300">Ticket Volume — Last 30 Days</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <BarChart2 className="h-4 w-4 text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-300">
+                Ticket Volume —{' '}
+                {volumeRange === '1d' && 'Last 24 Hours'}
+                {volumeRange === '7d' && 'Last 7 Days'}
+                {volumeRange === '30d' && 'Last 30 Days'}
+                {volumeRange === 'all' && 'All Time'}
+              </h3>
+            </div>
+            <div className="inline-flex rounded-full border border-neutral-700 bg-neutral-900 text-xs">
+              {[
+                { key: '1d', label: '1d' },
+                { key: '7d', label: '1w' },
+                { key: '30d', label: '1m' },
+                { key: 'all', label: 'All' },
+              ].map((opt) => {
+                const active = volumeRange === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setVolumeRange(opt.key as typeof volumeRange)}
+                    className="px-2.5 py-0.5 rounded-full transition-colors"
+                    style={{
+                      background: active ? '#14b8a6' : 'transparent',
+                      color: active ? '#0b0f0f' : '#9ca3af',
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           {volume.length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">No data yet.</p>
@@ -371,6 +414,41 @@ export default function ReportingPage() {
                   </span>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── Completion time by owner ───────────────────────────────────────── */}
+        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <h3 className="text-sm font-semibold text-gray-300 mb-4">
+            Avg Completion Time by Owner
+          </h3>
+          {completionByOwner.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">
+              No completed tickets with owners yet.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-neutral-800 text-gray-500 text-xs uppercase tracking-wide">
+                    <th className="text-left py-2 pr-4">Owner</th>
+                    <th className="text-right py-2 pr-4">Avg Completion</th>
+                    <th className="text-right py-2 pr-2">Closed Tickets</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {completionByOwner.map((row) => (
+                    <tr key={row.userId} className="border-b border-neutral-900/70">
+                      <td className="py-1.5 pr-4 text-gray-200">{row.userName}</td>
+                      <td className="py-1.5 pr-4 text-right text-gray-100">
+                        {row.avgHours == null ? '—' : formatHours(row.avgHours)}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right text-gray-400">{row.closedCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

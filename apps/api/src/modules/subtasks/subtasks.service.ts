@@ -50,11 +50,13 @@ export class SubtasksService {
       throw new ForbiddenException('Requesters cannot create subtasks');
     }
 
-    // Validate team exists
-    const team = await this.prisma.team.findUnique({
-      where: { id: dto.teamId, isActive: true },
-    });
-    if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
+    // Validate team exists when provided
+    if (dto.teamId) {
+      const team = await this.prisma.team.findUnique({
+        where: { id: dto.teamId, isActive: true },
+      });
+      if (!team) throw new NotFoundException(`Team ${dto.teamId} not found`);
+    }
 
     // Validate owner if specified
     if (dto.ownerId) {
@@ -67,7 +69,7 @@ export class SubtasksService {
     const subtask = await this.prisma.subtask.create({
       data: {
         ticketId,
-        teamId: dto.teamId,
+        ...(dto.teamId && { teamId: dto.teamId }),
         ownerId: dto.ownerId,
         title: dto.title,
         description: dto.description,

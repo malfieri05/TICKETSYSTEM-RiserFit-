@@ -119,6 +119,25 @@ export default function DashboardPage() {
   const openTickets = allTickets.filter((t) => !DONE_STATUSES.has(t.status));
   const doneTickets = allTickets.filter((t) => DONE_STATUSES.has(t.status));
 
+  // Average completion time for my tickets (resolved/closed)
+  const completionDurationsHours = (doneTickets as any[])
+    .filter((t) => t.resolvedAt)
+    .map((t) => {
+      const created = new Date(t.createdAt).getTime();
+      const resolved = new Date(t.resolvedAt).getTime();
+      return Math.max(0, (resolved - created) / 3_600_000);
+    });
+  const avgCompletionHours =
+    completionDurationsHours.length > 0
+      ? completionDurationsHours.reduce((sum, h) => sum + h, 0) / completionDurationsHours.length
+      : null;
+  const avgCompletionLabel =
+    avgCompletionHours == null
+      ? '—'
+      : avgCompletionHours < 1
+        ? `${Math.round(avgCompletionHours * 60)} min`
+        : `${avgCompletionHours.toFixed(1)} h`;
+
   // Apply hide filters
   const visibleOpen = openTickets.filter((t) => !hidden.has(t.id));
   const hiddenOpen  = openTickets.filter((t) =>  hidden.has(t.id));
@@ -286,9 +305,9 @@ export default function DashboardPage() {
               iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}
             />
             <StatCard
-              label="Closed"
-              value={summary?.closed ?? 0}
-              sub="Archived"
+              label="Avg Completion"
+              value={avgCompletionLabel}
+              sub="From created to resolved"
               icon={CheckCheck}
               iconStyle={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
             />

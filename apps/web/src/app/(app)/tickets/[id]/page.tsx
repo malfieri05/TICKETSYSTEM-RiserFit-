@@ -194,7 +194,7 @@ export default function TicketDetailPage() {
             <div className="rounded-xl p-5 space-y-3" style={panel}>
               <div className="flex items-start gap-3 flex-wrap">
                 <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} />
+                <PriorityBadge priority={ticket.priority} muted={ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'} />
                 {ticket.category && (
                   <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: '#2a2a2a', color: '#aaaaaa' }}>
                     {ticket.category.name}
@@ -317,6 +317,44 @@ export default function TicketDetailPage() {
             {/* ── Subtasks ─── */}
             {activeTab === 'subtasks' && (
               <div className="space-y-3">
+                {/* Progress header */}
+                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: '#111111', border: '1px solid #262626' }}>
+                  {(() => {
+                    const total = ticket.subtasks.length;
+                    const done = ticket.subtasks.filter((s) => s.status === 'DONE').length;
+                    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+                    return (
+                      <>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#777777' }}>
+                            Subtask Progress
+                          </span>
+                          <span className="text-sm font-medium" style={{ color: '#e5e5e5' }}>
+                            {done} of {total} complete
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 w-64">
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: '#1f2933' }}>
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${percent}%`,
+                                background:
+                                  percent === 100
+                                    ? 'linear-gradient(90deg,#22c55e,#16a34a)'
+                                    : 'linear-gradient(90deg,#22c55e,#4ade80)',
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-semibold tabular-nums" style={{ color: '#9ca3af' }}>
+                            {percent}%
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+
                 {ticket.subtasks.length === 0 && (
                   <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No subtasks yet.</p>
                 )}

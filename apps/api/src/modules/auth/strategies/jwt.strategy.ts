@@ -18,6 +18,7 @@ export interface RequestUser {
   displayName: string;
   role: string;
   teamId: string | null;
+  teamName?: string | null;
   studioId: string | null;
   marketId: string | null;
   isActive: boolean;
@@ -45,6 +46,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         name: true,
         role: true,
         teamId: true,
+        team: { select: { name: true } },
         studioId: true,
         marketId: true,
         isActive: true,
@@ -61,6 +63,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       displayName: user.name,
       role: user.role,
       teamId: user.teamId,
+      teamName: user.team?.name ?? null,
       studioId: user.studioId,
       marketId: user.marketId,
       isActive: user.isActive,

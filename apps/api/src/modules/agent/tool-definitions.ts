@@ -186,14 +186,19 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'get_ticket_metrics',
       description:
-        'Get aggregate ticket counts grouped by status, priority, category, or market. Useful for dashboards and reporting questions.',
+        'Get ticket counts. Use for "how many X tickets" questions. Group by status, priority, category, or market. Optionally filter by priority (e.g. URGENT) or status first.',
       parameters: {
         type: 'object',
         properties: {
           group_by: {
             type: 'string',
             enum: ['status', 'priority', 'category', 'market'],
-            description: 'Dimension to group by',
+            description: 'Dimension to group by. Use priority for "how many urgent/high/low" questions.',
+          },
+          priority: {
+            type: 'array',
+            items: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+            description: 'Optional: filter to these priorities only (e.g. ["URGENT"] for urgent count)',
           },
           status: {
             type: 'array',

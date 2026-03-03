@@ -81,7 +81,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     queryFn: () => usersApi.list(),
     enabled: user?.role === 'ADMIN' || user?.role === 'AGENT',
   });
-  const agents = (usersData?.data ?? []).filter((u) => u.role === 'AGENT' || u.role === 'ADMIN');
+  const agents = (usersData?.data ?? []);
 
   const { data: attachmentsRes } = useQuery({
     queryKey: ['ticket', ticketId, 'attachments'],
@@ -151,7 +151,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             {ticket && (
               <div className="flex items-center gap-2">
                 <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} />
+                <PriorityBadge priority={ticket.priority} muted={ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'} />
               </div>
             )}
           </div>
@@ -317,6 +317,43 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 {/* ── Subtasks ── */}
                 {activeTab === 'subtasks' && (
                   <>
+                    {/* Progress header */}
+                    <div className="rounded-xl px-3.5 py-3 mb-2 flex items-center justify-between" style={{ background: '#151515', border: '1px solid #252525' }}>
+                      {(() => {
+                        const total = ticket.subtasks.length;
+                        const done = ticket.subtasks.filter((s) => s.status === 'DONE').length;
+                        const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+                        return (
+                          <>
+                            <div className="flex flex-col gap-1">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#777777' }}>
+                                Subtask Progress
+                              </span>
+                              <span className="text-xs font-medium" style={{ color: '#e5e5e5' }}>
+                                {done} of {total} complete
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 w-52">
+                              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#1f2933' }}>
+                                <div
+                                  className="h-full rounded-full transition-all"
+                                  style={{
+                                    width: `${percent}%`,
+                                    background:
+                                      percent === 100
+                                        ? 'linear-gradient(90deg,#22c55e,#16a34a)'
+                                        : 'linear-gradient(90deg,#22c55e,#4ade80)',
+                                  }}
+                                />
+                              </div>
+                              <span className="text-[11px] font-semibold tabular-nums" style={{ color: '#9ca3af' }}>
+                                {percent}%
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
                     {ticket.subtasks.length === 0 && (
                       <p className="text-sm text-center py-10" style={{ color: '#777777' }}>No subtasks yet.</p>
                     )}
@@ -466,10 +503,11 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               {/* Assignment */}
               {canManage && (
                 <SideSection label="Assigned to">
-                  <Select value={ticket.owner?.id ?? ''} onChange={(e) => assignMut.mutate(e.target.value)}>
-                    <option value="">Unassigned</option>
-                    {agents.map((a) => <option key={a.id} value={a.id}>{a.displayName}</option>)}
-                  </Select>
+                  <AssigneeSelector
+                    currentOwner={ticket.owner}
+                    agents={agents}
+                    onAssign={(ownerId) => assignMut.mutate(ownerId ?? '')}
+                  />
                 </SideSection>
               )}
 
@@ -538,6 +576,74 @@ function SideSection({ label, children }: { label: string; children: React.React
     <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: '#1a1a1a', border: '1px solid #242424' }}>
       <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#666666' }}>{label}</p>
       {children}
+    </div>
+  );
+}
+
+interface AssigneeSelectorProps {
+  currentOwner: { id: string; displayName: string } | null | undefined;
+  agents: Array<{ id: string; displayName: string }>;
+  onAssign: (ownerId: string | null) => void;
+}
+
+function AssigneeSelector({ currentOwner, agents, onAssign }: AssigneeSelectorProps) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const displayLabel = currentOwner?.displayName ?? 'Unassigned';
+  const filtered = agents.filter((a) => {
+    const name = (a.displayName ?? '').toLowerCase();
+    return name.includes(query.toLowerCase());
+  });
+
+  return (
+    <div className="space-y-1">
+      <div
+        className="rounded-lg px-2 py-1 text-xs"
+        style={{ background: '#111111', border: '1px solid #2a2a2a', color: '#999999' }}
+      >
+        Current: <span style={{ color: '#e5e5e5' }}>{displayLabel}</span>
+      </div>
+      <div className="relative">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Type a name…"
+          className="w-full rounded-md px-3 py-1.5 text-sm bg-[#111111] text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
+          style={{ border: '1px solid #2a2a2a' }}
+        />
+        {open && (
+          <div
+            className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-md shadow-lg text-sm"
+            style={{ background: '#111111', border: '1px solid #2a2a2a' }}
+          >
+            <button
+              type="button"
+              onClick={() => { onAssign(null); setQuery(''); setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 hover:bg-[#222222] text-gray-300"
+            >
+              Unassigned
+            </button>
+            {filtered.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => { onAssign(a.id); setQuery(''); setOpen(false); }}
+                className="w-full text-left px-3 py-1.5 hover:bg-[#222222] text-gray-300"
+              >
+                {a.displayName}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-3 py-1.5 text-gray-500">
+                No matches
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

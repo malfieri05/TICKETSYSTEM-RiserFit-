@@ -120,7 +120,7 @@ export class AuthService {
 
   // ── Shared ───────────────────────────────────────────────────────────────
 
-  private issueToken(user: {
+  private async issueToken(user: {
     id: string;
     email: string;
     name: string;
@@ -129,12 +129,20 @@ export class AuthService {
     teamId?: string | null;
     studioId?: string | null;
     marketId?: string | null;
-  }): { access_token: string; user: RequestUser } {
+  }): Promise<{ access_token: string; user: RequestUser }> {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role as RequestUser['role'],
     };
+
+    const team =
+      user.teamId != null
+        ? await this.prisma.team.findUnique({
+            where: { id: user.teamId },
+            select: { name: true },
+          })
+        : null;
 
     return {
       access_token: this.jwtService.sign(payload),
@@ -144,9 +152,10 @@ export class AuthService {
         displayName: user.name,
         role: user.role as RequestUser['role'],
         isActive: user.isActive,
-        teamId: user.teamId ?? undefined,
-        studioId: user.studioId ?? undefined,
-        marketId: user.marketId ?? undefined,
+        teamId: user.teamId ?? null,
+        teamName: team?.name ?? null,
+        studioId: user.studioId ?? null,
+        marketId: user.marketId ?? null,
       },
     };
   }
