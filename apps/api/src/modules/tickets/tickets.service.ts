@@ -88,12 +88,14 @@ export class TicketsService {
   // ─── CREATE ─────────────────────────────────────────────────────────────────
 
   async create(dto: CreateTicketDto, actor: RequestUser) {
-    // Validate category exists
-    const category = await this.prisma.category.findUnique({
-      where: { id: dto.categoryId },
-    });
-    if (!category) {
-      throw new NotFoundException(`Category ${dto.categoryId} not found`);
+    // Validate category exists (only if provided)
+    if (dto.categoryId) {
+      const category = await this.prisma.category.findUnique({
+        where: { id: dto.categoryId },
+      });
+      if (!category) {
+        throw new NotFoundException(`Category ${dto.categoryId} not found`);
+      }
     }
 
     // Validate owner exists if specified
@@ -108,13 +110,13 @@ export class TicketsService {
       const created = await tx.ticket.create({
         data: {
           title: dto.title,
-          description: dto.description,
-          categoryId: dto.categoryId,
-          studioId: dto.studioId,
-          marketId: dto.marketId,
+          ...(dto.description ? { description: dto.description } : {}),
+          ...(dto.categoryId ? { categoryId: dto.categoryId } : {}),
+          ...(dto.studioId ? { studioId: dto.studioId } : {}),
+          ...(dto.marketId ? { marketId: dto.marketId } : {}),
+          ...(dto.ownerId ? { ownerId: dto.ownerId } : {}),
           priority: dto.priority ?? 'MEDIUM',
           requesterId: actor.id,
-          ownerId: dto.ownerId,
           status: 'NEW',
         },
         select: TICKET_LIST_SELECT,
@@ -467,6 +469,96 @@ export class TicketsService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
     return ticket;
+  }
+
+  // ─── MY SUMMARY ─────────────────────────────────────────────────────────────
+
+  async getMySummary(actor: RequestUser) {
+    const userId = actor.id;
+
+    // Tickets where the user is requester OR owner OR watcher
+    const myTicketWhere: Prisma.TicketWhereInput = {
+      OR: [
+        { requesterId: userId },
+        { ownerId: userId },
+        { watchers: { some: { userId } } },
+      ],
+    };
+
+    const [total, open, resolved, closed, byCategory, myTickets] = await Promise.all([
+      // Total my tickets
+      this.prisma.ticket.count({ where: myTicketWhere }),
+
+      // Open (not resolved or closed)
+      this.prisma.ticket.count({
+        where: { ...myTicketWhere, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+      }),
+
+      // Resolved
+      this.prisma.ticket.count({
+        where: { ...myTicketWhere, status: 'RESOLVED' },
+      }),
+
+      // Closed
+      this.prisma.ticket.count({
+        where: { ...myTicketWhere, status: 'CLOSED' },
+      }),
+
+      // By category
+      this.prisma.ticket.groupBy({
+        by: ['categoryId'],
+        where: myTicketWhere,
+        _count: { id: true },
+      }),
+
+      // Full list for the checklist panel — lightweight fields only
+      this.prisma.ticket.findMany({
+        where: myTicketWhere,
+        orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          updatedAt: true,
+          createdAt: true,
+          resolvedAt: true,
+          category: { select: { id: true, name: true, color: true } },
+          requester: { select: { id: true, name: true } },
+          owner: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
+
+    // Enrich category names
+    const categoryIds = byCategory
+      .map((r) => r.categoryId)
+      .filter((id): id is string => id !== null);
+
+    const categories = categoryIds.length
+      ? await this.prisma.category.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true, color: true },
+        })
+      : [];
+
+    const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+
+    const byCategoryEnriched = byCategory.map((r) => ({
+      categoryId: r.categoryId,
+      categoryName: r.categoryId ? (categoryMap[r.categoryId]?.name ?? 'Unknown') : 'No Category',
+      categoryColor: r.categoryId ? (categoryMap[r.categoryId]?.color ?? null) : null,
+      count: r._count.id,
+    }));
+
+    return {
+      total,
+      open,
+      resolved,
+      closed,
+      byCategory: byCategoryEnriched,
+      tickets: myTickets,
+    };
   }
 
   private assertCanModify(

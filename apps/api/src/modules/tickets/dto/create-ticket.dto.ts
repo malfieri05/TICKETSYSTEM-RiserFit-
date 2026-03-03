@@ -15,13 +15,13 @@ export class CreateTicketDto {
   @MaxLength(255)
   title: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  description?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  categoryId: string;
+  categoryId?: string;
 
   @IsOptional()
   @IsString()

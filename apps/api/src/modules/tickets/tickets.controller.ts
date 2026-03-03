@@ -33,6 +33,12 @@ export class TicketsController {
     return this.ticketsService.create(dto, user);
   }
 
+  // GET /api/tickets/my-summary
+  @Get('my-summary')
+  getMySummary(@CurrentUser() user: RequestUser) {
+    return this.ticketsService.getMySummary(user);
+  }
+
   // GET /api/tickets?status=&categoryId=&page=&limit=
   @Get()
   findAll(

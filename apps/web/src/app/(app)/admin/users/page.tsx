@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { usersApi } from '@/lib/api';
 import type { UserRole } from '@/types';
 
+const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+
 export default function AdminUsersPage() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => usersApi.list() });
@@ -23,30 +25,35 @@ export default function AdminUsersPage() {
   });
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
       <Header title="Users" />
       <div className="p-6">
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex justify-center py-12">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-indigo-600 border-t-transparent" />
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
+                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Email</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Role</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-900">{u.displayName}</td>
-                    <td className="px-4 py-3 text-gray-500">{u.email}</td>
+              <tbody>
+                {users.map((u, i) => (
+                  <tr
+                    key={u.id}
+                    style={{ borderTop: i > 0 ? '1px solid #222222' : undefined }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <td className="px-4 py-3 font-medium text-gray-200">{u.displayName}</td>
+                    <td className="px-4 py-3" style={{ color: '#666666' }}>{u.email}</td>
                     <td className="px-4 py-3">
                       <Select
                         value={u.role}
@@ -59,7 +66,10 @@ export default function AdminUsersPage() {
                       </Select>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium"
+                        style={u.isActive
+                          ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
+                          : { background: '#222222', color: '#666666' }}>
                         {u.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -68,7 +78,7 @@ export default function AdminUsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          style={{ color: '#f87171' } as React.CSSProperties}
                           onClick={() => deactivateMut.mutate(u.id)}
                           loading={deactivateMut.isPending}
                         >

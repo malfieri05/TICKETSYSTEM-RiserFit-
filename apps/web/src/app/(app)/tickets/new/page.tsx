@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
-import { ticketsApi, usersApi } from '@/lib/api';
+import { ticketsApi, usersApi, adminApi } from '@/lib/api';
 import type { TicketPriority } from '@/types';
+
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
@@ -19,6 +20,7 @@ export default function NewTicketPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TicketPriority>('MEDIUM');
+  const [categoryId, setCategoryId] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [error, setError] = useState('');
 
@@ -29,12 +31,19 @@ export default function NewTicketPage() {
   });
   const agents = (usersData?.data ?? []).filter((u) => u.role === 'AGENT' || u.role === 'ADMIN');
 
+  const { data: categoriesData } = useQuery({
+    queryKey: ['admin-categories'],
+    queryFn: () => adminApi.listCategories(),
+  });
+  const activeCategories = (categoriesData?.data ?? []).filter((c) => c.isActive);
+
   const mutation = useMutation({
     mutationFn: () =>
       ticketsApi.create({
         title,
-        description: description || undefined,
+        description: description.trim() || undefined,
         priority,
+        categoryId: categoryId || undefined,
         ownerId: ownerId || undefined,
       }),
     onSuccess: (res) => {
@@ -60,8 +69,8 @@ export default function NewTicketPage() {
           Back
         </Button>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-          <h2 className="text-base font-semibold text-gray-900">Create a new ticket</h2>
+        <form onSubmit={handleSubmit} className="rounded-xl p-6 space-y-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <h2 className="text-base font-semibold text-gray-100">Create a new ticket</h2>
 
           <Input
             id="title"
@@ -80,6 +89,18 @@ export default function NewTicketPage() {
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
           />
+
+          <Select
+            id="category"
+            label="Category (optional)"
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            <option value="">— No category —</option>
+            {activeCategories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </Select>
 
           <Select
             id="priority"
@@ -108,8 +129,8 @@ export default function NewTicketPage() {
           )}
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
 

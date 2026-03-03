@@ -1,7 +1,15 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../common/database/prisma.service';
 import { JwtPayload, RequestUser } from './strategies/jwt.strategy';
+
+const BCRYPT_ROUNDS = 12;
 
 @Injectable()
 export class AuthService {
@@ -10,24 +18,77 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  // Called after SSO callback validates the identity provider token.
-  // Finds or creates the user in our DB, then issues our own JWT.
-  async loginWithSso(ssoId: string, email: string, name: string): Promise<{ access_token: string; user: RequestUser }> {
+  // ── Password auth ────────────────────────────────────────────────────────
+
+  async register(
+    email: string,
+    name: string,
+    password: string,
+  ): Promise<{ access_token: string; user: RequestUser }> {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException('An account with this email already exists.');
+    }
+
+    if (password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters.');
+    }
+
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        name,
+        passwordHash,
+        role: 'REQUESTER',
+      },
+    });
+
+    return this.issueToken(user);
+  }
+
+  async loginWithPassword(
+    email: string,
+    password: string,
+  ): Promise<{ access_token: string; user: RequestUser }> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been deactivated.');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
+    return this.issueToken(user);
+  }
+
+  // ── SSO ──────────────────────────────────────────────────────────────────
+
+  async loginWithSso(
+    ssoId: string,
+    email: string,
+    name: string,
+  ): Promise<{ access_token: string; user: RequestUser }> {
     let user = await this.prisma.user.findUnique({ where: { ssoId } });
 
     if (!user) {
-      // First login — auto-provision the user
       user = await this.prisma.user.create({
-        data: {
-          ssoId,
-          email,
-          name,
-          // Default role is REQUESTER — Admin must elevate manually
-          role: 'REQUESTER',
-        },
+        data: { ssoId, email, name, role: 'REQUESTER' },
       });
     } else {
-      // Update last login timestamp
       await this.prisma.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
@@ -38,47 +99,41 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been deactivated.');
     }
 
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-    };
-
-    const accessToken = this.jwtService.sign(payload);
-
-    return {
-      access_token: accessToken,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.name,
-        role: user.role,
-        isActive: user.isActive,
-        teamId: user.teamId,
-        studioId: user.studioId,
-        marketId: user.marketId,
-      },
-    };
+    return this.issueToken(user);
   }
 
-  // Dev-only: issue a JWT directly for a user by email (NO SSO).
-  // This endpoint is disabled in production.
-  async devLogin(email: string): Promise<{ access_token: string; user: Record<string, unknown> }> {
+  // ── Dev-only ─────────────────────────────────────────────────────────────
+
+  async devLogin(
+    email: string,
+  ): Promise<{ access_token: string; user: RequestUser }> {
     if (process.env.NODE_ENV === 'production') {
       throw new UnauthorizedException('Dev login not available in production');
     }
 
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (!user) throw new UnauthorizedException('User not found');
+    if (!user.isActive) throw new UnauthorizedException('Your account has been deactivated.');
 
-    if (!user.isActive) {
-      throw new UnauthorizedException('Your account has been deactivated.');
-    }
+    return this.issueToken(user);
+  }
 
+  // ── Shared ───────────────────────────────────────────────────────────────
+
+  private issueToken(user: {
+    id: string;
+    email: string;
+    name: string;
+    role: string;
+    isActive: boolean;
+    teamId?: string | null;
+    studioId?: string | null;
+    marketId?: string | null;
+  }): { access_token: string; user: RequestUser } {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
-      role: user.role,
+      role: user.role as RequestUser['role'],
     };
 
     return {
@@ -87,11 +142,11 @@ export class AuthService {
         id: user.id,
         email: user.email,
         displayName: user.name,
-        role: user.role,
+        role: user.role as RequestUser['role'],
         isActive: user.isActive,
-        teamId: user.teamId,
-        studioId: user.studioId,
-        marketId: user.marketId,
+        teamId: user.teamId ?? undefined,
+        studioId: user.studioId ?? undefined,
+        marketId: user.marketId ?? undefined,
       },
     };
   }

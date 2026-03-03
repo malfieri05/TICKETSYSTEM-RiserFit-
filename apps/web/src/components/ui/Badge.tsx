@@ -2,42 +2,42 @@ import { cn } from '@/lib/utils';
 import type { TicketStatus, TicketPriority, SubtaskStatus } from '@/types';
 
 const statusColors: Record<TicketStatus, string> = {
-  NEW: 'bg-blue-100 text-blue-800',
-  TRIAGED: 'bg-purple-100 text-purple-800',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-800',
-  WAITING_ON_REQUESTER: 'bg-orange-100 text-orange-800',
-  WAITING_ON_VENDOR: 'bg-amber-100 text-amber-800',
-  RESOLVED: 'bg-green-100 text-green-800',
-  CLOSED: 'bg-gray-100 text-gray-600',
+  NEW:                    'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30',
+  TRIAGED:                'bg-purple-500/20 text-purple-300 ring-1 ring-purple-500/30',
+  IN_PROGRESS:            'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/30',
+  WAITING_ON_REQUESTER:   'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/30',
+  WAITING_ON_VENDOR:      'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30',
+  RESOLVED:               'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
+  CLOSED:                 'bg-neutral-800 text-neutral-500 ring-1 ring-neutral-700/50',
 };
 
 const statusLabels: Record<TicketStatus, string> = {
-  NEW: 'New',
-  TRIAGED: 'Triaged',
-  IN_PROGRESS: 'In Progress',
-  WAITING_ON_REQUESTER: 'Waiting: Requester',
-  WAITING_ON_VENDOR: 'Waiting: Vendor',
-  RESOLVED: 'Resolved',
-  CLOSED: 'Closed',
+  NEW:                    'New',
+  TRIAGED:                'Triaged',
+  IN_PROGRESS:            'In Progress',
+  WAITING_ON_REQUESTER:   'Waiting: Requester',
+  WAITING_ON_VENDOR:      'Waiting: Vendor',
+  RESOLVED:               'Resolved',
+  CLOSED:                 'Closed',
 };
 
 const priorityColors: Record<TicketPriority, string> = {
-  LOW: 'bg-gray-100 text-gray-600',
-  MEDIUM: 'bg-blue-100 text-blue-700',
-  HIGH: 'bg-orange-100 text-orange-700',
-  URGENT: 'bg-red-100 text-red-700',
+  LOW:    'bg-neutral-800 text-neutral-400 ring-1 ring-neutral-700/50',
+  MEDIUM: 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/30',
+  HIGH:   'bg-orange-500/20 text-orange-300 ring-1 ring-orange-500/30',
+  URGENT: 'bg-red-500/20 text-red-300 ring-1 ring-red-500/30',
 };
 
 const subtaskStatusColors: Record<SubtaskStatus, string> = {
-  TODO: 'bg-gray-100 text-gray-600',
-  IN_PROGRESS: 'bg-yellow-100 text-yellow-800',
-  BLOCKED: 'bg-red-100 text-red-700',
-  DONE: 'bg-green-100 text-green-800',
+  TODO:        'bg-neutral-800 text-neutral-400 ring-1 ring-neutral-700/50',
+  IN_PROGRESS: 'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/30',
+  BLOCKED:     'bg-red-500/20 text-red-300 ring-1 ring-red-500/30',
+  DONE:        'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
 };
 
 export function StatusBadge({ status }: { status: TicketStatus }) {
   return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', statusColors[status])}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', statusColors[status])}>
       {statusLabels[status]}
     </span>
   );
@@ -45,7 +45,7 @@ export function StatusBadge({ status }: { status: TicketStatus }) {
 
 export function PriorityBadge({ priority }: { priority: TicketPriority }) {
   return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', priorityColors[priority])}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', priorityColors[priority])}>
       {priority}
     </span>
   );
@@ -53,7 +53,7 @@ export function PriorityBadge({ priority }: { priority: TicketPriority }) {
 
 export function SubtaskStatusBadge({ status }: { status: SubtaskStatus }) {
   return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-xs font-medium', subtaskStatusColors[status])}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium', subtaskStatusColors[status])}>
       {status.replace('_', ' ')}
     </span>
   );

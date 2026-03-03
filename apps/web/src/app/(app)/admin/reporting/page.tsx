@@ -21,21 +21,21 @@ function StatCard({
   icon: React.ElementType;
   color?: 'indigo' | 'green' | 'amber' | 'red';
 }) {
-  const bg = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    green: 'bg-green-50 text-green-600',
-    amber: 'bg-amber-50 text-amber-600',
-    red: 'bg-red-50 text-red-600',
+  const iconStyle = {
+    indigo: { background: 'rgba(20,184,166,0.15)', color: '#14b8a6' },
+    green:  { background: 'rgba(34,197,94,0.15)',  color: '#4ade80' },
+    amber:  { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' },
+    red:    { background: 'rgba(239,68,68,0.15)',  color: '#f87171' },
   }[color];
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-start gap-4">
-      <div className={`rounded-lg p-2.5 ${bg}`}>
+    <div className="rounded-xl p-5 flex items-start gap-4" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+      <div className="rounded-lg p-2.5" style={iconStyle}>
         <Icon className="h-5 w-5" />
       </div>
       <div>
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+        <p className="text-2xl font-bold text-gray-100 mt-0.5">{value}</p>
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
       </div>
     </div>
@@ -56,8 +56,8 @@ function HorizontalBar({
   const pct = max > 0 ? Math.max(2, Math.round((count / max) * 100)) : 0;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-36 text-gray-600 truncate shrink-0">{label}</span>
-      <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+      <span className="w-36 text-gray-400 truncate shrink-0">{label}</span>
+      <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: '#2a2a2a' }}>
         <div
           className="h-2 rounded-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -79,7 +79,7 @@ function VolumeChart({ data }: { data: { date: string; count: number }[] }) {
         return (
           <div
             key={d.date}
-            className="flex-1 bg-indigo-500 rounded-t hover:bg-indigo-600 transition-colors cursor-default group relative"
+            className="flex-1 bg-teal-500 rounded-t hover:bg-teal-600 transition-colors cursor-default group relative"
             style={{ height: `${barH}px` }}
             title={`${d.date}: ${d.count} tickets`}
           >
@@ -187,17 +187,17 @@ export default function ReportingPage() {
 
   if (summaryLoading) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full" style={{ background: '#000000' }}>
         <Header title="Reporting" />
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin h-8 w-8 rounded-full border-4 border-indigo-600 border-t-transparent" />
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-600 border-t-transparent" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
       <Header
         title="Reporting"
         action={
@@ -241,10 +241,10 @@ export default function ReportingPage() {
         </div>
 
         {/* ── Volume chart ───────────────────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
           <div className="flex items-center gap-2 mb-4">
             <BarChart2 className="h-4 w-4 text-gray-400" />
-            <h3 className="text-sm font-semibold text-gray-700">Ticket Volume — Last 30 Days</h3>
+            <h3 className="text-sm font-semibold text-gray-300">Ticket Volume — Last 30 Days</h3>
           </div>
           {volume.length === 0 ? (
             <p className="text-sm text-gray-400 py-6 text-center">No data yet.</p>
@@ -262,8 +262,8 @@ export default function ReportingPage() {
         {/* ── Two-column breakdowns ──────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* By Status */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">By Status</h3>
+          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Status</h3>
             <div className="space-y-2.5">
               {byStatus.length === 0 ? (
                 <p className="text-sm text-gray-400">No data.</p>
@@ -282,8 +282,8 @@ export default function ReportingPage() {
           </div>
 
           {/* By Priority */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">By Priority</h3>
+          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Priority</h3>
             <div className="space-y-2.5">
               {byPriority.length === 0 ? (
                 <p className="text-sm text-gray-400">No data.</p>
@@ -302,8 +302,8 @@ export default function ReportingPage() {
           </div>
 
           {/* By Category */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">By Category</h3>
+          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Category</h3>
             <div className="space-y-2.5">
               {byCategory.length === 0 ? (
                 <p className="text-sm text-gray-400">No data.</p>
@@ -321,8 +321,8 @@ export default function ReportingPage() {
           </div>
 
           {/* By Market */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">By Market</h3>
+          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Market</h3>
             <div className="space-y-2.5">
               {byMarket.length === 0 ? (
                 <p className="text-sm text-gray-400">No data.</p>
@@ -342,8 +342,8 @@ export default function ReportingPage() {
         </div>
 
         {/* ── Resolution time by category ────────────────────────────────────── */}
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-700 mb-4">
+        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <h3 className="text-sm font-semibold text-gray-300 mb-4">
             Avg Resolution Time by Category
           </h3>
           {resolutionTime.length === 0 ? (
@@ -354,8 +354,8 @@ export default function ReportingPage() {
             <div className="space-y-2.5">
               {resolutionTime.map((row) => (
                 <div key={row.categoryName} className="flex items-center gap-3 text-sm">
-                  <span className="w-36 text-gray-600 truncate shrink-0">{row.categoryName}</span>
-                  <div className="flex-1 bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <span className="w-36 text-gray-400 truncate shrink-0">{row.categoryName}</span>
+                  <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: '#2a2a2a' }}>
                     <div
                       className="h-2 rounded-full bg-emerald-500 transition-all"
                       style={{

@@ -34,6 +34,10 @@ api.interceptors.response.use(
 // ─── Auth ──────────────────────────────────────────────────────────────────
 
 export const authApi = {
+  register: (data: { email: string; name: string; password: string }) =>
+    api.post<{ access_token: string; user: import('@/types').User }>('/auth/register', data),
+  login: (data: { email: string; password: string }) =>
+    api.post<{ access_token: string; user: import('@/types').User }>('/auth/login', data),
   devLogin: (email: string) =>
     api.post<{ access_token: string; user: import('@/types').User }>('/auth/dev-login', { email }),
   me: () => api.get<import('@/types').User>('/auth/me'),
@@ -42,6 +46,14 @@ export const authApi = {
 // ─── Tickets ───────────────────────────────────────────────────────────────
 
 export const ticketsApi = {
+  mySummary: () => api.get<{
+    total: number;
+    open: number;
+    resolved: number;
+    closed: number;
+    byCategory: { categoryId: string | null; categoryName: string; categoryColor: string | null; count: number }[];
+    tickets: import('@/types').TicketListItem[];
+  }>('/tickets/my-summary'),
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),
@@ -231,7 +243,64 @@ export const aiApi = {
   deleteDocument: (id: string) => api.delete(`/ai/documents/${id}`),
 };
 
+// ─── AI Agent (tool calling) ────────────────────────────────────────────────
+
+export interface AgentActionPlan {
+  summary: string;
+  actions: Array<{ tool: string; args: Record<string, unknown> }>;
+  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
+  requires_confirmation: boolean;
+}
+
+export interface AgentResponse {
+  conversationId: string;
+  messageId: string;
+  mode: 'ASK' | 'DO';
+  content: string;
+  actionPlan?: AgentActionPlan;
+  toolResults?: Array<{ tool: string; result: unknown }>;
+  sources?: Array<{ title: string; text: string }>;
+}
+
+export const agentApi = {
+  chat: (message: string, conversationId?: string, allowWebSearch?: boolean) =>
+    api.post<AgentResponse>('/agent/chat', { message, conversationId, allowWebSearch }),
+
+  confirm: (conversationId: string, messageId: string) =>
+    api.post<AgentResponse>('/agent/confirm', { conversationId, messageId }),
+
+  getConversations: () =>
+    api.get<Array<{ id: string; title: string | null; createdAt: string; updatedAt: string }>>('/agent/conversations'),
+
+  getMessages: (conversationId: string) =>
+    api.get<Array<{
+      id: string; role: string; content: string | null; mode: string | null;
+      actionPlan: AgentActionPlan | null; toolResults: unknown; createdAt: string;
+    }>>(`/agent/conversations/${conversationId}/messages`),
+};
+
 // ─── Admin ─────────────────────────────────────────────────────────────────
+
+export const adminApi = {
+  // Categories
+  listCategories: () =>
+    api.get<{ id: string; name: string; color: string | null; isActive: boolean }[]>('/admin/categories'),
+  createCategory: (data: { name: string; description?: string; color?: string }) =>
+    api.post('/admin/categories', data),
+  updateCategory: (id: string, data: { isActive?: boolean; name?: string; color?: string }) =>
+    api.patch(`/admin/categories/${id}`, data),
+
+  // Markets
+  listMarkets: () =>
+    api.get<{ id: string; name: string; isActive: boolean; studios: { id: string; name: string }[] }[]>('/admin/markets'),
+  createMarket: (data: { name: string }) => api.post('/admin/markets', data),
+  updateMarket: (id: string, data: { isActive?: boolean }) => api.patch(`/admin/markets/${id}`, data),
+
+  // Studios
+  listStudios: () => api.get('/admin/studios'),
+  createStudio: (data: { name: string; marketId: string }) => api.post('/admin/studios', data),
+  updateStudio: (id: string, data: { isActive?: boolean }) => api.patch(`/admin/studios/${id}`, data),
+};
 
 export const usersApi = {
   list: () => api.get<import('@/types').User[]>('/users'),

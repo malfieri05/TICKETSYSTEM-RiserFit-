@@ -1,10 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { Plus, Search, Filter } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { Search } from 'lucide-react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketStatus, TicketPriority } from '@/types';
 import { Header } from '@/components/layout/Header';
@@ -12,22 +11,50 @@ import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { SlaBadge } from '@/components/ui/SlaBadge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
-import { useAuth } from '@/hooks/useAuth';
+import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 
 const PAGE_SIZE = 20;
 
+type ViewTab = 'active' | 'completed';
+
+const ACTIVE_STATUSES: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+const COMPLETED_STATUSES: TicketStatus[] = ['RESOLVED', 'CLOSED'];
+
 export default function TicketsPage() {
-  const router = useRouter();
-  const { user } = useAuth();
+  const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Debounce search input — fires query 300ms after user stops typing
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setFilters((f) => ({ ...f, page: 1 }));
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', filters],
-    queryFn: () => ticketsApi.list({ ...filters, search: search || undefined }),
+    queryKey: ['tickets', filters, viewTab, debouncedSearch],
+    queryFn: () => ticketsApi.list({ ...filters, search: debouncedSearch || undefined }),
   });
 
-  const tickets = data?.data.data ?? [];
+  const allTickets = data?.data.data ?? [];
+
+  // Live counts for Active / Completed tabs based on the currently loaded set.
+  // This automatically respects search + filter controls and updates as results change.
+  const activeCount = allTickets.filter((t) => ACTIVE_STATUSES.includes(t.status as TicketStatus)).length;
+  const completedCount = allTickets.filter((t) => COMPLETED_STATUSES.includes(t.status as TicketStatus)).length;
+
+  const tickets = allTickets.filter((t) =>
+    filters.status
+      ? true // if user picked a specific status from dropdown, don't override
+      : viewTab === 'active'
+        ? ACTIVE_STATUSES.includes(t.status as TicketStatus)
+        : COMPLETED_STATUSES.includes(t.status as TicketStatus),
+  );
   const total = data?.data.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
@@ -35,43 +62,59 @@ export default function TicketsPage() {
     setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFilters((f) => ({ ...f, search: search || undefined, page: 1 }));
-  };
-
   return (
     <div className="flex flex-col h-full">
-      <Header
-        title="Tickets"
-        action={
-          <Button size="sm" onClick={() => router.push('/tickets/new')}>
-            <Plus className="h-4 w-4" />
-            New Ticket
-          </Button>
-        }
-      />
+      <Header title="Tickets" />
 
-      <div className="flex-1 p-6 space-y-4">
+      {/* Sub-category tabs */}
+      <div className="flex items-center gap-1 px-6 py-2.5" style={{ background: '#0a0a0a', borderBottom: '1px solid #1e1e1e' }}>
+        {([
+          { key: 'active' as ViewTab, label: 'Active', count: activeCount },
+          { key: 'completed' as ViewTab, label: 'Completed', count: completedCount },
+        ]).map(({ key, label, count }) => {
+          const active = viewTab === key;
+          return (
+            <button
+              key={key}
+              onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+              style={{
+                background: active ? '#1e1e1e' : 'transparent',
+                color: active ? '#f0f0f0' : '#666666',
+                border: active ? '1px solid #2a2a2a' : '1px solid transparent',
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#aaaaaa'; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#666666'; }}
+            >
+              {label}
+              <span
+                className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
+                style={{
+                  background: active ? '#2a2a2a' : '#1a1a1a',
+                  color: active ? '#e0e0e0' : '#555555',
+                }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex-1 p-6 space-y-4" style={{ background: '#000000' }}>
         {/* Filters bar */}
         <div className="flex flex-wrap gap-3 items-end">
-          <form onSubmit={handleSearch} className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: '#555555' }} />
             <Input
               placeholder="Search tickets..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-56"
+              className="w-64 pl-9"
             />
-            <Button type="submit" variant="secondary" size="md">
-              <Search className="h-4 w-4" />
-            </Button>
-          </form>
+          </div>
 
-          <Select
-            value={filters.status ?? ''}
-            onChange={(e) => setFilter('status', e.target.value)}
-            className="w-44"
-          >
+          <Select value={filters.status ?? ''} onChange={(e) => setFilter('status', e.target.value)} className="w-44">
             <option value="">All Statuses</option>
             <option value="NEW">New</option>
             <option value="TRIAGED">Triaged</option>
@@ -82,11 +125,7 @@ export default function TicketsPage() {
             <option value="CLOSED">Closed</option>
           </Select>
 
-          <Select
-            value={filters.priority ?? ''}
-            onChange={(e) => setFilter('priority', e.target.value)}
-            className="w-36"
-          >
+          <Select value={filters.priority ?? ''} onChange={(e) => setFilter('priority', e.target.value)} className="w-36">
             <option value="">All Priorities</option>
             <option value="URGENT">Urgent</option>
             <option value="HIGH">High</option>
@@ -94,37 +133,21 @@ export default function TicketsPage() {
             <option value="LOW">Low</option>
           </Select>
 
-          {(user?.role === 'ADMIN' || user?.role === 'AGENT') && (
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => setFilters((f) => ({ ...f, ownerId: f.ownerId ? undefined : user?.id, page: 1 }))}
-              className={filters.ownerId ? 'bg-indigo-50 text-indigo-700' : ''}
-            >
-              <Filter className="h-4 w-4" />
-              {filters.ownerId ? 'My tickets' : 'Mine'}
-            </Button>
-          )}
-
-          {(filters.status || filters.priority || filters.search || filters.ownerId) && (
-            <Button
-              variant="ghost"
-              size="md"
-              onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}
-            >
+          {(filters.status || filters.priority || filters.search) && (
+            <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
               Clear filters
             </Button>
           )}
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
           {isLoading ? (
             <div className="flex items-center justify-center h-48">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-indigo-600 border-t-transparent" />
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
             </div>
           ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-400">
+            <div className="flex flex-col items-center justify-center h-48" style={{ color: '#555555' }}>
               <p className="text-sm">No tickets found</p>
               {Object.keys(filters).some((k) => k !== 'page' && k !== 'limit' && filters[k as keyof TicketFilters]) && (
                 <Button variant="ghost" size="sm" className="mt-2" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
@@ -135,44 +158,48 @@ export default function TicketsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Title</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Priority</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">SLA</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Requester</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Owner</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Updated</th>
+                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Title</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Date Created</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Priority</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Due Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Requester</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Owner</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Category</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Updated</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody>
                 {tickets.map((ticket) => (
                   <tr
                     key={ticket.id}
-                    onClick={() => router.push(`/tickets/${ticket.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    onClick={() => setSelectedId(ticket.id)}
+                    className="cursor-pointer transition-colors"
+                    style={{
+                      borderBottom: '1px solid #222222',
+                      background: selectedId === ticket.id ? '#1e2a1e' : 'transparent',
+                    }}
+                    onMouseEnter={(e) => { if (selectedId !== ticket.id) e.currentTarget.style.background = '#222222'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = selectedId === ticket.id ? '#1e2a1e' : 'transparent'; }}
                   >
                     <td className="px-4 py-3">
-                      <span className="font-medium text-gray-900 line-clamp-1">{ticket.title}</span>
+                      <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
                     </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#aaaaaa' }}>
+                      {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                    </td>
+                    <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
+                    <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} /></td>
                     <td className="px-4 py-3">
-                      <StatusBadge status={ticket.status} />
+                      {ticket.sla && ticket.sla.status !== 'RESOLVED'
+                        ? <SlaBadge sla={ticket.sla} showTime />
+                        : <span style={{ color: '#444444' }}>—</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      <PriorityBadge priority={ticket.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      {ticket.sla && ticket.sla.status !== 'RESOLVED' ? (
-                        <SlaBadge sla={ticket.sla} showTime />
-                      ) : (
-                        <span className="text-xs text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{ticket.requester.displayName}</td>
-                    <td className="px-4 py-3 text-gray-600">{ticket.owner?.displayName ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{ticket.category?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.requester.displayName}</td>
+                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.owner?.displayName ?? '—'}</td>
+                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.category?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#555555' }}>
                       {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
                     </td>
                   </tr>
@@ -185,30 +212,19 @@ export default function TicketsPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
+            <p className="text-sm" style={{ color: '#555555' }}>
               Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
             </p>
             <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) <= 1}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) >= totalPages}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
-              >
-                Next
-              </Button>
+              <Button variant="secondary" size="sm" disabled={(filters.page ?? 1) <= 1} onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}>Previous</Button>
+              <Button variant="secondary" size="sm" disabled={(filters.page ?? 1) >= totalPages} onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}>Next</Button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Slide-in drawer */}
+      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );
 }

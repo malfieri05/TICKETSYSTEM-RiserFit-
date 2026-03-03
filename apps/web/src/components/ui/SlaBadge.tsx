@@ -11,22 +11,23 @@ export interface SlaStatus {
   percentUsed: number;
 }
 
-const SLA_CONFIG: Record<SlaStatusValue, { label: string; className: string }> = {
+// Dark-theme translucent badge styles
+const SLA_CONFIG: Record<SlaStatusValue, { label: string; style: React.CSSProperties }> = {
   OK: {
     label: 'On Track',
-    className: 'bg-green-50 text-green-700 border-green-200',
+    style: { background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)' },
   },
   AT_RISK: {
     label: 'At Risk',
-    className: 'bg-amber-50 text-amber-700 border-amber-200',
+    style: { background: 'rgba(251,191,36,0.15)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.3)' },
   },
   BREACHED: {
     label: 'SLA Breached',
-    className: 'bg-red-50 text-red-700 border-red-200',
+    style: { background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' },
   },
   RESOLVED: {
     label: 'Resolved',
-    className: 'bg-gray-50 text-gray-500 border-gray-200',
+    style: { background: '#222222', color: '#666666', border: '1px solid #2a2a2a' },
   },
 };
 
@@ -54,11 +55,8 @@ export function SlaBadge({ sla, showTime = false, className }: SlaBadgeProps) {
 
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border',
-        config.className,
-        className,
-      )}
+      className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', className)}
+      style={config.style}
       title={`SLA: ${sla.elapsedHours.toFixed(1)}h elapsed of ${sla.targetHours}h target`}
     >
       <Icon className="h-3 w-3 shrink-0" />
@@ -69,25 +67,24 @@ export function SlaBadge({ sla, showTime = false, className }: SlaBadgeProps) {
   );
 }
 
-/** Compact progress bar for ticket list rows */
 export function SlaProgressBar({ sla }: { sla: SlaStatus }) {
   if (sla.status === 'RESOLVED') return null;
 
   const pct = Math.min(100, sla.percentUsed);
   const barColor =
-    sla.status === 'BREACHED' ? 'bg-red-500' :
-    sla.status === 'AT_RISK'  ? 'bg-amber-400' :
-    'bg-green-500';
+    sla.status === 'BREACHED' ? '#ef4444' :
+    sla.status === 'AT_RISK'  ? '#f59e0b' :
+    '#22c55e';
 
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
         <div
-          className={cn('h-1 rounded-full transition-all', barColor)}
-          style={{ width: `${pct}%` }}
+          className="h-1 rounded-full transition-all"
+          style={{ width: `${pct}%`, background: barColor }}
         />
       </div>
-      <span className="text-xs text-gray-400 shrink-0">{pct.toFixed(0)}%</span>
+      <span className="text-xs shrink-0" style={{ color: '#555555' }}>{pct.toFixed(0)}%</span>
     </div>
   );
 }

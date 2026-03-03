@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { AiChatWidget } from '@/components/ai/AiChatWidget';
 import { useNotificationStream } from '@/hooks/useNotifications';
 
 function NotificationStreamInit() {
@@ -24,7 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin h-8 w-8 rounded-full border-4 border-indigo-600 border-t-transparent" />
+        <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
       </div>
     );
   }
@@ -35,7 +36,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       <NotificationStreamInit />
       <Sidebar />
-      <main className="ml-60 flex-1 overflow-y-auto">{children}</main>
+      <main className="ml-60 flex-1 overflow-y-auto" style={{ background: '#000000' }}>{children}</main>
+      <AiChatWidget />
     </div>
   );
 }
