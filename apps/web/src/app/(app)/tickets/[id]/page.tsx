@@ -61,9 +61,9 @@ export default function TicketDetailPage() {
   const { data: usersData } = useQuery({
     queryKey: ['users'],
     queryFn: () => usersApi.list(),
-    enabled: user?.role === 'ADMIN' || user?.role === 'AGENT',
+    enabled: user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER',
   });
-  const agents = (usersData?.data ?? []).filter((u) => u.role === 'AGENT' || u.role === 'ADMIN');
+  const agents = (usersData?.data ?? []).filter((u) => u.role === 'DEPARTMENT_USER' || u.role === 'ADMIN');
 
   const transitionMut = useMutation({
     mutationFn: (status: TicketStatus) => ticketsApi.transition(id, status),
@@ -172,7 +172,7 @@ export default function TicketDetailPage() {
     return <div className="p-6" style={{ color: '#666666' }}>Ticket not found.</div>;
   }
 
-  const canManage = user?.role === 'ADMIN' || user?.role === 'AGENT';
+  const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const validTransitions = VALID_TRANSITIONS[ticket.status];
   const isWatching = ticket.watchers.some((w) => w.userId === user?.id);
 

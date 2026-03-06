@@ -13,8 +13,10 @@ import {
   Home,
   Plus,
   LayoutGrid,
+  BookMarked,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import type { Department } from '@/types';
 
 const navItems = [
   { href: '/tickets', label: 'Home', icon: Home },
@@ -35,6 +37,22 @@ const BORDER = '#2a2a2a';
 const ACTIVE = '#222222';
 const HOVER  = '#1a1a1a';
 const ACCENT = '#14b8a6';
+
+/** Map department enum to display label. Never show raw "DEPARTMENT_USER". */
+function departmentToLabel(d?: Department): string {
+  if (d === 'HR') return 'HR';
+  if (d === 'OPERATIONS') return 'Operations';
+  if (d === 'MARKETING') return 'Marketing';
+  return 'Marketing';
+}
+
+/** Single line under user name: Admin | Studio User | department name (never raw enum). */
+function userRoleDisplayLabel(role: string | undefined, departments?: Department[]): string {
+  if (role === 'ADMIN') return 'Admin';
+  if (role === 'STUDIO_USER') return 'Studio User';
+  if (role === 'DEPARTMENT_USER') return departmentToLabel(departments?.[0]);
+  return 'User';
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -102,6 +120,31 @@ export function Sidebar() {
           );
         })}
 
+        {user?.studioId && (
+          <Link
+            href="/handbook"
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            style={{
+              background: pathname === '/handbook' ? ACTIVE : 'transparent',
+              color: pathname === '/handbook' ? '#ffffff' : '#888888',
+              borderLeft: `3px solid ${pathname === '/handbook' ? ACCENT : 'transparent'}`,
+            }}
+            onMouseEnter={(e) => {
+              if (pathname !== '/handbook') {
+                e.currentTarget.style.background = HOVER;
+                e.currentTarget.style.color = '#cccccc';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = pathname === '/handbook' ? ACTIVE : 'transparent';
+              e.currentTarget.style.color = pathname === '/handbook' ? '#ffffff' : '#888888';
+            }}
+          >
+            <BookMarked className="h-4 w-4 shrink-0" />
+            Handbook
+          </Link>
+        )}
+
         {isAdmin && (
           <>
             <div className="pt-5 pb-1.5 px-3">
@@ -142,13 +185,8 @@ export function Sidebar() {
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-white">{user?.displayName}</p>
             <p className="truncate text-[11px]" style={{ color: '#888888' }}>
-              {user?.role}
+              {userRoleDisplayLabel(user?.role, user?.departments)}
             </p>
-            {user?.teamName && (
-              <p className="truncate text-[11px]" style={{ color: '#666666' }}>
-                Department: {user.teamName}
-              </p>
-            )}
           </div>
           <button
             onClick={handleLogout}

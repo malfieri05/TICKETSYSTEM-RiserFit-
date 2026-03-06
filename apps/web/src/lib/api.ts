@@ -46,14 +46,18 @@ export const authApi = {
 // ─── Tickets ───────────────────────────────────────────────────────────────
 
 export const ticketsApi = {
-  mySummary: () => api.get<{
-    total: number;
-    open: number;
-    resolved: number;
-    closed: number;
-    byCategory: { categoryId: string | null; categoryName: string; categoryColor: string | null; count: number }[];
-    tickets: import('@/types').TicketListItem[];
-  }>('/tickets/my-summary'),
+  mySummary: (params?: { page?: number; limit?: number }) =>
+    api.get<{
+      total: number;
+      open: number;
+      resolved: number;
+      closed: number;
+      byCategory: { categoryId: string | null; categoryName: string; categoryColor: string | null; count: number }[];
+      tickets: import('@/types').TicketListItem[];
+      page: number;
+      limit: number;
+      totalPages: number;
+    }>('/tickets/my-summary', { params }),
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),
@@ -211,6 +215,13 @@ export const aiApi = {
       { message },
     ),
 
+  /** Studio users only: RAG over handbook documents */
+  handbookChat: (message: string) =>
+    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string }[]; usedContext: boolean }>(
+      '/ai/handbook-chat',
+      { message },
+    ),
+
   /** List all knowledge base documents (admin) */
   listDocuments: () =>
     api.get<{
@@ -220,6 +231,7 @@ export const aiApi = {
       sourceUrl: string | null;
       mimeType: string | null;
       sizeBytes: number | null;
+      documentType: string | null;
       isActive: boolean;
       createdAt: string;
       uploadedBy: { id: string; name: string };
@@ -236,6 +248,16 @@ export const aiApi = {
     form.append('file', file);
     form.append('title', title);
     return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/file', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** Upload a PDF for handbook ingestion (admin). Max 15MB. */
+  ingestPdf: (title: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('title', title);
+    return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/pdf', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
@@ -312,5 +334,7 @@ export const usersApi = {
   get: (id: string) => api.get<import('@/types').User>(`/users/${id}`),
   updateRole: (id: string, role: import('@/types').UserRole) =>
     api.patch(`/users/${id}/role`, { role }),
+  setDepartments: (id: string, departments: import('@/types').Department[]) =>
+    api.patch(`/users/${id}/departments`, { departments }),
   deactivate: (id: string) => api.patch(`/users/${id}/deactivate`),
 };

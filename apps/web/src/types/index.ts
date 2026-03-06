@@ -13,7 +13,10 @@ export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
 export type SubtaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE';
 
-export type UserRole = 'ADMIN' | 'AGENT' | 'REQUESTER';
+export type UserRole = 'ADMIN' | 'DEPARTMENT_USER' | 'STUDIO_USER';
+
+/** Department enum (backend). Only applies to DEPARTMENT_USER. */
+export type Department = 'HR' | 'OPERATIONS' | 'MARKETING';
 
 export type NotificationChannel = 'EMAIL' | 'TEAMS' | 'IN_APP';
 
@@ -30,6 +33,8 @@ export interface User {
   teamName?: string | null;
   studioId?: string;
   marketId?: string;
+  departments?: Department[];
+  scopeStudioIds?: string[];
 }
 
 export interface Category {

@@ -42,14 +42,20 @@ export default function LoginPage() {
       login(res.data.access_token, res.data.user);
       router.push('/tickets');
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      setError(
-        typeof msg === 'string'
-          ? msg
-          : mode === 'login'
-            ? 'Invalid email or password.'
-            : 'Could not create account. Please try again.',
-      );
+      const ax = err as { response?: { data?: { message?: string }; status?: number }; message?: string; code?: string };
+      const msg = ax?.response?.data?.message;
+      if (typeof msg === 'string') {
+        setError(msg);
+      } else if (ax?.response?.status === 401 || ax?.response?.status === 400) {
+        setError(mode === 'login' ? 'Invalid email or password.' : 'Could not create account. Please try again.');
+      } else {
+        const hint = !ax?.response ? ' Check that the API is running and CORS allows this origin.' : '';
+        setError(
+          mode === 'login'
+            ? `Sign-in failed.${hint}`
+            : `Could not create account.${hint}`,
+        );
+      }
     } finally {
       setLoading(false);
     }

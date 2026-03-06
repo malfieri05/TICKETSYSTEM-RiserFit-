@@ -27,9 +27,9 @@ export default function NewTicketPage() {
   const { data: usersData } = useQuery({
     queryKey: ['users'],
     queryFn: () => usersApi.list(),
-    enabled: user?.role === 'ADMIN' || user?.role === 'AGENT',
+    enabled: user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER',
   });
-  const agents = (usersData?.data ?? []).filter((u) => u.role === 'AGENT' || u.role === 'ADMIN');
+  const agents = (usersData?.data ?? []).filter((u) => u.role === 'DEPARTMENT_USER' || u.role === 'ADMIN');
 
   const { data: categoriesData } = useQuery({
     queryKey: ['admin-categories'],
@@ -114,7 +114,7 @@ export default function NewTicketPage() {
             <option value="URGENT">Urgent</option>
           </Select>
 
-          {(user?.role === 'ADMIN' || user?.role === 'AGENT') && (
+          {(user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER') && (
             <Select
               id="owner"
               label="Assign to (optional)"

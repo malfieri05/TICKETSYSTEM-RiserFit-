@@ -79,7 +79,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const { data: usersData } = useQuery({
     queryKey: ['users'],
     queryFn: () => usersApi.list(),
-    enabled: user?.role === 'ADMIN' || user?.role === 'AGENT',
+    enabled: user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER',
   });
   const agents = (usersData?.data ?? []);
 
@@ -116,7 +116,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const fmt = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 
-  const canManage = user?.role === 'ADMIN' || user?.role === 'AGENT';
+  const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const validTransitions = ticket ? VALID_TRANSITIONS[ticket.status] : [];
   const isWatching = ticket?.watchers.some((w) => w.userId === user?.id) ?? false;
 

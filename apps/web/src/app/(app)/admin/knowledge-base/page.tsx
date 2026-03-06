@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { aiApi } from '@/lib/api';
 
-type IngestMode = 'text' | 'file';
+type IngestMode = 'text' | 'file' | 'pdf';
 
 interface DocRow {
   id: string;
@@ -18,6 +18,7 @@ interface DocRow {
   sourceUrl: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
+  documentType: string | null;
   isActive: boolean;
   createdAt: string;
   uploadedBy: { id: string; name: string };
@@ -53,9 +54,11 @@ export default function KnowledgeBasePage() {
   const [title, setTitle] = useState('');
   const [textContent, setTextContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['ai-documents'],
@@ -78,6 +81,7 @@ export default function KnowledgeBasePage() {
     if (!title.trim()) return;
     if (mode === 'text' && !textContent.trim()) return;
     if (mode === 'file' && !file) return;
+    if (mode === 'pdf' && !pdfFile) return;
 
     setIngesting(true);
     setIngestResult(null);
@@ -86,12 +90,15 @@ export default function KnowledgeBasePage() {
       let res: { data: { documentId: string; chunksCreated: number } };
       if (mode === 'text') {
         res = await aiApi.ingestText(title.trim(), textContent.trim());
+      } else if (mode === 'pdf') {
+        res = await aiApi.ingestPdf(title.trim(), pdfFile!);
       } else {
         res = await aiApi.ingestFile(title.trim(), file!);
       }
       setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
-      setTitle(''); setTextContent(''); setFile(null);
+      setTitle(''); setTextContent(''); setFile(null); setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (pdfInputRef.current) pdfInputRef.current.value = '';
       qc.invalidateQueries({ queryKey: ['ai-documents'] });
     } catch {
       setIngestResult({ ok: false, message: 'Ingestion failed. Check the API logs for details.' });
@@ -117,7 +124,7 @@ export default function KnowledgeBasePage() {
 
           {/* Mode toggle */}
           <div className="flex rounded-lg p-1 mb-4 w-fit gap-1" style={{ background: '#111111', border: '1px solid #2a2a2a' }}>
-            {(['text', 'file'] as IngestMode[]).map((m) => (
+            {(['text', 'file', 'pdf'] as IngestMode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => { setMode(m); setIngestResult(null); }}
@@ -126,7 +133,7 @@ export default function KnowledgeBasePage() {
                   ? { background: '#14b8a6', color: '#ffffff' }
                   : { color: '#666666' }}
               >
-                {m === 'text' ? 'Paste Text' : 'Upload File'}
+                {m === 'text' ? 'Paste Text' : m === 'pdf' ? 'Handbook PDF' : 'Upload File'}
               </button>
             ))}
           </div>
@@ -156,6 +163,41 @@ export default function KnowledgeBasePage() {
                   required
                 />
                 <p className="text-xs mt-1" style={{ color: '#555555' }}>{textContent.length.toLocaleString()} characters</p>
+              </div>
+            ) : mode === 'pdf' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Handbook PDF (max 15 MB)</label>
+                <p className="text-xs mb-2" style={{ color: '#555555' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
+                <div
+                  onClick={() => pdfInputRef.current?.click()}
+                  className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
+                  style={pdfFile
+                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed #14b8a6' }
+                    : { background: '#111111', border: '2px dashed #333333' }}
+                  onMouseEnter={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = '#14b8a6'; }}
+                  onMouseLeave={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = '#333333'; }}
+                >
+                  {pdfFile ? (
+                    <>
+                      <FileText className="h-8 w-8 text-teal-400" />
+                      <p className="text-sm font-medium text-teal-300">{pdfFile.name}</p>
+                      <p className="text-xs" style={{ color: '#666666' }}>{formatBytes(pdfFile.size)}</p>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPdfFile(null); if (pdfInputRef.current) pdfInputRef.current.value = ''; }}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-8 w-8" style={{ color: '#444444' }} />
+                      <p className="text-sm" style={{ color: '#888888' }}>Click to select a PDF file</p>
+                    </>
+                  )}
+                  <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
+                </div>
               </div>
             ) : (
               <div>
@@ -237,7 +279,7 @@ export default function KnowledgeBasePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
-                  {['Title', 'Type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Status', ''].map((h) => (
+                  {['Title', 'Type', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Status', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>{h}</th>
                   ))}
                 </tr>
@@ -254,6 +296,11 @@ export default function KnowledgeBasePage() {
                       <span className="line-clamp-1">{doc.title}</span>
                     </td>
                     <td className="px-4 py-3"><SourceTypeBadge type={doc.sourceType} /></td>
+                    <td className="px-4 py-3">
+                      <span className="text-xs" style={{ color: doc.documentType === 'handbook' ? '#14b8a6' : '#666666' }}>
+                        {doc.documentType === 'handbook' ? 'Handbook' : 'General'}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 tabular-nums" style={{ color: '#888888' }}>{doc._count.chunks}</td>
                     <td className="px-4 py-3 text-xs" style={{ color: '#666666' }}>{formatBytes(doc.sizeBytes)}</td>
                     <td className="px-4 py-3" style={{ color: '#888888' }}>{doc.uploadedBy.name}</td>
