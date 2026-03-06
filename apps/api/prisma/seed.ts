@@ -136,6 +136,65 @@ async function main() {
   }
   console.log('📋 Maintenance categories: ensured 12 required');
 
+  // Stage 3: Form schemas (one per support topic, one per maintenance category)
+  const supportTopics = await prisma.supportTopic.findMany({ where: { isActive: true }, select: { id: true, name: true, departmentId: true } });
+  for (const topic of supportTopics) {
+    const existing = await prisma.ticketFormSchema.findFirst({
+      where: { ticketClassId: 'tclass_support', supportTopicId: topic.id },
+    });
+    if (!existing) {
+      await prisma.ticketFormSchema.create({
+        data: {
+          ticketClassId: 'tclass_support',
+          departmentId: topic.departmentId,
+          supportTopicId: topic.id,
+          name: `Support: ${topic.name}`,
+          sortOrder: 0,
+          isActive: true,
+        },
+      });
+    }
+  }
+  const maintenanceCats = await prisma.maintenanceCategory.findMany({ where: { isActive: true }, select: { id: true, name: true } });
+  for (const mcat of maintenanceCats) {
+    const existing = await prisma.ticketFormSchema.findFirst({
+      where: { ticketClassId: 'tclass_maintenance', maintenanceCategoryId: mcat.id },
+    });
+    if (!existing) {
+      await prisma.ticketFormSchema.create({
+        data: {
+          ticketClassId: 'tclass_maintenance',
+          maintenanceCategoryId: mcat.id,
+          name: `Maintenance: ${mcat.name}`,
+          sortOrder: 0,
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log('📋 Form schemas: one per support topic + one per maintenance category');
+
+  // Stage 3: Add one default field per schema (idempotent by formSchemaId + fieldKey)
+  const schemas = await prisma.ticketFormSchema.findMany({ where: { isActive: true }, select: { id: true } });
+  for (const schema of schemas) {
+    const hasDetails = await prisma.ticketFormField.findFirst({
+      where: { formSchemaId: schema.id, fieldKey: 'additional_details' },
+    });
+    if (!hasDetails) {
+      await prisma.ticketFormField.create({
+        data: {
+          formSchemaId: schema.id,
+          fieldKey: 'additional_details',
+          type: 'textarea',
+          label: 'Additional details',
+          required: false,
+          sortOrder: 100,
+        },
+      });
+    }
+  }
+  console.log('📋 Form fields: default "additional_details" per schema');
+
   console.log('\n✅ Seed complete!');
   console.log(`\n🔑 All accounts use password: ${DEFAULT_PASSWORD}`);
   console.log('\nAccounts seeded:');

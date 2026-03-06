@@ -5,9 +5,10 @@ import { AuditLogModule } from '../../common/audit-log/audit-log.module';
 import { EventsModule } from '../events/events.module';
 import { SlaModule } from '../sla/sla.module';
 import { PermissionsModule } from '../../common/permissions/permissions.module';
+import { TicketFormsModule } from '../ticket-forms/ticket-forms.module';
 
 @Module({
-  imports: [AuditLogModule, EventsModule, SlaModule, PermissionsModule],
+  imports: [AuditLogModule, EventsModule, SlaModule, PermissionsModule, TicketFormsModule],
   controllers: [TicketsController],
   providers: [TicketsService],
   exports: [TicketsService],

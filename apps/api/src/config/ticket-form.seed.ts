@@ -1,0 +1,185 @@
+export const ticketFormSeed = `
+- SUPPORT TICKET  
+    - INFO COLLECTED
+        - Submitters full name + work email
+        - Employee / hiring location
+        - Ticket Type (Selected first by department — then each department has unique ticket ‘Topic’
+            - BREAKDOWN: (NOTE For each ticket the input fields standard throughout at the top are Submitted Full Name + Work email + Employee/Hiring location. THEN the selections that can change the dependencies are ’Ticket Type- Dept.’ which changes the ’Select Topic’ (topics available are dependent on Type/ Dept selected)
+                - HR
+                    - New Hire
+                        - Legal FIRST  Name of Employee
+                        - Legal LAST Name of employee
+                        - Alternate name of employee
+                        - Employee phone#
+                        - Employee Personal Email
+                        - Position
+                            - Corporate
+                            - RM
+                            - DM
+                            - GM
+                            - AGM
+                            - SA
+                            - EDC
+                            - Lead Instructor
+                            - Instructor
+                            - Junior Instructor
+                            - Apprentice Instructor
+                            - Junior Apprentice Instructor
+                            - Pilates Trainer
+                        - Reports to - Supervisor
+                        - Date of Offer
+                        - Start Date
+                        - Pay Rate $
+                        - Part-time or Full-Time?
+                        - Was this candidate referred by a current employee? (YES/NO — If YES - then input Referring Employees Full Name)
+                        - Candidate Source
+                            - JazzHR
+                            - Referral
+                            - Career Page
+                            - Other (IF OTHER - Input ‘What Source?’)
+                        - Candidate Application Date
+                    - PAN / Change in Relationship
+                        - Name (same inputs as above FIRS / LAST / Alternate name. ‘NAME’ means this each time unless otherwise specified) 
+                        - Position (same options from above ‘Position’. Assume this each time ‘position’ is mentioned unless otherwise specified)
+                        - Pay Rate$
+                        - Effective Date
+                        - Action (Change to Position/Pay), New Position, New Rate [this is a Text box response]
+                        - Does the employee have any company-issued Equipment they need to return? (YES/NO)
+                            -  IF YES then asks ‘What type of equipment needs to be collected? Laptop/ I-pad/phone [Text box response]
+                    - Resignation / Termination
+                        - NAME
+                        - Position of Employee
+                        - Effective Date / Last day worked
+                        - Resigned on
+                        - Resignation letter or any documents related to the termination (Drag and drop files here)
+                        - Why is the employee leaving Riser Fitness? [text box]
+                        - Does the employee have any company-issued Equipment they need to return? (YES/NO)
+                            -  IF YES then asks ‘What type of equipment needs to be collected? Laptop/ I-pad/phone [Text box response]
+                    - New Job Posting
+                        - Position
+                        - Part-time or Full time?
+                        - Hiring Manager (Who can view the applicate/candidate? [text box]
+                        - Pay Rate/ Pay Range [Text box]
+                        - Reason for Post
+                            - Promotion
+                            - New Position
+                            - New Studio
+                            - Resignation
+                            - Involuntary Termination
+                    - Workshop Bonus
+                        - Name
+                        - Date and Name of Workshop
+                    - Paycom (if selected user is prompted with the following information to use an external resource instead of submit a ticket for this)
+                        - “Please use ‘Ask Here’ in Paycom to answer all PayCom Questions
+                        - Follow this link: https://www.paycomonline.net/v4/ee/web.php/app/login
+                        - If you Need Additional Support, Please email HR@riserfit.com
+                - MARKETING:
+                    - Grassroots Spend Approval
+                        - By submitting this form you acknowledge that you and your team have the capacity and time to follow the full promotional plan to maximize results. [‘Agree’ checkbox’
+                        - Grassroots Type [select one]
+                            - Expo
+                            - Table Booth
+                            - Sponsorship
+                            - Other
+                        - Short Description of Grassroots Effort - Example: Long Beach Bridal Expo or Table Booth at Credit Union Health Fair
+                        - Date of grassroots efforts (NOTE: any of these ‘Date’ options have a little calendar that you interact with to click the date)
+                        - Cost
+                        - What is included in Cost?
+                        - Estimated Leads Expected
+                        - Why is this event a good fit for generating new leads?
+                        - Have we participated in this event or attempted a similar effort before? (If yes, please include previous results)
+                        - Relevant Links (Event website, socials, etc.) 
+                        - Relevant attachments (photos, PDF’s, etc.) 
+                    - Print Materials Request
+                        - Digital Stack template/photo [drag and drop files]
+                        - Description of the print material
+                        - Nearest Fedex office ‘print and ship’ address’
+                        - Types of Materials Needed (check 1 or multiple)
+                            - Booking Classes 101 4x6 Postcard
+                            - Waitlist 4x6 postcard
+                            - Studio policies 4x6 postcard
+                            - Classes and levels trifold
+                            - Referral program rack card
+                            - Plain postcard
+                            - For grassroots: New to Pilates? 4x6 Postcard
+                            - For Grassroots: Free intro Business Card size
+                            - For Grassroots: Free class 4x6 postcard
+                            - For grassroots: Move better Rack Card
+                            - For Presale: Opening Special Business Card Size
+                            - For Presale: Presale Postcard
+                            - For Presale: Hey neighbor Flyer
+                            - For Presale: Partnership Postcard
+                        - Quantity Requested?
+                    - General Support
+                        - General Support [text box]
+                    - Instructor Bio Update
+                        - Instructor CR ID
+                        - Description of update needed
+                        - Studio Locations where the instructor teaches
+                    - Custom Marketing Material
+                        - Flyer and Social Materials only (“Include studio and event/partnership details) [Text box response]
+                    - Club Pilates App Instructor Name Changes
+                        - Please give current name, new name change and location of the instructor
+                        - Instructors club ready ID#
+                - Retail:
+                    - Missing / Update SKU
+                        - Missing/update SKU’s - Add inventory (missing SKU) - “Need clear picture of the tag including the brand, style, color, size” [Drag and drop files] 
+                    - Retail Request
+                        - Retail Request - Milestone, Apparel, Accessories, socks request 
+                        - Add picture of requested item (if available) “Need clear picture of the tag including the brand, style, color, size” [Drag and drop files]
+                    - Damaged Product
+                        - Brand/style/size or accessory description
+                        - Picture of the damage areas of the product and tag (if available) [Drag and drop files]
+                        - Attach corresponding shipping invoice (if available) [Drag and drop files]
+                - Operations:
+                    - System Issues - CR, CRC, CP App, Netgym, Powerhouse, Riser U, other
+                        - Full Legal Name of Employee (separate from standard name input thats foundational to every ticket)
+                        - Select the system(s): [checkboxes one or multiple]
+                            - Powerhouse
+                            - Club pilates app
+                            - Club ready 
+                            - Club ready connect (CRC)
+                            - NetGym
+                            - Amazon
+                            - Riser U
+                            - Other
+                        - Can you provide a screenshot of the issue? [Drag and drop files]
+                        - More details of the issue: [text field]
+                    - CR, NetGym - add User and/or Locations
+                        - Full Legal name of employee
+                        - Which locations need to be added?
+                    - E-mail Reset/New/Microsoft Issues - (Microsoft Suite - Excel, Teams, Authenticator)
+                        - Full legal name of employee
+                        - Can you provide a screenshot of the issue? [drag and drop files]
+                        - More details of the issue: 
+                    - Wipes Orders
+                        - Location the wipes will be shipped to:
+                        - How many single bags do you have left?
+                        - How many cases are needed for the month - (4 bags in each cases)
+                        - Are you sharing with other studios? “List studios and how many cases are going to each studio?”
+                    - Ops General Support ONLY - “NO Paycom”
+                        - Can you provide a screenshot of the issue? [drag and drop]
+                        - More details of the issue: 
+- MAINTENANCE TICKET 
+    - Studio Location
+    - Submitters Full Name / Work email
+    - Maintenance Category 
+        - Safety
+        - Electrical / Lighting
+        - HVAC (Heating, Ventilation, Air Conditioning) / Climate Control
+        - Plumbing
+        - Flooring
+        - Mirror / Glass
+        - Doors / Locks / Hardware
+        - Walls / Paint / Mounted Items
+        - Roof / Water Intrusion
+        - Pest Control
+        - Equipment / Fixtures 
+        - ‘Other’ 
+    - Issue: “A quick description of your single or multiple maintenance issue(s) (i.e. Toilet Clogged, Springboard Loose, etc.)
+    - Detailed Description of Issue: “Provide a thorough explanation of the problem, so maintenance can properly assess it before arriving at the studio”
+    - First Day availability (for onsite appointments) “indicate the most preferred date for maintenance to visit” [calendar date selector]
+    - Pictures/Videos “Attach clear images or videos of the issue [drag and drop files]
+    - Additional Comments “Any additional comments or dates and times that may work for your studio”
+
+`;

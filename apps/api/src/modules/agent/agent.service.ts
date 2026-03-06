@@ -22,7 +22,7 @@ interface ActionPlan {
   risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
-interface AgentResponse {
+export interface AgentResponse {
   conversationId: string;
   messageId: string;
   mode: 'ASK' | 'DO';
@@ -31,6 +31,9 @@ interface AgentResponse {
   toolResults?: Array<{ tool: string; result: unknown }>;
   sources?: Array<{ title: string; text: string }>;
 }
+
+/** OpenAI tool call with function payload (narrows union for type safety). */
+type ToolCallWithFunction = { id: string; type: 'function'; function: { name: string; arguments: string } };
 
 const SYSTEM_PROMPT = `You are an AI assistant for an internal ticketing system used by ~500 employees.
 
@@ -210,7 +213,7 @@ export class AgentService {
       const rawSummary = assistantMessage.content ?? 'The following actions will be performed:';
       const plan: ActionPlan = {
         summary: this.stripConfirmCancelPhrase(rawSummary),
-        actions: toolCalls.map((tc) => ({
+        actions: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
           tool: tc.function.name,
           args: JSON.parse(tc.function.arguments),
         })),
@@ -361,7 +364,7 @@ export class AgentService {
         {
           role: 'assistant' as const,
           content: assistantContent,
-          tool_calls: toolCalls.map((tc) => ({
+          tool_calls: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
             id: tc.id,
             type: 'function' as const,
             function: { name: tc.function.name, arguments: tc.function.arguments },
@@ -374,7 +377,7 @@ export class AgentService {
     });
 
     const finalContent = followUp.choices[0]?.message?.content ?? this.summarizeResults(results);
-    const mode = toolCalls.some((tc) => MUTATION_TOOLS.has(tc.function.name)) ? 'DO' : 'ASK';
+    const mode = (toolCalls as ToolCallWithFunction[]).some((tc) => MUTATION_TOOLS.has(tc.function.name)) ? 'DO' : 'ASK';
 
     // Detect knowledge search sources
     const knowledgeResults = results.find((r) => r.tool === 'knowledge_search');
@@ -441,11 +444,12 @@ export class AgentService {
   ): boolean {
     // For now, keep it simple and safe:
     // ANY mutating tool call requires an explicit confirmation step.
-    return toolCalls.some((tc: any) => MUTATION_TOOLS.has(tc.function?.name));
+    return (toolCalls as ToolCallWithFunction[]).some((tc) => MUTATION_TOOLS.has(tc.function?.name));
   }
 
   private assessRisk(toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]): 'LOW' | 'MEDIUM' | 'HIGH' {
-    const mutations = toolCalls.filter((tc) => MUTATION_TOOLS.has(tc.function.name));
+    const withFn = toolCalls as ToolCallWithFunction[];
+    const mutations = withFn.filter((tc) => MUTATION_TOOLS.has(tc.function.name));
     if (mutations.length === 0) return 'LOW';
     if (mutations.some((tc) => {
       if (tc.function.name !== 'update_ticket_status') return false;

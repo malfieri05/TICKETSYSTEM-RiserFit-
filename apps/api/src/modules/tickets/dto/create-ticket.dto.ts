@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   MaxLength,
   MinLength,
+  IsObject,
 } from 'class-validator';
 import { Priority } from '@prisma/client';
 
@@ -59,4 +60,9 @@ export class CreateTicketDto {
   @IsOptional()
   @IsString()
   ownerId?: string;
+
+  /** Stage 3: dynamic form responses (fieldKey → value). Validated against schema when ticketClassId + topic are set. */
+  @IsOptional()
+  @IsObject()
+  formResponses?: Record<string, string>;
 }

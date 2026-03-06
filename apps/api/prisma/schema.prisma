@@ -255,7 +255,8 @@ model TicketClass {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tickets Ticket[]
+  tickets     Ticket[]
+  formSchemas TicketFormSchema[]
 
   @@map("ticket_classes")
 }
@@ -272,6 +273,7 @@ model TaxonomyDepartment {
 
   supportTopics SupportTopic[]
   tickets       Ticket[]
+  formSchemas   TicketFormSchema[]
 
   @@map("departments")
 }
@@ -285,8 +287,9 @@ model SupportTopic {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department TaxonomyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  tickets    Ticket[]
+  department   TaxonomyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  tickets      Ticket[]
+  formSchemas  TicketFormSchema[]
 
   @@unique([departmentId, name])
   @@index([departmentId])
@@ -303,9 +306,91 @@ model MaintenanceCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tickets Ticket[]
+  tickets          Ticket[]
+  formSchemas      TicketFormSchema[]
 
   @@map("maintenance_categories")
+}
+
+// ============================================================
+// TICKET FORM SCHEMAS (Stage 3 — schema-driven forms)
+// ============================================================
+
+model TicketFormSchema {
+  id                    String   @id @default(cuid())
+  ticketClassId         String
+  departmentId          String?
+  supportTopicId        String?
+  maintenanceCategoryId String?
+  version               Int      @default(1)
+  name                  String?
+  sortOrder             Int      @default(0)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  ticketClass         TicketClass           @relation(fields: [ticketClassId], references: [id], onDelete: Cascade)
+  department          TaxonomyDepartment?   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  supportTopic        SupportTopic?         @relation(fields: [supportTopicId], references: [id], onDelete: Cascade)
+  maintenanceCategory MaintenanceCategory?  @relation(fields: [maintenanceCategoryId], references: [id], onDelete: Cascade)
+  fields              TicketFormField[]
+
+  @@unique([ticketClassId, supportTopicId])
+  @@unique([ticketClassId, maintenanceCategoryId])
+  @@index([ticketClassId])
+  @@index([supportTopicId])
+  @@index([maintenanceCategoryId])
+  @@map("ticket_form_schemas")
+}
+
+model TicketFormField {
+  id                  String   @id @default(cuid())
+  formSchemaId        String
+  fieldKey            String
+  type                String   // text | textarea | select | checkbox | date | file
+  label               String
+  required            Boolean  @default(false)
+  sortOrder           Int      @default(0)
+  conditionalFieldKey String?
+  conditionalValue    String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  formSchema TicketFormSchema    @relation(fields: [formSchemaId], references: [id], onDelete: Cascade)
+  options    TicketFormFieldOption[]
+
+  @@unique([formSchemaId, fieldKey])
+  @@index([formSchemaId])
+  @@map("ticket_form_fields")
+}
+
+model TicketFormFieldOption {
+  id          String   @id @default(cuid())
+  formFieldId String
+  value       String
+  label       String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  formField TicketFormField @relation(fields: [formFieldId], references: [id], onDelete: Cascade)
+
+  @@index([formFieldId])
+  @@map("ticket_form_field_options")
+}
+
+model TicketFormResponse {
+  id        String   @id @default(cuid())
+  ticketId  String
+  fieldKey  String
+  value     String
+  createdAt DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, fieldKey])
+  @@index([ticketId])
+  @@map("ticket_form_responses")
 }
 
 // ============================================================
@@ -350,6 +435,7 @@ model Ticket {
   watchers      TicketWatcher[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  formResponses TicketFormResponse[]
 
   @@index([status])
   @@index([ownerId])

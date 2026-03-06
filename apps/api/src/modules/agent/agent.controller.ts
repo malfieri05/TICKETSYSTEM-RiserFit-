@@ -1,7 +1,7 @@
 import {
   Controller, Post, Get, Param, Body, HttpCode, HttpStatus, Logger,
 } from '@nestjs/common';
-import { AgentService } from './agent.service';
+import { AgentService, AgentResponse } from './agent.service';
 import { AgentChatDto, AgentConfirmDto } from './dto/agent.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
@@ -21,7 +21,7 @@ export class AgentController {
   async chat(
     @Body() dto: AgentChatDto,
     @CurrentUser() user: RequestUser,
-  ) {
+  ): Promise<AgentResponse> {
     this.logger.log(`Agent chat from ${user.id}: "${dto.message.slice(0, 80)}..."`);
     return this.agentService.chat(dto.message, user, dto.conversationId, dto.allowWebSearch);
   }
@@ -35,7 +35,7 @@ export class AgentController {
   async confirm(
     @Body() dto: AgentConfirmDto,
     @CurrentUser() user: RequestUser,
-  ) {
+  ): Promise<AgentResponse> {
     this.logger.log(`Agent confirm from ${user.id}: convo=${dto.conversationId}, msg=${dto.messageId}`);
     return this.agentService.confirmAction(dto.conversationId, dto.messageId, user);
   }

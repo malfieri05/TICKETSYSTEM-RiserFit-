@@ -17,6 +17,7 @@ import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { assertValidTransition } from './ticket-state-machine';
 import { Role, TicketStatus, Prisma } from '@prisma/client';
 import { SlaService } from '../sla/sla.service';
+import { TicketFormsService } from '../ticket-forms/ticket-forms.service';
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -106,6 +107,10 @@ const TICKET_DETAIL_SELECT = {
   tags: {
     include: { tag: { select: { id: true, name: true, color: true } } },
   },
+  formResponses: {
+    select: { fieldKey: true, value: true },
+    orderBy: { fieldKey: 'asc' as const },
+  },
 } satisfies Prisma.TicketSelect;
 
 @Injectable()
@@ -119,6 +124,7 @@ export class TicketsService {
     private sla: SlaService,
     private mySummaryCache: MySummaryCacheService,
     private visibility: TicketVisibilityService,
+    private ticketForms: TicketFormsService,
   ) {}
 
   /**
@@ -235,6 +241,31 @@ export class TicketsService {
       maintenanceCategoryId: resolved.maintenanceCategoryId,
     });
 
+    // Stage 3: validate formResponses against schema when provided
+    let schemaForResponses: Awaited<ReturnType<TicketFormsService['getSchema']>> | null = null;
+    if (dto.formResponses && Object.keys(dto.formResponses).length > 0) {
+      try {
+        schemaForResponses = await this.ticketForms.getSchema({
+          ticketClassId: resolved.ticketClassId,
+          departmentId: resolved.departmentId ?? undefined,
+          supportTopicId: resolved.supportTopicId ?? undefined,
+          maintenanceCategoryId: resolved.maintenanceCategoryId ?? undefined,
+        });
+      } catch (e) {
+        if (e instanceof NotFoundException || e instanceof BadRequestException) throw e;
+        throw new BadRequestException(
+          'Form schema could not be loaded for this ticket context. Omit formResponses or set ticket class and topic.',
+        );
+      }
+      const requiredKeys = schemaForResponses.fields.filter((f) => f.required).map((f) => f.fieldKey);
+      for (const key of requiredKeys) {
+        const val = dto.formResponses![key];
+        if (val === undefined || val === null || String(val).trim() === '') {
+          throw new BadRequestException(`Required form field "${key}" is missing or empty`);
+        }
+      }
+    }
+
     if (dto.categoryId) {
       const category = await this.prisma.category.findUnique({
         where: { id: dto.categoryId },
@@ -281,6 +312,17 @@ export class TicketsService {
         await tx.ticketWatcher.create({
           data: { ticketId: created.id, userId: dto.ownerId },
         });
+      }
+
+      // Stage 3: persist form responses when provided and validated
+      if (schemaForResponses && dto.formResponses && Object.keys(dto.formResponses).length > 0) {
+        const validKeys = new Set(schemaForResponses.fields.map((f) => f.fieldKey));
+        for (const [fieldKey, value] of Object.entries(dto.formResponses)) {
+          if (!validKeys.has(fieldKey)) continue;
+          await tx.ticketFormResponse.create({
+            data: { ticketId: created.id, fieldKey, value: String(value ?? '') },
+          });
+        }
       }
 
       return created;

@@ -20,6 +20,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { TicketFormsModule } from './modules/ticket-forms/ticket-forms.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -71,6 +72,9 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // ── AI Agent (tool calling + action plans) ────────────────────────────────
     AgentModule,
+
+    // ── Ticket forms (schema-driven) ──────────────────────────────────────────
+    TicketFormsModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,
