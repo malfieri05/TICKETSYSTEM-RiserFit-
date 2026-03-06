@@ -42,11 +42,14 @@ enum Priority {
   URGENT
 }
 
+/// Stage 4: LOCKED/READY for workflow; DONE/SKIPPED satisfy dependencies. TODO removed.
 enum SubtaskStatus {
-  TODO
+  LOCKED
+  READY
   IN_PROGRESS
   BLOCKED
   DONE
+  SKIPPED
 }
 
 enum NotificationEventType {
@@ -170,7 +173,8 @@ model User {
   ownedTickets        Ticket[]                 @relation("TicketOwner")
   comments            TicketComment[]
   mentions            CommentMention[]
-  ownedSubtasks       Subtask[]
+  ownedSubtasks         Subtask[]
+  assignedSubtaskTemplates SubtaskTemplate[]
   watchedTickets      TicketWatcher[]
   attachmentsUploaded  TicketAttachment[]
   notifications        Notification[]
@@ -255,8 +259,9 @@ model TicketClass {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tickets     Ticket[]
-  formSchemas TicketFormSchema[]
+  tickets            Ticket[]
+  formSchemas        TicketFormSchema[]
+  workflowTemplates  SubtaskWorkflowTemplate[]
 
   @@map("ticket_classes")
 }
@@ -271,9 +276,12 @@ model TaxonomyDepartment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  supportTopics SupportTopic[]
-  tickets       Ticket[]
-  formSchemas   TicketFormSchema[]
+  supportTopics     SupportTopic[]
+  tickets           Ticket[]
+  formSchemas       TicketFormSchema[]
+  workflowTemplates SubtaskWorkflowTemplate[]
+  subtaskTemplates  SubtaskTemplate[]
+  subtasks          Subtask[]
 
   @@map("departments")
 }
@@ -287,9 +295,10 @@ model SupportTopic {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department   TaxonomyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
-  tickets      Ticket[]
-  formSchemas  TicketFormSchema[]
+  department         TaxonomyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  tickets            Ticket[]
+  formSchemas        TicketFormSchema[]
+  workflowTemplates  SubtaskWorkflowTemplate[]
 
   @@unique([departmentId, name])
   @@index([departmentId])
@@ -306,8 +315,9 @@ model MaintenanceCategory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tickets          Ticket[]
-  formSchemas      TicketFormSchema[]
+  tickets            Ticket[]
+  formSchemas        TicketFormSchema[]
+  workflowTemplates  SubtaskWorkflowTemplate[]
 
   @@map("maintenance_categories")
 }
@@ -515,31 +525,119 @@ model TicketAttachment {
 }
 
 // ============================================================
-// SUBTASKS
+// SUBTASK WORKFLOW (Stage 4 — template-driven, dependency-aware)
+// ============================================================
+
+/// One per ticket context (SUPPORT + supportTopicId or MAINTENANCE + maintenanceCategoryId).
+model SubtaskWorkflowTemplate {
+  id                    String   @id @default(cuid())
+  ticketClassId         String
+  departmentId          String?
+  supportTopicId        String?
+  maintenanceCategoryId String?
+  name                  String?
+  sortOrder             Int      @default(0)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  ticketClass         TicketClass           @relation(fields: [ticketClassId], references: [id], onDelete: Cascade)
+  department          TaxonomyDepartment?   @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  supportTopic        SupportTopic?        @relation(fields: [supportTopicId], references: [id], onDelete: Cascade)
+  maintenanceCategory MaintenanceCategory? @relation(fields: [maintenanceCategoryId], references: [id], onDelete: Cascade)
+  subtaskTemplates    SubtaskTemplate[]
+
+  @@unique([ticketClassId, supportTopicId])
+  @@unique([ticketClassId, maintenanceCategoryId])
+  @@index([ticketClassId])
+  @@index([supportTopicId])
+  @@index([maintenanceCategoryId])
+  @@map("subtask_workflow_templates")
+}
+
+model SubtaskTemplate {
+  id                   String   @id @default(cuid())
+  workflowTemplateId   String
+  title                String
+  description          String?
+  departmentId         String
+  assignedUserId       String?
+  isRequired           Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workflowTemplate   SubtaskWorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Cascade)
+  department         TaxonomyDepartment     @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  assignedUser       User?                  @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  dependencyFrom     SubtaskTemplateDependency[] @relation("DependsOnTemplate")
+  dependencyTo       SubtaskTemplateDependency[] @relation("RequiredByTemplate")
+  liveSubtasks       Subtask[]
+
+  @@index([workflowTemplateId])
+  @@index([departmentId])
+  @@map("subtask_templates")
+}
+
+/// Template A depends on template B: A cannot be READY until B is DONE/SKIPPED. DAG enforced on create.
+model SubtaskTemplateDependency {
+  subtaskTemplateId         String
+  dependsOnSubtaskTemplateId String
+
+  subtaskTemplate         SubtaskTemplate @relation("DependsOnTemplate", fields: [subtaskTemplateId], references: [id], onDelete: Cascade)
+  dependsOnSubtaskTemplate SubtaskTemplate @relation("RequiredByTemplate", fields: [dependsOnSubtaskTemplateId], references: [id], onDelete: Cascade)
+
+  @@id([subtaskTemplateId, dependsOnSubtaskTemplateId])
+  @@map("subtask_template_dependencies")
+}
+
+/// Live dependency: subtaskId cannot be READY until dependsOnSubtaskId is DONE or SKIPPED.
+model SubtaskDependency {
+  subtaskId         String
+  dependsOnSubtaskId String
+
+  subtask          Subtask @relation("DependsOnSubtask", fields: [subtaskId], references: [id], onDelete: Cascade)
+  dependsOnSubtask Subtask @relation("RequiredBySubtask", fields: [dependsOnSubtaskId], references: [id], onDelete: Cascade)
+
+  @@id([subtaskId, dependsOnSubtaskId])
+  @@index([dependsOnSubtaskId])
+  @@map("subtask_dependencies")
+}
+
+// ============================================================
+// SUBTASKS (live)
 // ============================================================
 
 model Subtask {
-  id          String        @id @default(cuid())
-  ticketId    String
-  teamId      String?
-  ownerId     String?
-  title       String
-  description String?
-  status      SubtaskStatus @default(TODO)
-  isRequired  Boolean       @default(true)
-  dueDate     DateTime?
-  completedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  ticketId           String
+  teamId             String?
+  ownerId            String?
+  departmentId       String?
+  subtaskTemplateId  String?
+  title              String
+  description        String?
+  status             SubtaskStatus @default(READY)
+  isRequired         Boolean       @default(true)
+  dueDate            DateTime?
+  completedAt       DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  ticket Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  team   Team?   @relation(fields: [teamId], references: [id])
-  owner  User?   @relation(fields: [ownerId], references: [id])
+  ticket          Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  team            Team?             @relation(fields: [teamId], references: [id])
+  owner           User?             @relation(fields: [ownerId], references: [id])
+  department      TaxonomyDepartment? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  subtaskTemplate SubtaskTemplate?  @relation(fields: [subtaskTemplateId], references: [id], onDelete: SetNull)
+  dependencyFrom  SubtaskDependency[] @relation("DependsOnSubtask")
+  dependencyTo    SubtaskDependency[] @relation("RequiredBySubtask")
 
   @@index([ticketId])
+  @@index([ticketId, status])
   @@index([ownerId])
   @@index([teamId])
-  @@index([status])
+  @@index([departmentId])
+  @@index([departmentId, status])
   @@map("subtasks")
 }
 

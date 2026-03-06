@@ -18,6 +18,7 @@ import { assertValidTransition } from './ticket-state-machine';
 import { Role, TicketStatus, Prisma } from '@prisma/client';
 import { SlaService } from '../sla/sla.service';
 import { TicketFormsService } from '../ticket-forms/ticket-forms.service';
+import { SubtaskWorkflowService } from '../subtask-workflow/subtask-workflow.service';
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -125,6 +126,7 @@ export class TicketsService {
     private mySummaryCache: MySummaryCacheService,
     private visibility: TicketVisibilityService,
     private ticketForms: TicketFormsService,
+    private subtaskWorkflow: SubtaskWorkflowService,
   ) {}
 
   /**
@@ -325,6 +327,14 @@ export class TicketsService {
         }
       }
 
+      // Stage 4: instantiate subtask workflow template (subtasks + dependencies, READY/LOCKED)
+      await this.subtaskWorkflow.instantiateForTicket(tx, created.id, {
+        ticketClassId: resolved.ticketClassId,
+        departmentId: resolved.departmentId,
+        supportTopicId: resolved.supportTopicId,
+        maintenanceCategoryId: resolved.maintenanceCategoryId,
+      });
+
       return created;
     });
 
@@ -375,6 +385,7 @@ export class TicketsService {
       search,
       searchInTitleOnly,
       includeCounts = true,
+      actionableForMe = false,
       createdAfter,
       createdBefore,
       page = 1,
@@ -413,6 +424,27 @@ export class TicketsService {
               ],
       }),
     };
+
+    // Stage 4: department actionable queue — tickets with at least one READY subtask for my department or assigned to me
+    if (actionableForMe && (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN')) {
+      const departmentCodes = actor.departments?.length
+        ? actor.departments.map((d) => String(d))
+        : [];
+      filterWhere.AND = filterWhere.AND ?? [];
+      (filterWhere.AND as Prisma.TicketWhereInput[]).push({
+        subtasks: {
+          some: {
+            status: 'READY',
+            OR: [
+              ...(departmentCodes.length > 0
+                ? [{ department: { code: { in: departmentCodes } } }]
+                : []),
+              { ownerId: actor.id },
+            ].filter(Boolean),
+          },
+        },
+      });
+    }
 
     // Merge scope restriction with user-supplied filters using AND
     const where: Prisma.TicketWhereInput =
@@ -595,13 +627,13 @@ export class TicketsService {
     // Validate the transition is legal
     assertValidTransition(ticket.status, newStatus);
 
-    // Resolution gate: cannot RESOLVE if any required subtask is not DONE
+    // Resolution gate: cannot RESOLVE if any required subtask is not DONE or SKIPPED (Stage 4)
     if (newStatus === 'RESOLVED') {
       const blockedSubtasks = await this.prisma.subtask.count({
         where: {
           ticketId,
           isRequired: true,
-          status: { not: 'DONE' },
+          status: { notIn: ['DONE', 'SKIPPED'] },
         },
       });
 

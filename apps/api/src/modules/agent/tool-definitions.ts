@@ -173,7 +173,7 @@ export const AGENT_TOOLS: ToolDef[] = [
         properties: {
           ticket_id: { type: 'string' },
           subtask_id: { type: 'string' },
-          status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'BLOCKED', 'DONE'] },
+          status: { type: 'string', enum: ['LOCKED', 'READY', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'SKIPPED'] },
         },
         required: ['ticket_id', 'subtask_id', 'status'],
       },

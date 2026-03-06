@@ -26,6 +26,10 @@ export class CreateSubtaskDto {
   ownerId?: string;
 
   @IsOptional()
+  @IsString()
+  departmentId?: string;
+
+  @IsOptional()
   @IsDateString()
   dueDate?: string;
 

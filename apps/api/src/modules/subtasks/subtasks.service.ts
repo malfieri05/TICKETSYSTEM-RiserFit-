@@ -7,10 +7,11 @@ import {
 import { PrismaService } from '../../common/database/prisma.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { DomainEventsService } from '../events/domain-events.service';
+import { SubtaskWorkflowService } from '../subtask-workflow/subtask-workflow.service';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
-import { Role, SubtaskStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 const SUBTASK_SELECT = {
   id: true,
@@ -21,10 +22,13 @@ const SUBTASK_SELECT = {
   isRequired: true,
   dueDate: true,
   completedAt: true,
+  departmentId: true,
+  subtaskTemplateId: true,
   createdAt: true,
   updatedAt: true,
   team: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
+  department: { select: { id: true, code: true, name: true } },
 };
 
 @Injectable()
@@ -35,6 +39,7 @@ export class SubtasksService {
     private prisma: PrismaService,
     private auditLog: AuditLogService,
     private domainEvents: DomainEventsService,
+    private subtaskWorkflow: SubtaskWorkflowService,
   ) {}
 
   async create(ticketId: string, dto: CreateSubtaskDto, actor: RequestUser) {
@@ -70,12 +75,13 @@ export class SubtasksService {
       data: {
         ticketId,
         ...(dto.teamId && { teamId: dto.teamId }),
+        ...(dto.departmentId && { departmentId: dto.departmentId }),
         ownerId: dto.ownerId,
         title: dto.title,
         description: dto.description,
         isRequired: dto.isRequired ?? true,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-        status: 'TODO',
+        status: 'READY',
       },
       select: SUBTASK_SELECT,
     });
@@ -134,24 +140,30 @@ export class SubtasksService {
 
     const previousStatus = subtask.status;
     const now = new Date();
+    const completing = dto.status === 'DONE' || dto.status === 'SKIPPED';
 
-    const updated = await this.prisma.subtask.update({
-      where: { id: subtaskId },
-      data: {
-        ...(dto.title && { title: dto.title }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.ownerId !== undefined && { ownerId: dto.ownerId }),
-        ...(dto.status && { status: dto.status }),
-        ...(dto.dueDate !== undefined && {
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-        }),
-        // Set completedAt when status moves to DONE; clear it if re-opened
-        ...(dto.status === 'DONE' ? { completedAt: now } : {}),
-        ...(dto.status && dto.status !== 'DONE' && previousStatus === 'DONE'
-          ? { completedAt: null }
-          : {}),
-      },
-      select: SUBTASK_SELECT,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const out = await tx.subtask.update({
+        where: { id: subtaskId },
+        data: {
+          ...(dto.title && { title: dto.title }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.ownerId !== undefined && { ownerId: dto.ownerId }),
+          ...(dto.status && { status: dto.status }),
+          ...(dto.dueDate !== undefined && {
+            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          }),
+          ...(completing ? { completedAt: now } : {}),
+          ...(dto.status && !completing && (previousStatus === 'DONE' || previousStatus === 'SKIPPED')
+            ? { completedAt: null }
+            : {}),
+        },
+        select: SUBTASK_SELECT,
+      });
+      if (completing) {
+        await this.subtaskWorkflow.unlockDownstreamIfSatisfied(tx, subtaskId);
+      }
+      return out;
     });
 
     await this.auditLog.log({
@@ -171,7 +183,7 @@ export class SubtasksService {
         select: { ownerId: true },
       });
 
-      if (dto.status === 'DONE') {
+      if (completing) {
         await this.domainEvents.emit({
           type: 'SUBTASK_COMPLETED',
           ticketId: subtask.ticketId,
@@ -217,7 +229,7 @@ export class SubtasksService {
   }
 
   /**
-   * Returns count of required subtasks that are NOT done.
+   * Returns count of required subtasks that are NOT done (DONE or SKIPPED satisfy the gate).
    * Used by TicketsService.transitionStatus() to enforce the resolution gate.
    */
   async countBlockingSubtasks(ticketId: string): Promise<number> {
@@ -225,7 +237,7 @@ export class SubtasksService {
       where: {
         ticketId,
         isRequired: true,
-        status: { not: 'DONE' },
+        status: { notIn: ['DONE', 'SKIPPED'] },
       },
     });
   }
@@ -242,6 +254,7 @@ export class SubtasksService {
         ownerId: true,
         status: true,
         teamId: true,
+        departmentId: true,
       },
     });
     if (!subtask) throw new NotFoundException(`Subtask ${id} not found`);

@@ -63,6 +63,12 @@ export class TicketFiltersDto {
   @IsBoolean()
   searchInTitleOnly?: boolean = false;
 
+  /** Stage 4: when true, restrict to tickets with at least one READY subtask for the current user's department or assigned to them. */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  actionableForMe?: boolean = false;
+
   // Date range filters
   @IsOptional()
   @IsDateString()

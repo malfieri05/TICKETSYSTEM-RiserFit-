@@ -6,9 +6,10 @@ import { EventsModule } from '../events/events.module';
 import { SlaModule } from '../sla/sla.module';
 import { PermissionsModule } from '../../common/permissions/permissions.module';
 import { TicketFormsModule } from '../ticket-forms/ticket-forms.module';
+import { SubtaskWorkflowModule } from '../subtask-workflow/subtask-workflow.module';
 
 @Module({
-  imports: [AuditLogModule, EventsModule, SlaModule, PermissionsModule, TicketFormsModule],
+  imports: [AuditLogModule, EventsModule, SlaModule, PermissionsModule, TicketFormsModule, SubtaskWorkflowModule],
   controllers: [TicketsController],
   providers: [TicketsService],
   exports: [TicketsService],

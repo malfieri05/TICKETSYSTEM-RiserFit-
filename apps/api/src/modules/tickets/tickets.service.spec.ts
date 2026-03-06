@@ -86,6 +86,9 @@ describe('TicketsService', () => {
     ticketForms = {
       getSchema: jest.fn(),
     };
+    const subtaskWorkflow = {
+      instantiateForTicket: jest.fn().mockResolvedValue(undefined),
+    };
 
     service = new TicketsService(
       prisma as never,
@@ -95,6 +98,7 @@ describe('TicketsService', () => {
       mySummaryCache as never,
       visibility as never,
       ticketForms as never,
+      subtaskWorkflow as never,
     );
   });
 
