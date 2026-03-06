@@ -4,6 +4,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD } from '@nestjs/core';
 
 import { DatabaseModule } from './common/database/database.module';
+import { CacheModule } from './common/cache/cache.module';
 import { AuditLogModule } from './common/audit-log/audit-log.module';
 
 import { AuthModule } from './modules/auth/auth.module';
@@ -42,8 +43,9 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
       },
     }),
 
-    // ── Database ──────────────────────────────────────────────────────────────
+    // ── Database + Cache ───────────────────────────────────────────────────────
     DatabaseModule,
+    CacheModule,
     AuditLogModule,
 
     // ── Feature Modules ───────────────────────────────────────────────────────

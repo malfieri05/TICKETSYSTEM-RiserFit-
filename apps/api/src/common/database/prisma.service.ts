@@ -14,8 +14,16 @@ export class PrismaService
     if (!connectionString) {
       throw new Error('DATABASE_URL environment variable is not set');
     }
-    const adapter = new PrismaPg({ connectionString });
-    super({ adapter });
+    // Use Neon pooled endpoint in production (e.g. ...-pooler.region.aws.neon.tech) to avoid exhausting connections.
+    const poolSize = parseInt(process.env.DATABASE_POOL_SIZE ?? '20', 10);
+    const adapter = new PrismaPg({
+      connectionString,
+      max: poolSize,
+    });
+    super({
+      adapter,
+      log: process.env.NODE_ENV === 'development' ? ['query'] : [],
+    });
   }
 
   async onModuleInit() {

@@ -3,6 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../common/database/prisma.service';
+import { UserCacheService } from '../../../common/cache/user-cache.service';
+import { Department } from '@prisma/client';
 
 export interface JwtPayload {
   sub: string;   // user id
@@ -22,6 +24,10 @@ export interface RequestUser {
   studioId: string | null;
   marketId: string | null;
   isActive: boolean;
+  /** Departments this user belongs to (DEPARTMENT_USER only; empty for others). */
+  departments: Department[];
+  /** Extra studio IDs granted by an admin as scope overrides. */
+  scopeStudioIds: string[];
 }
 
 @Injectable()
@@ -29,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     private prisma: PrismaService,
+    private userCache: UserCacheService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -38,6 +45,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload): Promise<RequestUser> {
+    const cached = this.userCache.get(payload.sub);
+    if (cached) return cached;
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
@@ -50,6 +60,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         studioId: true,
         marketId: true,
         isActive: true,
+        departments: { select: { department: true } },
+        studioScopes: { select: { studioId: true } },
       },
     });
 
@@ -57,7 +69,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found or inactive');
     }
 
-    return {
+    const requestUser: RequestUser = {
       id: user.id,
       email: user.email,
       displayName: user.name,
@@ -67,6 +79,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       studioId: user.studioId,
       marketId: user.marketId,
       isActive: user.isActive,
+      departments: user.departments.map((d) => d.department),
+      scopeStudioIds: user.studioScopes.map((s) => s.studioId),
     };
+    this.userCache.set(user.id, requestUser);
+    return requestUser;
   }
 }

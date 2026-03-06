@@ -33,10 +33,16 @@ export class TicketsController {
     return this.ticketsService.create(dto, user);
   }
 
-  // GET /api/tickets/my-summary
+  // GET /api/tickets/my-summary?page=1&limit=50
   @Get('my-summary')
-  getMySummary(@CurrentUser() user: RequestUser) {
-    return this.ticketsService.getMySummary(user);
+  getMySummary(
+    @CurrentUser() user: RequestUser,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
+    const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50)) : 50;
+    return this.ticketsService.getMySummary(user, pageNum, limitNum);
   }
 
   // GET /api/tickets?status=&categoryId=&page=&limit=
@@ -69,7 +75,7 @@ export class TicketsController {
 
   // PATCH /api/tickets/:id/assign
   @Patch(':id/assign')
-  @Roles('AGENT', 'MANAGER', 'ADMIN')
+  @Roles('DEPARTMENT_USER', 'ADMIN')
   assign(
     @Param('id') id: string,
     @Body() dto: AssignTicketDto,

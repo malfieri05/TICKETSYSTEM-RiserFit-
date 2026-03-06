@@ -267,6 +267,15 @@ OPENAI_API_KEY=sk-...
 
 ---
 
+### Performance & AI Agent Notes (Current)
+
+- Horizontal scaling is not enabled yet; app is designed stateless so multiple API instances behind a load balancer can be added later without major refactors.
+- k6 load tests show a single API instance cleanly handles 150–200 very active virtual users (0% errors) with p95 latency between ~5–8 seconds under synthetic, worst-case clicking.
+- My-summary and ticket list endpoints have been optimized (caching, pooled DB connections, optional lightweight list mode) to keep real-world response times snappy for ~50 concurrent human users.
+- AI Agent sidebar (tool-calling assistant) is fully wired into tickets/subtasks/users/reporting with confirmation flow and audit logs; it is an optional UX helper, not required for core workflows.
+
+---
+
 ## 10. Testing Framework (Planned — Executed at Designated Build Gates)
 
 | Phase | Tests |

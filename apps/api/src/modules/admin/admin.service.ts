@@ -50,6 +50,53 @@ export class AdminService {
     return cat;
   }
 
+  // ─── Ticket taxonomy (Stage 2, read-only config) ──────────────────────────
+
+  async getTicketTaxonomy() {
+    const [ticketClasses, departments, supportTopics, maintenanceCategories] = await Promise.all([
+      this.prisma.ticketClass.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, code: true, name: true, sortOrder: true },
+      }),
+      this.prisma.taxonomyDepartment.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, code: true, name: true, sortOrder: true },
+      }),
+      this.prisma.supportTopic.findMany({
+        where: { isActive: true },
+        orderBy: [{ departmentId: 'asc' }, { sortOrder: 'asc' }],
+        select: {
+          id: true,
+          name: true,
+          sortOrder: true,
+          departmentId: true,
+          department: { select: { id: true, code: true, name: true } },
+        },
+      }),
+      this.prisma.maintenanceCategory.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: { id: true, name: true, description: true, color: true, sortOrder: true },
+      }),
+    ]);
+
+    const supportTopicsByDepartment = departments.map((dept) => ({
+      ...dept,
+      topics: supportTopics
+        .filter((t) => t.departmentId === dept.id)
+        .map(({ id, name, sortOrder }) => ({ id, name, sortOrder })),
+    }));
+
+    return {
+      ticketClasses,
+      departments: departments.map((d) => ({ id: d.id, code: d.code, name: d.name, sortOrder: d.sortOrder })),
+      supportTopicsByDepartment,
+      maintenanceCategories,
+    };
+  }
+
   // ─── Markets ─────────────────────────────────────────────────────────────
 
   async listMarkets() {

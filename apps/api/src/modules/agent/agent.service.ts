@@ -485,7 +485,7 @@ export class AgentService {
 
     if (!asksToCreateTicket) return null;
 
-    const categories = await this.prisma.category.findMany({
+    const categories = await this.prisma.maintenanceCategory.findMany({
       where: { isActive: true },
       select: { id: true, name: true },
       orderBy: { sortOrder: 'asc' },

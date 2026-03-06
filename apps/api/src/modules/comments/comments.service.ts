@@ -39,8 +39,8 @@ export class CommentsService {
 
     // Requesters cannot post internal notes
     const isInternal = dto.isInternal ?? false;
-    if (isInternal && actor.role === Role.REQUESTER) {
-      throw new ForbiddenException('Requesters cannot post internal notes');
+    if (isInternal && actor.role === Role.STUDIO_USER) {
+      throw new ForbiddenException('Studio users cannot post internal notes');
     }
 
     // Extract @mentions from the comment body
@@ -135,7 +135,7 @@ export class CommentsService {
     const where = {
       ticketId,
       // Requesters cannot see internal notes
-      ...(actor.role === Role.REQUESTER ? { isInternal: false } : {}),
+      ...(actor.role === Role.STUDIO_USER ? { isInternal: false } : {}),
     };
 
     return this.prisma.ticketComment.findMany({

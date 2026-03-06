@@ -41,7 +41,7 @@ export class AuthService {
         email,
         name,
         passwordHash,
-        role: 'REQUESTER',
+        role: 'STUDIO_USER',
       },
     });
 
@@ -52,7 +52,10 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ access_token: string; user: RequestUser }> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { team: { select: { name: true } } },
+    });
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid email or password.');
@@ -82,12 +85,17 @@ export class AuthService {
     email: string,
     name: string,
   ): Promise<{ access_token: string; user: RequestUser }> {
-    let user = await this.prisma.user.findUnique({ where: { ssoId } });
+    let user = await this.prisma.user.findUnique({
+      where: { ssoId },
+      include: { team: { select: { name: true } } },
+    });
 
     if (!user) {
-      user = await this.prisma.user.create({
-        data: { ssoId, email, name, role: 'REQUESTER' },
+      const created = await this.prisma.user.create({
+        data: { ssoId, email, name, role: 'STUDIO_USER' },
+        include: { team: { select: { name: true } } },
       });
+      user = created;
     } else {
       await this.prisma.user.update({
         where: { id: user.id },
@@ -111,7 +119,10 @@ export class AuthService {
       throw new UnauthorizedException('Dev login not available in production');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { team: { select: { name: true } } },
+    });
     if (!user) throw new UnauthorizedException('User not found');
     if (!user.isActive) throw new UnauthorizedException('Your account has been deactivated.');
 
@@ -129,6 +140,7 @@ export class AuthService {
     teamId?: string | null;
     studioId?: string | null;
     marketId?: string | null;
+    team?: { name: string } | null;
   }): Promise<{ access_token: string; user: RequestUser }> {
     const payload: JwtPayload = {
       sub: user.id,
@@ -136,13 +148,14 @@ export class AuthService {
       role: user.role as RequestUser['role'],
     };
 
-    const team =
-      user.teamId != null
-        ? await this.prisma.team.findUnique({
+    const teamName =
+      user.team?.name ??
+      (user.teamId != null
+        ? (await this.prisma.team.findUnique({
             where: { id: user.teamId },
             select: { name: true },
-          })
-        : null;
+          }))?.name ?? null
+        : null);
 
     return {
       access_token: this.jwtService.sign(payload),
@@ -153,9 +166,11 @@ export class AuthService {
         role: user.role as RequestUser['role'],
         isActive: user.isActive,
         teamId: user.teamId ?? null,
-        teamName: team?.name ?? null,
+        teamName: teamName ?? null,
         studioId: user.studioId ?? null,
         marketId: user.marketId ?? null,
+        departments: [],
+        scopeStudioIds: [],
       },
     };
   }

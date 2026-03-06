@@ -11,6 +11,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -25,6 +26,8 @@ import { Role } from '@prisma/client';
 
 // 10MB max for plain-text / markdown document uploads
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
+// 15MB max for PDF handbook uploads
+const MAX_PDF_SIZE = 15 * 1024 * 1024;
 
 @Controller('ai')
 export class AiController {
@@ -45,6 +48,19 @@ export class AiController {
   @HttpCode(HttpStatus.OK)
   async chat(@Body() dto: ChatDto) {
     return this.aiService.chat(dto.message);
+  }
+
+  /**
+   * POST /api/ai/handbook-chat
+   * Studio users only. RAG over handbook documents only.
+   */
+  @Post('handbook-chat')
+  @HttpCode(HttpStatus.OK)
+  async handbookChat(@Body() dto: ChatDto, @CurrentUser() user: RequestUser) {
+    if (user.studioId == null) {
+      throw new ForbiddenException('Handbook chat is only available to studio users.');
+    }
+    return this.aiService.chatHandbook(dto.message);
   }
 
   // ── Knowledge base management (ADMIN only) ─────────────────────────────
@@ -113,6 +129,47 @@ export class AiController {
       sourceType: 'file',
       mimeType: file.mimetype,
       sizeBytes: file.size,
+    });
+  }
+
+  /**
+   * POST /api/ai/ingest/pdf
+   * Upload a PDF for handbook ingestion (multipart: file, title). ADMIN only.
+   */
+  @Post('ingest/pdf')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_PDF_SIZE },
+      fileFilter: (_req, file, cb) => {
+        if (file.mimetype === 'application/pdf' || file.originalname?.match(/\.pdf$/i)) {
+          cb(null, true);
+        } else {
+          cb(new BadRequestException('Only PDF files are supported'), false);
+        }
+      },
+    }),
+  )
+  async ingestPdf(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('title') title: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!file) throw new BadRequestException('No file provided');
+    if (!title?.trim()) throw new BadRequestException('title is required');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(file.buffer);
+    const text = data?.text?.trim() ?? '';
+    if (!text) throw new BadRequestException('PDF produced no extractable text');
+    this.logger.log(`Admin ${user.id} ingesting PDF: "${file.originalname}" (${file.size} bytes) → ${text.length} chars`);
+    return this.ingestionService.ingestText(title.trim(), text, user.id, {
+      sourceType: 'file',
+      mimeType: 'application/pdf',
+      sizeBytes: file.size,
+      documentType: 'handbook',
     });
   }
 

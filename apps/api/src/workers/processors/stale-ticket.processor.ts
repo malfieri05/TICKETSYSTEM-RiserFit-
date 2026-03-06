@@ -78,7 +78,7 @@ export class StaleTicketProcessor extends WorkerHost {
 
       // Also notify all ADMIN and MANAGER users (escalation)
       const escalationUsers = await this.prisma.user.findMany({
-        where: { role: { in: ['ADMIN', 'MANAGER'] }, isActive: true },
+        where: { role: { in: ['ADMIN'] }, isActive: true },
         select: { id: true },
       });
       escalationUsers.forEach((u) => recipientIds.add(u.id));

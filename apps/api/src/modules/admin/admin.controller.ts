@@ -43,6 +43,13 @@ export class AdminController {
     return this.adminService.updateCategory(id, dto);
   }
 
+  // Read-only ticket taxonomy (Stage 2); any authenticated user
+  @Get('config/ticket-taxonomy')
+  @Roles()
+  getTicketTaxonomy() {
+    return this.adminService.getTicketTaxonomy();
+  }
+
   // ─── Markets ─────────────────────────────────────────────────────────────
 
   // Readable by all authenticated users

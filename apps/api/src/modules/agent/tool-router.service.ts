@@ -2,6 +2,7 @@ import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { IngestionService } from '../ai/ingestion.service';
+import { TicketsService } from '../tickets/tickets.service';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { Role, TicketStatus, Priority, SubtaskStatus, Prisma } from '@prisma/client';
 
@@ -21,6 +22,7 @@ export class ToolRouterService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly ingestion: IngestionService,
+    private readonly ticketsService: TicketsService,
   ) {}
 
   async execute(toolName: string, args: Record<string, unknown>, actor: RequestUser): Promise<ToolResult> {
@@ -109,12 +111,12 @@ export class ToolRouterService {
     if (Array.isArray(args.priority) && args.priority.length > 0) {
       where.priority = { in: args.priority as Priority[] };
     }
-    if (args.category_id) where.categoryId = String(args.category_id);
+    if (args.category_id) where.maintenanceCategoryId = String(args.category_id);
     if (args.owner_user_id) where.ownerId = String(args.owner_user_id);
     if (args.requester_user_id) where.requesterId = String(args.requester_user_id);
 
-    // RBAC: Requesters can only see their own tickets
-    if (actor.role === 'REQUESTER') {
+    // RBAC: Studio users can only see their own tickets
+    if (actor.role === 'STUDIO_USER') {
       where.requesterId = actor.id;
     }
 
@@ -125,6 +127,10 @@ export class ToolRouterService {
       select: {
         id: true, title: true, status: true, priority: true, createdAt: true, updatedAt: true,
         category: { select: { id: true, name: true } },
+        ticketClass: { select: { code: true, name: true } },
+        department: { select: { name: true } },
+        supportTopic: { select: { name: true } },
+        maintenanceCategory: { select: { id: true, name: true } },
         requester: { select: { id: true, name: true } },
         owner: { select: { id: true, name: true } },
         studio: { select: { id: true, name: true } },
@@ -146,6 +152,10 @@ export class ToolRouterService {
         id: true, title: true, description: true, status: true, priority: true,
         createdAt: true, updatedAt: true, resolvedAt: true, closedAt: true,
         category: { select: { id: true, name: true } },
+        ticketClass: { select: { code: true, name: true } },
+        department: { select: { name: true } },
+        supportTopic: { select: { name: true } },
+        maintenanceCategory: { select: { id: true, name: true } },
         requester: { select: { id: true, name: true } },
         owner: { select: { id: true, name: true } },
         studio: { select: { id: true, name: true } },
@@ -168,8 +178,8 @@ export class ToolRouterService {
       },
     });
 
-    // RBAC: hide internal comments from requesters
-    if (actor.role === 'REQUESTER') {
+    // RBAC: hide internal comments from studio users
+    if (actor.role === 'STUDIO_USER') {
       ticket.comments = ticket.comments.filter((c) => !c.isInternal);
     }
 
@@ -179,27 +189,29 @@ export class ToolRouterService {
   // ── create_ticket ───────────────────────────────────────────────────────────
 
   private async createTicket(args: Record<string, unknown>, actor: RequestUser) {
-    const data: Prisma.TicketCreateInput = {
+    const maintenanceCategoryId = args.category_id
+      ? String(args.category_id)
+      : await this.getDefaultMaintenanceCategoryId();
+    const ticketClass = await this.prisma.ticketClass.findFirstOrThrow({
+      where: { code: 'MAINTENANCE', isActive: true },
+      select: { id: true },
+    });
+
+    const dto = {
       title: String(args.title),
       description: args.description ? String(args.description) : '',
       priority: (args.priority as Priority) || 'MEDIUM',
-      requester: { connect: { id: actor.id } },
-      category: args.category_id
-        ? { connect: { id: String(args.category_id) } }
-        : { connect: { id: await this.getDefaultCategoryId() } },
+      ticketClassId: ticketClass.id,
+      maintenanceCategoryId,
+      ownerId: args.owner_user_id && this.canAssign(actor) ? String(args.owner_user_id) : undefined,
     };
 
-    if (args.owner_user_id && this.canAssign(actor)) {
-      data.owner = { connect: { id: String(args.owner_user_id) } };
-    }
-
-    const ticket = await this.prisma.ticket.create({
-      data,
-      select: { id: true, title: true, status: true, priority: true, createdAt: true },
-    });
-
-    await this.writeAuditLog(actor.id, 'CREATED', 'Ticket', ticket.id, ticket.id);
-    return { ticket_id: ticket.id, title: ticket.title, status: ticket.status };
+    const ticket = await this.ticketsService.create(dto, actor);
+    return {
+      ticket_id: ticket.id,
+      title: ticket.title,
+      status: ticket.status,
+    };
   }
 
   // ── update_ticket_status ────────────────────────────────────────────────────
@@ -255,8 +267,8 @@ export class ToolRouterService {
     const ticketId = String(args.ticket_id);
     const isInternal = Boolean(args.is_internal);
 
-    if (isInternal && actor.role === 'REQUESTER') {
-      throw new ForbiddenException('Requesters cannot create internal notes');
+    if (isInternal && actor.role === 'STUDIO_USER') {
+      throw new ForbiddenException('Studio users cannot create internal notes');
     }
 
     const comment = await this.prisma.ticketComment.create({
@@ -333,9 +345,9 @@ export class ToolRouterService {
       if (statusFilter?.length) where.status = { in: statusFilter };
       if (priorityFilter?.length) where.priority = { in: priorityFilter };
 
-      const groupField: 'status' | 'priority' | 'categoryId' | 'marketId' =
+      const groupField: 'status' | 'priority' | 'maintenanceCategoryId' | 'categoryId' | 'marketId' =
         groupBy === 'priority' ? 'priority'
-          : groupBy === 'category' ? 'categoryId'
+          : groupBy === 'category' ? 'maintenanceCategoryId'
           : groupBy === 'market' ? 'marketId'
           : 'status';
 
@@ -347,16 +359,21 @@ export class ToolRouterService {
       });
 
       if (groupBy === 'category') {
-        const catIds = groups.map((g) => (g as { categoryId?: string }).categoryId).filter((id): id is string => Boolean(id));
+        const catIds = groups
+          .map((g) => (g as { maintenanceCategoryId?: string | null }).maintenanceCategoryId)
+          .filter((id): id is string => Boolean(id));
         const cats = catIds.length
-          ? await this.prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } })
+          ? await this.prisma.maintenanceCategory.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } })
           : [];
         const catMap = Object.fromEntries(cats.map((c) => [c.id, c.name]));
         return {
-          counts: groups.map((g) => ({
-            group: catMap[(g as { categoryId?: string }).categoryId ?? ''] ?? 'Unknown',
-            count: g._count.id,
-          })),
+          counts: groups.map((g) => {
+            const id = (g as { maintenanceCategoryId?: string | null }).maintenanceCategoryId;
+            return {
+              group: id ? (catMap[id] ?? 'Unknown') : 'Support / Unassigned',
+              count: g._count.id,
+            };
+          }),
         };
       }
       if (groupBy === 'market') {
@@ -421,12 +438,12 @@ export class ToolRouterService {
   // ── list_categories ─────────────────────────────────────────────────────────
 
   private async listCategories() {
-    const cats = await this.prisma.category.findMany({
+    const categories = await this.prisma.maintenanceCategory.findMany({
       where: { isActive: true },
       select: { id: true, name: true, color: true },
       orderBy: { sortOrder: 'asc' },
     });
-    return { categories: cats };
+    return { categories };
   }
 
   // ── list_users ──────────────────────────────────────────────────────────────
@@ -447,16 +464,19 @@ export class ToolRouterService {
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
   private canManageTickets(actor: RequestUser): boolean {
-    return ['ADMIN', 'AGENT', 'MANAGER'].includes(actor.role);
+    return ['ADMIN', 'DEPARTMENT_USER'].includes(actor.role);
   }
 
   private canAssign(actor: RequestUser): boolean {
-    return ['ADMIN', 'AGENT', 'MANAGER'].includes(actor.role);
+    return ['ADMIN', 'DEPARTMENT_USER'].includes(actor.role);
   }
 
-  private async getDefaultCategoryId(): Promise<string> {
-    const cat = await this.prisma.category.findFirst({ where: { isActive: true }, orderBy: { sortOrder: 'asc' } });
-    if (!cat) throw new Error('No categories exist. Ask an admin to create one first.');
+  private async getDefaultMaintenanceCategoryId(): Promise<string> {
+    const cat = await this.prisma.maintenanceCategory.findFirst({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+    if (!cat) throw new Error('No maintenance categories exist. Ask an admin to seed taxonomy first.');
     return cat.id;
   }
 

@@ -13,10 +13,16 @@ datasource db {
 // ============================================================
 
 enum Role {
-  REQUESTER
-  AGENT
-  MANAGER
   ADMIN
+  DEPARTMENT_USER
+  STUDIO_USER
+}
+
+enum Department {
+  HR
+  OPERATIONS
+  MARKETING
+  RETAIL
 }
 
 enum TicketStatus {
@@ -112,9 +118,10 @@ model Studio {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  market    Market   @relation(fields: [marketId], references: [id])
-  tickets   Ticket[]
-  users     User[]
+  market      Market            @relation(fields: [marketId], references: [id])
+  tickets     Ticket[]
+  users       User[]
+  studioScopes UserStudioScope[]
 
   @@unique([name, marketId])
   @@index([marketId])
@@ -144,7 +151,7 @@ model User {
   email       String    @unique
   name        String
   avatarUrl   String?
-  role        Role      @default(REQUESTER)
+  role        Role      @default(STUDIO_USER)
   teamId      String?
   studioId    String?
   marketId    String?
@@ -172,6 +179,8 @@ model User {
   knowledgeDocs        KnowledgeDocument[]
   agentConversations   AgentConversation[]
   agentActionLogs      AgentActionLog[]
+  departments          UserDepartment[]
+  studioScopes         UserStudioScope[]
 
   @@index([email])
   @@index([role])
@@ -180,7 +189,42 @@ model User {
 }
 
 // ============================================================
-// CATEGORIES (admin-configurable)
+// USER DEPARTMENT MEMBERSHIPS
+// ============================================================
+
+model UserDepartment {
+  userId     String
+  department Department
+  assignedAt DateTime   @default(now())
+  assignedBy String?    // actorId of assigning ADMIN; null for system migration
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, department])
+  @@index([userId])
+  @@map("user_departments")
+}
+
+// ============================================================
+// USER STUDIO SCOPE OVERRIDES
+// ============================================================
+
+model UserStudioScope {
+  userId    String
+  studioId  String
+  grantedAt DateTime @default(now())
+  grantedBy String?  // actorId of granting ADMIN; null for system migration
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  studio Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@id([userId, studioId])
+  @@index([userId])
+  @@map("user_studio_scopes")
+}
+
+// ============================================================
+// CATEGORIES (admin-configurable) — legacy; prefer taxonomy
 // ============================================================
 
 model Category {
@@ -199,30 +243,105 @@ model Category {
 }
 
 // ============================================================
+// TICKET TAXONOMY (Stage 2 config entities)
+// ============================================================
+
+model TicketClass {
+  id        String   @id @default(cuid())
+  code      String   @unique // SUPPORT | MAINTENANCE
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@map("ticket_classes")
+}
+
+/// Taxonomy departments (HR, OPERATIONS, MARKETING, RETAIL). Sync with Department enum for RBAC.
+model TaxonomyDepartment {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supportTopics SupportTopic[]
+  tickets       Ticket[]
+
+  @@map("departments")
+}
+
+model SupportTopic {
+  id           String   @id @default(cuid())
+  departmentId String
+  name         String
+  sortOrder    Int      @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department TaxonomyDepartment @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  tickets    Ticket[]
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+  @@map("support_topics")
+}
+
+model MaintenanceCategory {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tickets Ticket[]
+
+  @@map("maintenance_categories")
+}
+
+// ============================================================
 // TICKETS
 // ============================================================
 
 model Ticket {
-  id          String       @id @default(cuid())
-  title       String
-  description String
-  status      TicketStatus @default(NEW)
-  priority    Priority     @default(MEDIUM)
-  categoryId  String
-  studioId    String?
-  marketId    String?
-  requesterId String
-  ownerId     String?
-  resolvedAt  DateTime?
-  closedAt    DateTime?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id                   String       @id @default(cuid())
+  title                String
+  description          String
+  status               TicketStatus @default(NEW)
+  priority             Priority     @default(MEDIUM)
+  /// @deprecated Use ticketClassId + departmentId/supportTopicId or maintenanceCategoryId. Kept for safety; removal in later migration.
+  categoryId           String?
+  ticketClassId        String
+  departmentId         String?
+  supportTopicId       String?
+  maintenanceCategoryId String?
+  studioId             String?
+  marketId             String?
+  requesterId          String
+  ownerId              String?
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
-  category    Category     @relation(fields: [categoryId], references: [id])
-  studio      Studio?      @relation(fields: [studioId], references: [id])
-  market      Market?      @relation(fields: [marketId], references: [id])
-  requester   User         @relation("TicketRequester", fields: [requesterId], references: [id])
-  owner       User?        @relation("TicketOwner", fields: [ownerId], references: [id])
+  category             Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  ticketClass          TicketClass          @relation(fields: [ticketClassId], references: [id])
+  department           TaxonomyDepartment?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  supportTopic         SupportTopic?       @relation(fields: [supportTopicId], references: [id], onDelete: SetNull)
+  maintenanceCategory  MaintenanceCategory? @relation(fields: [maintenanceCategoryId], references: [id], onDelete: SetNull)
+  studio               Studio?             @relation(fields: [studioId], references: [id])
+  market               Market?             @relation(fields: [marketId], references: [id])
+  requester            User                @relation("TicketRequester", fields: [requesterId], references: [id])
+  owner                User?               @relation("TicketOwner", fields: [ownerId], references: [id])
 
   comments      TicketComment[]
   attachments   TicketAttachment[]
@@ -238,10 +357,15 @@ model Ticket {
   @@index([studioId])
   @@index([marketId])
   @@index([categoryId])
+  @@index([ticketClassId])
+  @@index([departmentId])
+  @@index([supportTopicId])
+  @@index([maintenanceCategoryId])
   @@index([priority])
   @@index([createdAt])
   @@index([status, categoryId])
   @@index([status, ownerId])
+  @@index([requesterId, status])
   @@map("tickets")
 }
 
@@ -446,23 +570,25 @@ model NotificationPreference {
 // ============================================================
 
 model KnowledgeDocument {
-  id          String   @id @default(cuid())
-  title       String
-  sourceType  String   @default("manual") // "manual" | "url" | "file"
-  sourceUrl   String?
-  s3Key       String?  // populated when sourceType = "file"
-  mimeType    String?
-  sizeBytes   Int?
-  isActive    Boolean  @default(true)
+  id           String   @id @default(cuid())
+  title        String
+  sourceType   String   @default("manual") // "manual" | "url" | "file"
+  sourceUrl    String?
+  s3Key        String?  // populated when sourceType = "file"
+  mimeType     String?
+  sizeBytes    Int?
+  isActive     Boolean  @default(true)
+  documentType String?  @default("general") // "general" | "handbook" — handbook chat only searches handbook
   uploadedById String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   uploadedBy User            @relation(fields: [uploadedById], references: [id])
   chunks     DocumentChunk[]
 
   @@index([uploadedById])
   @@index([isActive])
+  @@index([documentType])
   @@map("knowledge_documents")
 }
 

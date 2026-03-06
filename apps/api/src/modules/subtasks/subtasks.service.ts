@@ -45,9 +45,9 @@ export class SubtasksService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    // Requesters cannot create subtasks
-    if (actor.role === Role.REQUESTER) {
-      throw new ForbiddenException('Requesters cannot create subtasks');
+    // Studio users cannot create subtasks
+    if (actor.role === Role.STUDIO_USER) {
+      throw new ForbiddenException('Studio users cannot create subtasks');
     }
 
     // Validate team exists when provided
@@ -128,8 +128,8 @@ export class SubtasksService {
   async update(subtaskId: string, dto: UpdateSubtaskDto, actor: RequestUser) {
     const subtask = await this.findSubtaskOrThrow(subtaskId);
 
-    if (actor.role === Role.REQUESTER) {
-      throw new ForbiddenException('Requesters cannot update subtasks');
+    if (actor.role === Role.STUDIO_USER) {
+      throw new ForbiddenException('Studio users cannot update subtasks');
     }
 
     const previousStatus = subtask.status;

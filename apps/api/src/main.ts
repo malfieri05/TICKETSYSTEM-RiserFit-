@@ -1,19 +1,33 @@
-import { NestFactory, Reflector } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const compression = require('compression');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.use(compression());
+
   // Global prefix — all routes are /api/...
   app.setGlobalPrefix('api');
 
-  // CORS — allow frontend dev server + production domain
+  // CORS — allow frontend dev server (any localhost port) + production domain
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3002',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3002',
+    process.env.FRONTEND_URL,
+  ].filter(Boolean);
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      process.env.FRONTEND_URL,
-    ].filter(Boolean),
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
 

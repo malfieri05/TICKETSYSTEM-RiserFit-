@@ -247,7 +247,7 @@ export const AGENT_TOOLS: ToolDef[] = [
       parameters: {
         type: 'object',
         properties: {
-          role: { type: 'string', enum: ['REQUESTER', 'AGENT', 'MANAGER', 'ADMIN'], description: 'Filter by role' },
+          role: { type: 'string', enum: ['STUDIO_USER', 'DEPARTMENT_USER', 'ADMIN'], description: 'Filter by role' },
         },
       },
     },

@@ -19,9 +19,30 @@ export class CreateTicketDto {
   @IsString()
   description?: string;
 
+  /** @deprecated Prefer ticketClassId + departmentId/supportTopicId or maintenanceCategoryId */
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  /** Required for full taxonomy. Optional for legacy: when missing, treated as MAINTENANCE. */
+  @IsOptional()
+  @IsString()
+  ticketClassId?: string;
+
+  /** Required when ticketClassId is SUPPORT. */
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
+
+  /** Required when ticketClassId is SUPPORT. */
+  @IsOptional()
+  @IsString()
+  supportTopicId?: string;
+
+  /** Required when ticketClassId is MAINTENANCE. */
+  @IsOptional()
+  @IsString()
+  maintenanceCategoryId?: string;
 
   @IsOptional()
   @IsString()

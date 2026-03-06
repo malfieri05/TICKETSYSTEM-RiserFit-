@@ -5,7 +5,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 
 @Controller('reporting')
-@Roles(Role.ADMIN, Role.MANAGER)
+@Roles(Role.ADMIN, Role.DEPARTMENT_USER)
 export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 

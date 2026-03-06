@@ -41,7 +41,14 @@ export class IngestionService {
     title: string,
     content: string,
     uploadedById: string,
-    opts: { sourceType?: string; sourceUrl?: string; s3Key?: string; mimeType?: string; sizeBytes?: number } = {},
+    opts: {
+      sourceType?: string;
+      sourceUrl?: string;
+      s3Key?: string;
+      mimeType?: string;
+      sizeBytes?: number;
+      documentType?: 'general' | 'handbook';
+    } = {},
   ): Promise<{ documentId: string; chunksCreated: number }> {
     // Create the parent document record
     const doc = await this.prisma.knowledgeDocument.create({
@@ -52,6 +59,7 @@ export class IngestionService {
         s3Key: opts.s3Key ?? null,
         mimeType: opts.mimeType ?? null,
         sizeBytes: opts.sizeBytes ?? null,
+        documentType: opts.documentType ?? 'general',
         uploadedById,
       },
     });

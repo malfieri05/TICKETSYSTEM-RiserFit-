@@ -1,5 +1,5 @@
-import { IsOptional, IsEnum, IsString, IsInt, Min, Max, IsDateString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsOptional, IsEnum, IsString, IsInt, Min, Max, IsDateString, IsBoolean } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 import { TicketStatus, Priority } from '@prisma/client';
 
 export class TicketFiltersDto {
@@ -10,6 +10,22 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  ticketClassId?: string;
+
+  @IsOptional()
+  @IsString()
+  departmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  supportTopicId?: string;
+
+  @IsOptional()
+  @IsString()
+  maintenanceCategoryId?: string;
 
   @IsOptional()
   @IsString()
@@ -34,6 +50,18 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  /** When true (default), list includes comment/subtask/attachment counts. Set false for faster list load. */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  includeCounts?: boolean = true;
+
+  /** When true and search is set, only search in title (faster). Default false = search title + description. */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  searchInTitleOnly?: boolean = false;
 
   // Date range filters
   @IsOptional()

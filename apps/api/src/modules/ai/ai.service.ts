@@ -6,6 +6,7 @@ import { IngestionService } from './ingestion.service';
 
 // How many chunks to retrieve for context
 const TOP_K = 5;
+const TOP_K_HANDBOOK = 8;
 // Cosine distance threshold — only use chunks that are sufficiently similar
 const DISTANCE_THRESHOLD = 0.4;
 // Model to use for chat completions
@@ -127,6 +128,72 @@ Keep answers concise and professional.`;
     return { answer, sources, usedContext };
   }
 
+  /** Handbook-only RAG: same as chat() but filters to documentType = 'handbook'. Studio users only. */
+  async chatHandbook(userMessage: string): Promise<ChatResponse> {
+    const queryEmbedding = await this.ingestion.embedOne(userMessage);
+
+    const chunks = await this.prisma.$queryRaw<ChunkRow[]>`
+      SELECT
+        dc.id,
+        dc.content,
+        dc."documentId"    AS document_id,
+        kd.title           AS document_title,
+        dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector AS distance
+      FROM "document_chunks" dc
+      JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
+      WHERE kd."isActive" = true
+        AND kd."documentType" = 'handbook'
+        AND dc.embedding IS NOT NULL
+        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${DISTANCE_THRESHOLD}
+      ORDER BY distance ASC
+      LIMIT ${TOP_K_HANDBOOK}
+    `;
+    this.logger.debug(`Handbook RAG retrieved ${chunks.length} chunks`);
+
+    let systemPrompt: string;
+    let usedContext = false;
+
+    if (chunks.length > 0) {
+      usedContext = true;
+      const contextBlocks = chunks
+        .map((c, i) => `[Source ${i + 1}: ${c.document_title}]\n${c.content}`)
+        .join('\n\n---\n\n');
+      systemPrompt = `You are a helpful assistant. Answer the user's question using ONLY the company handbook context below. If the answer cannot be found in the context, say so clearly. Keep answers concise and professional.
+
+CONTEXT:
+${contextBlocks}`;
+    } else {
+      systemPrompt = `You are a helpful assistant for company handbook questions. You don't have relevant handbook content for this question. Say so and suggest they contact their manager or submit a ticket.`;
+    }
+
+    const completion = await this.openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.2,
+      max_tokens: 800,
+    });
+
+    const answer = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.';
+
+    const seen = new Set<string>();
+    const sources = chunks
+      .filter((c) => {
+        if (seen.has(c.document_id)) return false;
+        seen.add(c.document_id);
+        return true;
+      })
+      .map((c) => ({
+        documentId: c.document_id,
+        title: c.document_title,
+        excerpt: c.content.slice(0, 200) + (c.content.length > 200 ? '…' : ''),
+      }));
+
+    return { answer, sources, usedContext };
+  }
+
   // ── Document management ───────────────────────────────────────────────────
 
   async listDocuments() {
@@ -139,6 +206,7 @@ Keep answers concise and professional.`;
         sourceUrl: true,
         mimeType: true,
         sizeBytes: true,
+        documentType: true,
         isActive: true,
         createdAt: true,
         uploadedBy: { select: { id: true, name: true } },
