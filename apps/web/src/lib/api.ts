@@ -366,6 +366,41 @@ export const workflowTemplatesApi = {
     api.delete<{ removed: boolean }>('/subtask-workflow/template-dependencies', { data }),
 };
 
+// ─── Workflow analytics (Stage 7B, admin only) ───────────────────────────────
+
+export interface WorkflowTemplateAnalyticsRow {
+  templateId: string;
+  templateName: string | null;
+  totalExecutions: number;
+  activeExecutions: number;
+  completedExecutions: number;
+  avgCompletionTimeHours: number | null;
+  mostRecentExecutionAt: string | null;
+}
+
+export interface WorkflowDepartmentMetricsRow {
+  departmentId: string;
+  departmentName: string;
+  ticketsCreated: number;
+  workflowsStarted: number;
+  workflowsCompleted: number;
+  avgWorkflowDurationHours: number | null;
+}
+
+export interface WorkflowBottlenecksResponse {
+  longestSubtasks: { subtaskTemplateId: string; title: string; avgDurationHours: number }[];
+  mostBlockedSubtasks: { subtaskTemplateId: string; title: string; blockedCount: number }[];
+}
+
+export const workflowAnalyticsApi = {
+  getTemplates: () =>
+    api.get<WorkflowTemplateAnalyticsRow[]>('/admin/workflow-analytics/templates'),
+  getDepartments: () =>
+    api.get<WorkflowDepartmentMetricsRow[]>('/admin/workflow-analytics/departments'),
+  getBottlenecks: () =>
+    api.get<WorkflowBottlenecksResponse>('/admin/workflow-analytics/bottlenecks'),
+};
+
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
 export const adminApi = {

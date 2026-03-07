@@ -33,6 +33,7 @@ const adminItems = [
   { href: '/admin/markets', label: 'Markets & Studios', icon: LayoutDashboard },
   { href: '/admin/users', label: 'Users', icon: Settings },
   { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: LayoutDashboard },
+  { href: '/admin/workflow-analytics', label: 'Workflow Analytics', icon: BarChart2 },
   { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
 ];

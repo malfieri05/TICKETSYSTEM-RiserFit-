@@ -22,6 +22,7 @@ import { AiModule } from './modules/ai/ai.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { TicketFormsModule } from './modules/ticket-forms/ticket-forms.module';
 import { SubtaskWorkflowModule } from './modules/subtask-workflow/subtask-workflow.module';
+import { WorkflowAnalyticsModule } from './modules/workflow-analytics/workflow-analytics.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -79,6 +80,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // ── Subtask workflow (Stage 4 templates + dependencies) ───────────────────
     SubtaskWorkflowModule,
+    WorkflowAnalyticsModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,
