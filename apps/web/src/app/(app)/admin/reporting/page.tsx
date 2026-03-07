@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download } from 'lucide-react';
-import { reportingApi, api } from '@/lib/api';
+import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download, Wrench } from 'lucide-react';
+import { reportingApi, api, adminApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Input';
+import { useAuth } from '@/hooks/useAuth';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -114,7 +116,16 @@ const PRIORITY_COLORS: Record<string, string> = {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function ReportingPage() {
+  const { user } = useAuth();
   const [volumeRange, setVolumeRange] = useState<'1d' | '7d' | '30d' | 'all'>('30d');
+
+  // Maintenance report filters (Stage 12)
+  const [maintStudioId, setMaintStudioId] = useState('');
+  const [maintMarketId, setMaintMarketId] = useState('');
+  const [maintCategoryId, setMaintCategoryId] = useState('');
+  const [maintStatus, setMaintStatus] = useState('');
+  const [maintCreatedAfter, setMaintCreatedAfter] = useState('');
+  const [maintCreatedBefore, setMaintCreatedBefore] = useState('');
 
   const volumeDays = volumeRange === '1d' ? 1 : volumeRange === '7d' ? 7 : volumeRange === '30d' ? 30 : 365;
 
@@ -158,6 +169,47 @@ export default function ReportingPage() {
     queryFn: () => reportingApi.completionByOwner(),
   });
 
+  const isAdmin = user?.role === 'ADMIN';
+  const { data: taxonomyRes } = useQuery({
+    queryKey: ['ticket-taxonomy'],
+    queryFn: () => adminApi.getTicketTaxonomy(),
+    enabled: isAdmin,
+  });
+  const { data: marketsRes } = useQuery({
+    queryKey: ['admin', 'markets'],
+    queryFn: () => adminApi.listMarkets(),
+    enabled: isAdmin,
+  });
+
+  const maintParams = {
+    studioId: maintStudioId || undefined,
+    marketId: maintMarketId || undefined,
+    maintenanceCategoryId: maintCategoryId || undefined,
+    status: maintStatus || undefined,
+    createdAfter: maintCreatedAfter || undefined,
+    createdBefore: maintCreatedBefore || undefined,
+  };
+  const { data: maintByStudioRes } = useQuery({
+    queryKey: ['reporting', 'maintenance', 'by-studio', maintParams],
+    queryFn: () => reportingApi.maintenanceByStudio(maintParams),
+    enabled: isAdmin,
+  });
+  const { data: maintByCategoryRes } = useQuery({
+    queryKey: ['reporting', 'maintenance', 'by-category', maintParams],
+    queryFn: () => reportingApi.maintenanceByCategory(maintParams),
+    enabled: isAdmin,
+  });
+  const { data: maintByMarketRes } = useQuery({
+    queryKey: ['reporting', 'maintenance', 'by-market', maintParams],
+    queryFn: () => reportingApi.maintenanceByMarket(maintParams),
+    enabled: isAdmin,
+  });
+  const { data: maintRepeatRes } = useQuery({
+    queryKey: ['reporting', 'maintenance', 'repeat-issues', maintParams],
+    queryFn: () => reportingApi.maintenanceRepeatIssues(maintParams),
+    enabled: isAdmin,
+  });
+
   const summary = summaryRes?.data;
   const volume = volumeRes?.data ?? [];
   const byStatus = statusRes?.data ?? [];
@@ -166,6 +218,19 @@ export default function ReportingPage() {
   const byMarket = marketRes?.data ?? [];
   const resolutionTime = resolutionRes?.data ?? [];
   const completionByOwner = completionOwnerRes?.data ?? [];
+
+  const maintByStudio = maintByStudioRes?.data ?? [];
+  const maintByCategory = maintByCategoryRes?.data ?? [];
+  const maintByMarket = maintByMarketRes?.data ?? [];
+  const maintRepeat = maintRepeatRes?.data ?? [];
+  const maintenanceCategories = taxonomyRes?.data?.maintenanceCategories ?? [];
+  const markets = marketsRes?.data ?? [];
+  const allStudios = markets.flatMap((m: { id: string; name: string; studios?: { id: string; name: string }[] }) =>
+    (m.studios ?? []).map((s: { id: string; name: string }) => ({ ...s, marketId: m.id, marketName: m.name })),
+  );
+  const maxMaintStudio = Math.max(...maintByStudio.map((r) => r.count), 1);
+  const maxMaintCategory = Math.max(...maintByCategory.map((r) => r.count), 1);
+  const maxMaintMarket = Math.max(...maintByMarket.map((r) => r.count), 1);
 
   const maxStatus = Math.max(...byStatus.map((r) => r.count), 1);
   const maxPriority = Math.max(...byPriority.map((r) => r.count), 1);
@@ -452,6 +517,144 @@ export default function ReportingPage() {
             </div>
           )}
         </div>
+
+        {/* ── Maintenance (Stage 12, ADMIN only) ────────────────────────────── */}
+        {isAdmin && (
+          <div className="rounded-xl p-5 space-y-4" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+            <div className="flex items-center gap-2">
+              <Wrench className="h-4 w-4 text-gray-400" />
+              <h3 className="text-sm font-semibold text-gray-300">Maintenance</h3>
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              <Select value={maintStudioId} onChange={(e) => setMaintStudioId(e.target.value)} className="w-44">
+                <option value="">All locations</option>
+                {allStudios.map((s: { id: string; name: string }) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </Select>
+              <Select value={maintMarketId} onChange={(e) => setMaintMarketId(e.target.value)} className="w-44">
+                <option value="">All markets</option>
+                {markets.map((m: { id: string; name: string }) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </Select>
+              <Select value={maintCategoryId} onChange={(e) => setMaintCategoryId(e.target.value)} className="w-44">
+                <option value="">All categories</option>
+                {maintenanceCategories.map((c: { id: string; name: string }) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+              <Select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-40">
+                <option value="">All statuses</option>
+                <option value="NEW">New</option>
+                <option value="TRIAGED">Triaged</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="WAITING_ON_REQUESTER">Waiting: Requester</option>
+                <option value="WAITING_ON_VENDOR">Waiting: Vendor</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
+              </Select>
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={maintCreatedAfter}
+                  onChange={(e) => setMaintCreatedAfter(e.target.value)}
+                  className="rounded border border-neutral-700 bg-neutral-900 text-gray-200 text-sm px-2 py-1"
+                />
+                <span className="text-gray-500 text-sm">–</span>
+                <input
+                  type="date"
+                  value={maintCreatedBefore}
+                  onChange={(e) => setMaintCreatedBefore(e.target.value)}
+                  className="rounded border border-neutral-700 bg-neutral-900 text-gray-200 text-sm px-2 py-1"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Issues by studio</h4>
+                {maintByStudio.length === 0 ? (
+                  <p className="text-sm text-gray-400">No maintenance tickets.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {maintByStudio.map((r) => (
+                      <HorizontalBar
+                        key={r.studioId ?? 'none'}
+                        label={r.studioName}
+                        count={r.count}
+                        max={maxMaintStudio}
+                        color="#14b8a6"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Issues by category</h4>
+                {maintByCategory.length === 0 ? (
+                  <p className="text-sm text-gray-400">No maintenance tickets.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {maintByCategory.map((r) => (
+                      <HorizontalBar
+                        key={r.maintenanceCategoryId ?? 'none'}
+                        label={r.maintenanceCategoryName}
+                        count={r.count}
+                        max={maxMaintCategory}
+                        color="#0ea5e9"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Issues by market</h4>
+                {maintByMarket.length === 0 ? (
+                  <p className="text-sm text-gray-400">No maintenance tickets.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {maintByMarket.map((r) => (
+                      <HorizontalBar
+                        key={r.marketId ?? 'none'}
+                        label={r.marketName}
+                        count={r.count}
+                        max={maxMaintMarket}
+                        color="#8b5cf6"
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Repeat issues</h4>
+                {maintRepeat.length === 0 ? (
+                  <p className="text-sm text-gray-400">No repeat issues (same studio + category, count ≥ threshold).</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-neutral-800 text-gray-500 text-xs uppercase tracking-wide">
+                          <th className="text-left py-2 pr-4">Studio</th>
+                          <th className="text-left py-2 pr-4">Category</th>
+                          <th className="text-right py-2">Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {maintRepeat.map((r, i) => (
+                          <tr key={`${r.studioId}-${r.maintenanceCategoryId}-${i}`} className="border-b border-neutral-900/70">
+                            <td className="py-1.5 pr-4 text-gray-200">{r.studioName}</td>
+                            <td className="py-1.5 pr-4 text-gray-200">{r.maintenanceCategoryName}</td>
+                            <td className="py-1.5 text-right text-gray-100 font-medium">{r.count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

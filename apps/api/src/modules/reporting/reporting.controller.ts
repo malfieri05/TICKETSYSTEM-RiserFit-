@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { ReportingService } from './reporting.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import type { MaintenanceReportFiltersDto } from './dto/maintenance-report-filters.dto';
 
 @Controller('reporting')
 @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
@@ -59,6 +60,31 @@ export class ReportingController {
   @Get('completion-time/owners')
   getCompletionTimeByOwner() {
     return this.reportingService.getCompletionTimeByOwner();
+  }
+
+  // ─── Maintenance reporting (Stage 12, ADMIN only) ─────────────────────────
+  @Get('maintenance/by-studio')
+  @Roles(Role.ADMIN)
+  getMaintenanceByStudio(@Query() filters: MaintenanceReportFiltersDto) {
+    return this.reportingService.getMaintenanceByStudio(filters);
+  }
+
+  @Get('maintenance/by-category')
+  @Roles(Role.ADMIN)
+  getMaintenanceByCategory(@Query() filters: MaintenanceReportFiltersDto) {
+    return this.reportingService.getMaintenanceByCategory(filters);
+  }
+
+  @Get('maintenance/by-market')
+  @Roles(Role.ADMIN)
+  getMaintenanceByMarket(@Query() filters: MaintenanceReportFiltersDto) {
+    return this.reportingService.getMaintenanceByMarket(filters);
+  }
+
+  @Get('maintenance/repeat-issues')
+  @Roles(Role.ADMIN)
+  getMaintenanceRepeatIssues(@Query() filters: MaintenanceReportFiltersDto) {
+    return this.reportingService.getMaintenanceRepeatIssues(filters);
   }
 
   // GET /api/reporting/export

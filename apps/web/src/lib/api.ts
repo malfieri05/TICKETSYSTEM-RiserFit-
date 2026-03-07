@@ -207,6 +207,62 @@ export const reportingApi = {
     api.get<{ userId: string; userName: string; avgHours: number | null; closedCount: number }[]>(
       '/reporting/completion-time/owners',
     ),
+
+  // Maintenance reporting (Stage 12, ADMIN only)
+  maintenanceByStudio: (params?: {
+    studioId?: string;
+    marketId?: string;
+    maintenanceCategoryId?: string;
+    status?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+  }) =>
+    api.get<
+      { studioId: string | null; studioName: string; marketId: string | null; marketName: string | null; count: number }[]
+    >('/reporting/maintenance/by-studio', { params }),
+
+  maintenanceByCategory: (params?: {
+    studioId?: string;
+    marketId?: string;
+    maintenanceCategoryId?: string;
+    status?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+  }) =>
+    api.get<
+      { maintenanceCategoryId: string | null; maintenanceCategoryName: string; count: number }[]
+    >('/reporting/maintenance/by-category', { params }),
+
+  maintenanceByMarket: (params?: {
+    studioId?: string;
+    marketId?: string;
+    maintenanceCategoryId?: string;
+    status?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+  }) =>
+    api.get<{ marketId: string | null; marketName: string; count: number }[]>(
+      '/reporting/maintenance/by-market',
+      { params },
+    ),
+
+  maintenanceRepeatIssues: (params?: {
+    studioId?: string;
+    marketId?: string;
+    maintenanceCategoryId?: string;
+    status?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+  }) =>
+    api.get<
+      {
+        studioId: string;
+        studioName: string;
+        maintenanceCategoryId: string;
+        maintenanceCategoryName: string;
+        count: number;
+      }[]
+    >('/reporting/maintenance/repeat-issues', { params }),
 };
 
 // ─── AI Assistant ───────────────────────────────────────────────────────────

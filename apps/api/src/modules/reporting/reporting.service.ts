@@ -1,9 +1,33 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
+import type { MaintenanceReportFiltersDto } from './dto/maintenance-report-filters.dto';
+
+const MAINT_REPEAT_THRESHOLD = parseInt(
+  process.env.MAINT_REPEAT_THRESHOLD ?? '2',
+  10,
+) || 2;
 
 @Injectable()
 export class ReportingService {
   constructor(private prisma: PrismaService) {}
+
+  /** Build where clause for maintenance tickets (ticketClass = MAINTENANCE) + optional filters. */
+  private maintenanceWhere(filters: MaintenanceReportFiltersDto): Prisma.TicketWhereInput {
+    const where: Prisma.TicketWhereInput = {
+      ticketClass: { code: 'MAINTENANCE' },
+    };
+    if (filters.studioId) where.studioId = filters.studioId;
+    if (filters.marketId) where.marketId = filters.marketId;
+    if (filters.maintenanceCategoryId) where.maintenanceCategoryId = filters.maintenanceCategoryId;
+    if (filters.status) where.status = filters.status;
+    if (filters.createdAfter || filters.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) where.createdAt.gte = new Date(filters.createdAfter);
+      if (filters.createdBefore) where.createdAt.lte = new Date(filters.createdBefore);
+    }
+    return where;
+  }
 
   // ── Overall summary stats ─────────────────────────────────────────────────
   async getSummary() {
@@ -273,5 +297,128 @@ export class ReportingService {
     ].join(','));
 
     return [headers.join(','), ...rows].join('\n');
+  }
+
+  // ─── Maintenance reporting (Stage 12) ─────────────────────────────────────
+
+  async getMaintenanceByStudio(filters: MaintenanceReportFiltersDto) {
+    const where = this.maintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['studioId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { studioId: 'desc' } },
+    });
+
+    const studioIds = rows.map((r) => r.studioId).filter((id): id is string => id !== null);
+    const studios = studioIds.length
+      ? await this.prisma.studio.findMany({
+          where: { id: { in: studioIds } },
+          select: { id: true, name: true, marketId: true, market: { select: { id: true, name: true } } },
+        })
+      : [];
+    const studioMap = new Map(studios.map((s) => [s.id, s]));
+
+    return rows.map((r) => ({
+      studioId: r.studioId,
+      studioName: r.studioId ? studioMap.get(r.studioId)?.name ?? 'Unknown' : 'No Studio',
+      marketId: r.studioId ? studioMap.get(r.studioId)?.marketId ?? null : null,
+      marketName: r.studioId ? studioMap.get(r.studioId)?.market?.name ?? null : null,
+      count: r._count._all,
+    }));
+  }
+
+  async getMaintenanceByCategory(filters: MaintenanceReportFiltersDto) {
+    const where = this.maintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['maintenanceCategoryId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { maintenanceCategoryId: 'desc' } },
+    });
+
+    const categoryIds = rows.map((r) => r.maintenanceCategoryId).filter((id): id is string => id !== null);
+    const categories = categoryIds.length
+      ? await this.prisma.maintenanceCategory.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
+    return rows.map((r) => ({
+      maintenanceCategoryId: r.maintenanceCategoryId,
+      maintenanceCategoryName: r.maintenanceCategoryId
+        ? categoryMap.get(r.maintenanceCategoryId)?.name ?? 'Unknown'
+        : 'Uncategorized',
+      count: r._count._all,
+    }));
+  }
+
+  async getMaintenanceByMarket(filters: MaintenanceReportFiltersDto) {
+    const where = this.maintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['marketId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { marketId: 'desc' } },
+    });
+
+    const marketIds = rows.map((r) => r.marketId).filter((id): id is string => id !== null);
+    const markets = marketIds.length
+      ? await this.prisma.market.findMany({
+          where: { id: { in: marketIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const marketMap = new Map(markets.map((m) => [m.id, m]));
+
+    return rows.map((r) => ({
+      marketId: r.marketId,
+      marketName: r.marketId ? marketMap.get(r.marketId)?.name ?? 'Unknown' : 'No Market',
+      count: r._count._all,
+    }));
+  }
+
+  async getMaintenanceRepeatIssues(filters: MaintenanceReportFiltersDto) {
+    const where = this.maintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['studioId', 'maintenanceCategoryId'],
+      where: {
+        ...where,
+        studioId: { not: null },
+        maintenanceCategoryId: { not: null },
+      },
+      _count: { _all: true },
+    });
+
+    const above = rows.filter((r) => r._count._all >= MAINT_REPEAT_THRESHOLD);
+    const studioIds = [...new Set(above.map((r) => r.studioId!).filter(Boolean))];
+    const categoryIds = [...new Set(above.map((r) => r.maintenanceCategoryId!).filter(Boolean))];
+
+    const [studios, categories] = await Promise.all([
+      studioIds.length
+        ? this.prisma.studio.findMany({
+            where: { id: { in: studioIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      categoryIds.length
+        ? this.prisma.maintenanceCategory.findMany({
+            where: { id: { in: categoryIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
+    const studioMap = new Map(studios.map((s) => [s.id, s]));
+    const categoryMap = new Map(categories.map((c) => [c.id, c]));
+
+    return above.map((r) => ({
+      studioId: r.studioId!,
+      studioName: studioMap.get(r.studioId!)?.name ?? 'Unknown',
+      maintenanceCategoryId: r.maintenanceCategoryId!,
+      maintenanceCategoryName: categoryMap.get(r.maintenanceCategoryId!)?.name ?? 'Unknown',
+      count: r._count._all,
+    }));
   }
 }
