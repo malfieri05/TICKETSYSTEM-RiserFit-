@@ -364,6 +364,8 @@ export const workflowTemplatesApi = {
     api.post<import('@/types').WorkflowTemplateDependencyDto>('/subtask-workflow/template-dependencies', data),
   removeDependency: (data: { subtaskTemplateId: string; dependsOnSubtaskTemplateId: string }) =>
     api.delete<{ removed: boolean }>('/subtask-workflow/template-dependencies', { data }),
+  reorderSubtaskTemplates: (workflowTemplateId: string, subtaskTemplateIds: string[]) =>
+    api.post<{ reordered: boolean }>(`/subtask-workflow/templates/${workflowTemplateId}/subtask-templates/reorder`, { subtaskTemplateIds }),
 };
 
 // ─── Workflow analytics (Stage 7B, admin only) ───────────────────────────────

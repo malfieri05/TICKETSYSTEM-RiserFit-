@@ -437,4 +437,34 @@ export class SubtaskWorkflowService {
     });
     return { removed: true };
   }
+
+  /**
+   * Reorder subtask templates by array order. Array index = sortOrder.
+   * All updates in a single transaction; only subtask templates belonging to this workflow are updated.
+   */
+  async reorderSubtaskTemplates(workflowTemplateId: string, subtaskTemplateIds: string[]) {
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
+      where: { id: workflowTemplateId },
+    });
+    const templateIds = await this.prisma.subtaskTemplate.findMany({
+      where: { workflowTemplateId },
+      select: { id: true },
+    });
+    const idSet = new Set(templateIds.map((t) => t.id));
+    const ordered = subtaskTemplateIds.filter((id) => idSet.has(id));
+    if (ordered.length !== idSet.size) {
+      throw new BadRequestException(
+        'subtaskTemplateIds must contain exactly the subtask template IDs for this workflow, in the desired order',
+      );
+    }
+    await this.prisma.$transaction(async (tx) => {
+      for (let index = 0; index < ordered.length; index++) {
+        await tx.subtaskTemplate.update({
+          where: { id: ordered[index] },
+          data: { sortOrder: index },
+        });
+      }
+    });
+    return { reordered: true };
+  }
 }

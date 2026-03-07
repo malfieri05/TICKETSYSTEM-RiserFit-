@@ -7,6 +7,7 @@ import { CreateSubtaskTemplateDto } from './dto/create-subtask-template.dto';
 import { UpdateSubtaskTemplateDto } from './dto/update-subtask-template.dto';
 import { AddTemplateDependencyDto } from './dto/add-template-dependency.dto';
 import { RemoveTemplateDependencyDto } from './dto/remove-template-dependency.dto';
+import { ReorderSubtaskTemplatesDto } from './dto/reorder-subtask-templates.dto';
 
 @Controller('subtask-workflow')
 export class SubtaskWorkflowController {
@@ -37,6 +38,12 @@ export class SubtaskWorkflowController {
       name: dto.name ?? undefined,
       sortOrder: dto.sortOrder ?? 0,
     });
+  }
+
+  @Post('templates/:id/subtask-templates/reorder')
+  @Roles('ADMIN')
+  reorderSubtaskTemplates(@Param('id') id: string, @Body() dto: ReorderSubtaskTemplatesDto) {
+    return this.workflow.reorderSubtaskTemplates(id, dto.subtaskTemplateIds);
   }
 
   @Get('templates/:id/stats')
