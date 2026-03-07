@@ -504,7 +504,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               {canManage && (
                 <SideSection label="Assigned to">
                   <AssigneeSelector
-                    currentOwner={ticket.owner}
+                    currentOwner={ticket.owner ? { id: ticket.owner.id, displayName: ticket.owner.displayName ?? ticket.owner.name ?? ticket.owner.email } : undefined}
                     agents={agents}
                     onAssign={(ownerId) => assignMut.mutate(ownerId ?? '')}
                   />

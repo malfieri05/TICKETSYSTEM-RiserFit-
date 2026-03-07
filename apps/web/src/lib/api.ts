@@ -61,16 +61,18 @@ export const ticketsApi = {
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),
-  create: (data: {
-    title: string;
-    description?: string;
-    priority: import('@/types').TicketPriority;
-    categoryId?: string;
-    studioId?: string;
-    marketId?: string;
-    teamId?: string;
-    ownerId?: string;
-  }) => api.post<import('@/types').TicketDetail>('/tickets', data),
+  create: (data:
+    | import('@/types').CreateTicketPayload
+    | {
+        title: string;
+        description?: string;
+        priority: import('@/types').TicketPriority;
+        categoryId?: string;
+        studioId?: string;
+        marketId?: string;
+        teamId?: string;
+        ownerId?: string;
+      }) => api.post<import('@/types').TicketDetail>('/tickets', data),
   update: (id: string, data: { title?: string; description?: string; priority?: import('@/types').TicketPriority }) =>
     api.patch<import('@/types').TicketDetail>(`/tickets/${id}`, data),
   assign: (id: string, ownerId: string | null) =>
@@ -306,9 +308,68 @@ export const agentApi = {
     }>>(`/agent/conversations/${conversationId}/messages`),
 };
 
+// ─── Ticket forms (Stage 3 schema) ──────────────────────────────────────────
+
+export const ticketFormsApi = {
+  getSchema: (params: {
+    ticketClassId: string;
+    departmentId?: string;
+    supportTopicId?: string;
+    maintenanceCategoryId?: string;
+  }) =>
+    api.get<import('@/types').TicketFormSchemaDto>('/ticket-forms/schema', { params }),
+};
+
+// ─── Workflow templates (Stage 4 / 6.5 admin) ──────────────────────────────
+
+export const workflowTemplatesApi = {
+  list: (params?: { ticketClassId?: string; supportTopicId?: string; maintenanceCategoryId?: string }) =>
+    api.get<import('@/types').WorkflowTemplateListItemDto[]>('/subtask-workflow/templates', { params }),
+  get: (id: string) =>
+    api.get<import('@/types').WorkflowTemplateDetailDto>(`/subtask-workflow/templates/${id}`),
+  create: (data: {
+    ticketClassId: string;
+    departmentId?: string | null;
+    supportTopicId?: string | null;
+    maintenanceCategoryId?: string | null;
+    name?: string | null;
+    sortOrder?: number;
+  }) => api.post<{ id: string }>('/subtask-workflow/templates', data),
+  update: (id: string, data: { name?: string | null; sortOrder?: number; isActive?: boolean }) =>
+    api.patch<import('@/types').WorkflowTemplateListItemDto>(`/subtask-workflow/templates/${id}`, data),
+  delete: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/subtask-workflow/templates/${id}`),
+  createSubtaskTemplate: (data: {
+    workflowTemplateId: string;
+    title: string;
+    description?: string | null;
+    departmentId: string;
+    assignedUserId?: string | null;
+    isRequired?: boolean;
+    sortOrder?: number;
+  }) => api.post<import('@/types').WorkflowTemplateSubtaskDto>('/subtask-workflow/subtask-templates', data),
+  updateSubtaskTemplate: (id: string, data: {
+    title?: string;
+    description?: string | null;
+    departmentId?: string;
+    assignedUserId?: string | null;
+    isRequired?: boolean;
+    sortOrder?: number;
+  }) => api.patch<import('@/types').WorkflowTemplateSubtaskDto>(`/subtask-workflow/subtask-templates/${id}`, data),
+  deleteSubtaskTemplate: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/subtask-workflow/subtask-templates/${id}`),
+  addDependency: (data: { workflowTemplateId: string; subtaskTemplateId: string; dependsOnSubtaskTemplateId: string }) =>
+    api.post<import('@/types').WorkflowTemplateDependencyDto>('/subtask-workflow/template-dependencies', data),
+  removeDependency: (data: { subtaskTemplateId: string; dependsOnSubtaskTemplateId: string }) =>
+    api.delete<{ removed: boolean }>('/subtask-workflow/template-dependencies', { data }),
+};
+
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
 export const adminApi = {
+  getTicketTaxonomy: () =>
+    api.get<import('@/types').TicketTaxonomyResponse>('/admin/config/ticket-taxonomy'),
+
   // Categories
   listCategories: () =>
     api.get<{ id: string; name: string; color: string | null; isActive: boolean }[]>('/admin/categories'),

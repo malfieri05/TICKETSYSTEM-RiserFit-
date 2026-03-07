@@ -269,7 +269,13 @@ export class SubtaskWorkflowService {
     const t = await this.prisma.subtaskWorkflowTemplate.findUnique({
       where: { id },
       include: {
-        subtaskTemplates: { orderBy: { sortOrder: 'asc' } },
+        subtaskTemplates: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            department: { select: { id: true, code: true, name: true } },
+            assignedUser: { select: { id: true, name: true, email: true } },
+          },
+        },
         ticketClass: { select: { id: true, code: true, name: true } },
         department: { select: { id: true, code: true, name: true } },
         supportTopic: { select: { id: true, name: true } },
@@ -284,5 +290,92 @@ export class SubtaskWorkflowService {
       },
     });
     return { ...t, templateDependencies: deps };
+  }
+
+  async listWorkflowTemplates(params?: {
+    ticketClassId?: string;
+    supportTopicId?: string;
+    maintenanceCategoryId?: string;
+  }) {
+    const where: { ticketClassId?: string; supportTopicId?: string; maintenanceCategoryId?: string } = {};
+    if (params?.ticketClassId) where.ticketClassId = params.ticketClassId;
+    if (params?.supportTopicId) where.supportTopicId = params.supportTopicId;
+    if (params?.maintenanceCategoryId) where.maintenanceCategoryId = params.maintenanceCategoryId;
+
+    return this.prisma.subtaskWorkflowTemplate.findMany({
+      where,
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      include: {
+        ticketClass: { select: { id: true, code: true, name: true } },
+        department: { select: { id: true, code: true, name: true } },
+        supportTopic: { select: { id: true, name: true } },
+        maintenanceCategory: { select: { id: true, name: true } },
+        _count: { select: { subtaskTemplates: true } },
+      },
+    });
+  }
+
+  async updateWorkflowTemplate(
+    id: string,
+    data: { name?: string | null; sortOrder?: number; isActive?: boolean },
+  ) {
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id } });
+    return this.prisma.subtaskWorkflowTemplate.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
+      },
+    });
+  }
+
+  async deleteWorkflowTemplate(id: string) {
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id } });
+    await this.prisma.subtaskWorkflowTemplate.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  async updateSubtaskTemplate(
+    id: string,
+    data: {
+      title?: string;
+      description?: string | null;
+      departmentId?: string;
+      assignedUserId?: string | null;
+      isRequired?: boolean;
+      sortOrder?: number;
+    },
+  ) {
+    await this.prisma.subtaskTemplate.findUniqueOrThrow({ where: { id } });
+    return this.prisma.subtaskTemplate.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.description !== undefined && { description: data.description }),
+        ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
+        ...(data.assignedUserId !== undefined && { assignedUserId: data.assignedUserId }),
+        ...(data.isRequired !== undefined && { isRequired: data.isRequired }),
+        ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
+      },
+    });
+  }
+
+  async deleteSubtaskTemplate(id: string) {
+    await this.prisma.subtaskTemplate.findUniqueOrThrow({ where: { id } });
+    await this.prisma.subtaskTemplate.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  async removeTemplateDependency(subtaskTemplateId: string, dependsOnSubtaskTemplateId: string) {
+    await this.prisma.subtaskTemplateDependency.delete({
+      where: {
+        subtaskTemplateId_dependsOnSubtaskTemplateId: {
+          subtaskTemplateId,
+          dependsOnSubtaskTemplateId,
+        },
+      },
+    });
+    return { removed: true };
   }
 }

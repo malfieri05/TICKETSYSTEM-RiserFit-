@@ -15,6 +15,7 @@ export default function NotificationsPage() {
   const { data, isLoading } = useNotifications({ limit: 50 });
   const notifications = data?.data.data ?? [];
 
+  const listParams = { limit: 50 };
   const markReadMut = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
@@ -24,6 +25,28 @@ export default function NotificationsPage() {
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
   });
+
+  /** Optimistic read: update UI immediately, then call API in background. */
+  function handleNotificationClick(notif: (typeof notifications)[0]) {
+    if (notif.ticketId) {
+      const subtaskId = notif.metadata?.subtaskId;
+      const href = subtaskId ? `/tickets/${notif.ticketId}#subtask-${subtaskId}` : `/tickets/${notif.ticketId}`;
+      if (!notif.isRead) {
+        qc.setQueryData(
+          ['notifications', listParams],
+          (prev: Awaited<ReturnType<typeof notificationsApi.list>>['data'] | undefined) => {
+            if (!prev?.data) return prev;
+            return {
+              ...prev,
+              data: prev.data.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)),
+            };
+          },
+        );
+        markReadMut.mutate(notif.id);
+      }
+      router.push(href);
+    }
+  }
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
@@ -54,10 +77,7 @@ export default function NotificationsPage() {
             {notifications.map((notif, i) => (
               <div
                 key={notif.id}
-                onClick={() => {
-                  if (!notif.isRead) markReadMut.mutate(notif.id);
-                  if (notif.ticketId) router.push(`/tickets/${notif.ticketId}`);
-                }}
+                onClick={() => handleNotificationClick(notif)}
                 className="flex items-start gap-3 px-4 py-3 transition-colors"
                 style={{
                   background: !notif.isRead ? 'rgba(20,184,166,0.06)' : 'transparent',

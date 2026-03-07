@@ -79,7 +79,7 @@ export default function AdminUsersPage() {
     try {
       await roleMut.mutateAsync({ id: userId, role });
       if (role === 'DEPARTMENT_USER') {
-        const departmentsToSet = department ? [department] : ['MARKETING'];
+        const departmentsToSet: Department[] = department ? [department as Department] : ['MARKETING'];
         await departmentsMut.mutateAsync({ id: userId, departments: departmentsToSet });
       }
       setEditableRows((prev) => ({ ...prev, [userId]: false }));

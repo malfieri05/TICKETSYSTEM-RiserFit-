@@ -93,12 +93,15 @@ export interface TicketListItem {
   createdAt: string;
   updatedAt: string;
   requester: { id: string; displayName: string; email: string };
-  owner?: { id: string; displayName: string; email: string };
+  /** API may return name or displayName */
+  owner?: { id: string; displayName?: string; name?: string; email: string };
   category?: { id: string; name: string };
   studio?: { id: string; name: string };
   market?: { id: string; name: string };
   _count?: { comments: number; subtasks: number; attachments: number };
   sla?: SlaStatus;
+  /** When actionableForMe=true, backend returns READY subtasks for list; avoids N+1. */
+  readySubtasksSummary?: { id: string; title: string }[];
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -152,6 +155,8 @@ export interface Notification {
   createdAt: string;
   ticketId?: string;
   ticket?: { id: string; title: string };
+  /** Optional payload for deep links (e.g. subtaskId for ticket#subtask-xxx). */
+  metadata?: { subtaskId?: string };
 }
 
 // ─── API response shapes ───────────────────────────────────────────────────
@@ -171,8 +176,151 @@ export interface TicketFilters {
   marketId?: string;
   ownerId?: string;
   requesterId?: string;
-   teamId?: string;
+  teamId?: string;
   search?: string;
   page?: number;
   limit?: number;
+  /** When true, list only tickets with READY subtasks for current user (dept/owner). */
+  actionableForMe?: boolean;
+}
+
+// ─── Ticket taxonomy (Stage 2) & form schema (Stage 3) ─────────────────────
+
+export interface TicketClassDto {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface TaxonomyDepartmentDto {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface SupportTopicDto {
+  id: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface DepartmentWithTopicsDto extends TaxonomyDepartmentDto {
+  topics: SupportTopicDto[];
+}
+
+export interface MaintenanceCategoryDto {
+  id: string;
+  name: string;
+  description?: string | null;
+  color?: string | null;
+  sortOrder: number;
+}
+
+export interface TicketTaxonomyResponse {
+  ticketClasses: TicketClassDto[];
+  departments: TaxonomyDepartmentDto[];
+  supportTopicsByDepartment: DepartmentWithTopicsDto[];
+  maintenanceCategories: MaintenanceCategoryDto[];
+}
+
+export interface FormFieldOptionDto {
+  value: string;
+  label: string;
+  sortOrder: number;
+}
+
+export interface FormFieldDto {
+  id: string;
+  fieldKey: string;
+  type: string;
+  label: string;
+  required: boolean;
+  sortOrder: number;
+  conditionalFieldKey?: string | null;
+  conditionalValue?: string | null;
+  options?: FormFieldOptionDto[];
+}
+
+export interface TicketFormSchemaDto {
+  id: string;
+  ticketClassId: string;
+  departmentId: string | null;
+  supportTopicId: string | null;
+  maintenanceCategoryId: string | null;
+  version: number;
+  name: string | null;
+  sortOrder: number;
+  fields: FormFieldDto[];
+}
+
+/** Full create payload when using taxonomy (no categoryId). */
+export interface CreateTicketPayload {
+  title: string;
+  description?: string;
+  priority: TicketPriority;
+  ticketClassId: string;
+  departmentId?: string;
+  supportTopicId?: string;
+  maintenanceCategoryId?: string;
+  formResponses?: Record<string, string>;
+  studioId?: string;
+  marketId?: string;
+  ownerId?: string;
+}
+
+// ─── Workflow templates (Stage 4 / 6.5) ─────────────────────────────────────
+
+export interface WorkflowTemplateSubtaskDto {
+  id: string;
+  workflowTemplateId: string;
+  title: string;
+  description: string | null;
+  departmentId: string;
+  assignedUserId: string | null;
+  isRequired: boolean;
+  sortOrder: number;
+  department?: { id: string; code: string; name: string };
+  assignedUser?: { id: string; name: string; email: string } | null;
+}
+
+export interface WorkflowTemplateDependencyDto {
+  subtaskTemplateId: string;
+  dependsOnSubtaskTemplateId: string;
+}
+
+export interface WorkflowTemplateDetailDto {
+  id: string;
+  ticketClassId: string;
+  departmentId: string | null;
+  supportTopicId: string | null;
+  maintenanceCategoryId: string | null;
+  name: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  ticketClass: { id: string; code: string; name: string };
+  department: { id: string; code: string; name: string } | null;
+  supportTopic: { id: string; name: string } | null;
+  maintenanceCategory: { id: string; name: string } | null;
+  subtaskTemplates: WorkflowTemplateSubtaskDto[];
+  templateDependencies: WorkflowTemplateDependencyDto[];
+}
+
+export interface WorkflowTemplateListItemDto {
+  id: string;
+  ticketClassId: string;
+  departmentId: string | null;
+  supportTopicId: string | null;
+  maintenanceCategoryId: string | null;
+  name: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  ticketClass: { id: string; code: string; name: string };
+  department: { id: string; code: string; name: string } | null;
+  supportTopic: { id: string; name: string } | null;
+  maintenanceCategory: { id: string; name: string } | null;
+  _count: { subtaskTemplates: number };
 }

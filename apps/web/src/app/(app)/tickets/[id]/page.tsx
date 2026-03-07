@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
@@ -35,6 +35,7 @@ const panelSection = { borderTop: '1px solid #2a2a2a' };
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const qc = useQueryClient();
 
@@ -51,6 +52,25 @@ export default function TicketDetailPage() {
     queryFn: () => ticketsApi.get(id),
   });
   const ticket = ticketRes?.data;
+
+  // Stage 6: deep link to subtask from #subtask-xxx or ?subtask=xxx
+  useEffect(() => {
+    if (!ticket) return;
+    const fromQuery = searchParams.get('subtask');
+    const hash = typeof window !== 'undefined' ? window.location.hash : '';
+    const fromHash = hash.startsWith('#subtask-') ? hash.slice('#subtask-'.length) : null;
+    const subtaskId = fromQuery ?? fromHash;
+    if (!subtaskId) return;
+    const hasSubtask = ticket.subtasks.some((s) => s.id === subtaskId);
+    if (!hasSubtask) return;
+    setActiveTab('subtasks');
+    const scrollToSubtask = () => {
+      const el = document.getElementById(`subtask-${subtaskId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+    const t = setTimeout(scrollToSubtask, 100);
+    return () => clearTimeout(t);
+  }, [ticket, searchParams]);
 
   const { data: historyRes } = useQuery({
     queryKey: ['ticket', id, 'history'],
@@ -359,7 +379,7 @@ export default function TicketDetailPage() {
                   <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No subtasks yet.</p>
                 )}
                 {ticket.subtasks.map((subtask) => (
-                  <div key={subtask.id} className="rounded-xl p-3 flex items-center gap-3" style={panel}>
+                  <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex items-center gap-3" style={panel}>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm font-medium', subtask.status === 'DONE' ? 'line-through' : 'text-gray-200')}
                         style={subtask.status === 'DONE' ? { color: '#555555', textDecoration: 'line-through' } : undefined}>

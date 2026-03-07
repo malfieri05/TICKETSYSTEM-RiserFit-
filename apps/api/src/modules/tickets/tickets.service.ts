@@ -489,7 +489,32 @@ export class TicketsService {
     ]);
 
     // Annotate with SLA status (computed from priority + createdAt, no extra DB query)
-    const annotated = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
+    let annotated: (typeof tickets[0] & { sla: ReturnType<SlaService['compute']>; readySubtasksSummary?: { id: string; title: string }[] })[] = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
+
+    // Stage 6: when actionableForMe=true, attach READY subtask summary per ticket (same dept/owner filter) to avoid N+1
+    if (actionableForMe && (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN') && annotated.length > 0) {
+      const departmentCodes = actor.departments?.length ? actor.departments.map((d) => String(d)) : [];
+      const readySubtasks = await this.prisma.subtask.findMany({
+        where: {
+          ticketId: { in: annotated.map((t) => t.id) },
+          status: 'READY',
+          OR: [
+            ...(departmentCodes.length > 0 ? [{ department: { code: { in: departmentCodes } } }] : []),
+            { ownerId: actor.id },
+          ].filter((x) => Object.keys(x).length > 0),
+        },
+        select: { ticketId: true, id: true, title: true },
+      });
+      const byTicket = new Map<string, { id: string; title: string }[]>();
+      for (const s of readySubtasks) {
+        if (!byTicket.has(s.ticketId)) byTicket.set(s.ticketId, []);
+        byTicket.get(s.ticketId)!.push({ id: s.id, title: s.title });
+      }
+      annotated = annotated.map((t) => ({
+        ...t,
+        readySubtasksSummary: byTicket.get(t.id) ?? [],
+      }));
+    }
 
     return {
       data: annotated,

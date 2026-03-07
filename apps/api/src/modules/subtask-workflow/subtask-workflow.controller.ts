@@ -1,13 +1,30 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SubtaskWorkflowService } from './subtask-workflow.service';
 import { CreateWorkflowTemplateDto } from './dto/create-workflow-template.dto';
+import { UpdateWorkflowTemplateDto } from './dto/update-workflow-template.dto';
 import { CreateSubtaskTemplateDto } from './dto/create-subtask-template.dto';
+import { UpdateSubtaskTemplateDto } from './dto/update-subtask-template.dto';
 import { AddTemplateDependencyDto } from './dto/add-template-dependency.dto';
+import { RemoveTemplateDependencyDto } from './dto/remove-template-dependency.dto';
 
 @Controller('subtask-workflow')
 export class SubtaskWorkflowController {
   constructor(private readonly workflow: SubtaskWorkflowService) {}
+
+  @Get('templates')
+  @Roles('ADMIN')
+  listWorkflowTemplates(
+    @Query('ticketClassId') ticketClassId?: string,
+    @Query('supportTopicId') supportTopicId?: string,
+    @Query('maintenanceCategoryId') maintenanceCategoryId?: string,
+  ) {
+    return this.workflow.listWorkflowTemplates({
+      ticketClassId: ticketClassId || undefined,
+      supportTopicId: supportTopicId || undefined,
+      maintenanceCategoryId: maintenanceCategoryId || undefined,
+    });
+  }
 
   @Post('templates')
   @Roles('ADMIN')
@@ -28,6 +45,22 @@ export class SubtaskWorkflowController {
     return this.workflow.getWorkflowTemplate(id);
   }
 
+  @Patch('templates/:id')
+  @Roles('ADMIN')
+  updateWorkflowTemplate(@Param('id') id: string, @Body() dto: UpdateWorkflowTemplateDto) {
+    return this.workflow.updateWorkflowTemplate(id, {
+      name: dto.name,
+      sortOrder: dto.sortOrder,
+      isActive: dto.isActive,
+    });
+  }
+
+  @Delete('templates/:id')
+  @Roles('ADMIN')
+  deleteWorkflowTemplate(@Param('id') id: string) {
+    return this.workflow.deleteWorkflowTemplate(id);
+  }
+
   @Post('subtask-templates')
   @Roles('ADMIN')
   createSubtaskTemplate(@Body() dto: CreateSubtaskTemplateDto) {
@@ -42,11 +75,39 @@ export class SubtaskWorkflowController {
     });
   }
 
+  @Patch('subtask-templates/:id')
+  @Roles('ADMIN')
+  updateSubtaskTemplate(@Param('id') id: string, @Body() dto: UpdateSubtaskTemplateDto) {
+    return this.workflow.updateSubtaskTemplate(id, {
+      title: dto.title,
+      description: dto.description,
+      departmentId: dto.departmentId,
+      assignedUserId: dto.assignedUserId,
+      isRequired: dto.isRequired,
+      sortOrder: dto.sortOrder,
+    });
+  }
+
+  @Delete('subtask-templates/:id')
+  @Roles('ADMIN')
+  deleteSubtaskTemplate(@Param('id') id: string) {
+    return this.workflow.deleteSubtaskTemplate(id);
+  }
+
   @Post('template-dependencies')
   @Roles('ADMIN')
   addTemplateDependency(@Body() dto: AddTemplateDependencyDto) {
     return this.workflow.addTemplateDependency(
       dto.workflowTemplateId,
+      dto.subtaskTemplateId,
+      dto.dependsOnSubtaskTemplateId,
+    );
+  }
+
+  @Delete('template-dependencies')
+  @Roles('ADMIN')
+  removeTemplateDependency(@Body() dto: RemoveTemplateDependencyDto) {
+    return this.workflow.removeTemplateDependency(
       dto.subtaskTemplateId,
       dto.dependsOnSubtaskTemplateId,
     );
