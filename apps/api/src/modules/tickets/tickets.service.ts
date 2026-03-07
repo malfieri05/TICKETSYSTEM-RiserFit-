@@ -914,5 +914,46 @@ export class TicketsService {
     return result;
   }
 
+  // ─── SCOPE SUMMARY (Studio Portal) ───────────────────────────────────────────
+
+  /**
+   * Returns open count, completed count, and recently updated tickets for the
+   * current user's visibility scope (TicketVisibilityService). Used by the
+   * Studio Ticket Portal dashboard.
+   */
+  async getScopeSummary(actor: RequestUser) {
+    const scopeWhere = this.visibility.buildWhereClause(actor);
+    const openStatuses: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+    const completedStatuses: TicketStatus[] = ['RESOLVED', 'CLOSED'];
+    const whereOpen =
+      Object.keys(scopeWhere).length === 0
+        ? { status: { in: openStatuses } }
+        : { AND: [scopeWhere, { status: { in: openStatuses } }] };
+    const whereCompleted =
+      Object.keys(scopeWhere).length === 0
+        ? { status: { in: completedStatuses } }
+        : { AND: [scopeWhere, { status: { in: completedStatuses } }] };
+
+    const [openCount, completedCount, recentTickets] = await Promise.all([
+      this.prisma.ticket.count({ where: whereOpen }),
+      this.prisma.ticket.count({ where: whereCompleted }),
+      this.prisma.ticket.findMany({
+        where: scopeWhere,
+        orderBy: { updatedAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          title: true,
+          status: true,
+          priority: true,
+          updatedAt: true,
+          studio: { select: { id: true, name: true } },
+          requester: { select: { id: true, name: true } },
+        },
+      }),
+    ]);
+
+    return { openCount, completedCount, recentTickets };
+  }
 }
 

@@ -104,6 +104,23 @@ export interface TicketListItem {
   readySubtasksSummary?: { id: string; title: string }[];
 }
 
+/** Studio Portal scope-summary: counts + recent tickets (minimal fields). */
+export interface ScopeSummaryRecentTicket {
+  id: string;
+  title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  updatedAt: string;
+  studio?: { id: string; name: string } | null;
+  requester: { id: string; name: string };
+}
+
+export interface ScopeSummaryResponse {
+  openCount: number;
+  completedCount: number;
+  recentTickets: ScopeSummaryRecentTicket[];
+}
+
 export interface TicketDetail extends TicketListItem {
   description?: string;
   resolvedAt?: string;
@@ -178,6 +195,7 @@ export interface TicketFilters {
   status?: TicketStatus;
   priority?: TicketPriority;
   categoryId?: string;
+  departmentId?: string;
   studioId?: string;
   marketId?: string;
   ownerId?: string;

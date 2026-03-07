@@ -45,6 +45,12 @@ export class TicketsController {
     return this.ticketsService.getMySummary(user, pageNum, limitNum);
   }
 
+  // GET /api/tickets/scope-summary — Studio Portal dashboard (must be before :id)
+  @Get('scope-summary')
+  getScopeSummary(@CurrentUser() user: RequestUser) {
+    return this.ticketsService.getScopeSummary(user);
+  }
+
   // GET /api/tickets?status=&categoryId=&page=&limit=
   @Get()
   findAll(

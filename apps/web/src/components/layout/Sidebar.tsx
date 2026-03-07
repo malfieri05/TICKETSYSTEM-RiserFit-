@@ -19,9 +19,15 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import type { Department } from '@/types';
 
-const navItems = [
+const navItemsDefault = [
   { href: '/tickets', label: 'Home', icon: Home },
   { href: '/dashboard', label: 'My Dashboard', icon: LayoutGrid },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+];
+
+/** Studio users see My Tickets → /portal instead of Home + My Dashboard. */
+const navItemsStudioUser = [
+  { href: '/portal', label: 'My Tickets', icon: Home },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
@@ -71,6 +77,8 @@ export function Sidebar() {
   };
 
   const isAdmin = user?.role === 'ADMIN';
+  const isStudioUser = user?.role === 'STUDIO_USER';
+  const navItems = isStudioUser ? navItemsStudioUser : navItemsDefault;
 
   return (
     <aside
@@ -104,9 +112,11 @@ export function Sidebar() {
         </button>
 
         {navItems.map(({ href, label, icon: Icon }) => {
-          const active = href === '/tickets'
-            ? pathname === '/tickets' || (pathname.startsWith('/tickets/') && pathname !== '/tickets/new')
-            : pathname === href || pathname.startsWith(href + '/');
+          const active = href === '/portal'
+            ? pathname === '/portal' || pathname.startsWith('/portal/')
+            : href === '/tickets'
+              ? pathname === '/tickets' || (pathname.startsWith('/tickets/') && pathname !== '/tickets/new')
+              : pathname === href || pathname.startsWith(href + '/');
           return (
             <Link
               key={href}

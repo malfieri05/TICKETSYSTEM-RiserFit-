@@ -58,6 +58,8 @@ export const ticketsApi = {
       limit: number;
       totalPages: number;
     }>('/tickets/my-summary', { params }),
+  scopeSummary: () =>
+    api.get<import('@/types').ScopeSummaryResponse>('/tickets/scope-summary'),
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),

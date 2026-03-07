@@ -204,8 +204,13 @@ export default function TicketDetailPage() {
   }
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
+  const isStudioUser = user?.role === 'STUDIO_USER';
   const validTransitions = VALID_TRANSITIONS[ticket.status];
   const isWatching = ticket.watchers.some((w) => w.userId === user?.id);
+  // Studio users see only non-internal comments (backend also filters on list endpoint; detail includes all, so filter here)
+  const visibleComments = isStudioUser
+    ? (ticket.comments ?? []).filter((c) => !(c as { isInternal?: boolean }).isInternal)
+    : (ticket.comments ?? []);
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
@@ -216,9 +221,9 @@ export default function TicketDetailPage() {
 
           {/* ── Main content ─────────────────────────────────────────────── */}
           <div className="flex-1 min-w-0 space-y-5">
-            <Button variant="ghost" size="sm" onClick={() => router.push('/tickets')}>
+            <Button variant="ghost" size="sm" onClick={() => router.push(isStudioUser ? '/portal' : '/tickets')}>
               <ArrowLeft className="h-4 w-4" />
-              Back to tickets
+              {isStudioUser ? 'Back to My Tickets' : 'Back to tickets'}
             </Button>
 
             {/* Ticket header card */}
@@ -253,7 +258,7 @@ export default function TicketDetailPage() {
                     history: <Clock className="h-4 w-4" />,
                   };
                   const labels = {
-                    comments: `Comments (${ticket.comments.length})`,
+                    comments: `Updates (${visibleComments.length})`,
                     subtasks: `Subtasks (${ticket.subtasks.length})`,
                     attachments: 'Attachments',
                     history: 'History',
@@ -278,26 +283,30 @@ export default function TicketDetailPage() {
               </nav>
             </div>
 
-            {/* ── Comments ─── */}
+            {/* ── Comments (Studio: "Updates" = non-internal only) ─── */}
             {activeTab === 'comments' && (
               <div className="space-y-4">
-                {ticket.comments.length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No comments yet.</p>
+                {visibleComments.length === 0 && (
+                  <p className="text-sm text-center py-6" style={{ color: '#555555' }}>
+                    {isStudioUser ? 'No updates yet.' : 'No comments yet.'}
+                  </p>
                 )}
-                {ticket.comments.map((comment) => (
+                {visibleComments.map((comment) => (
                   <div
                     key={comment.id}
                     className="rounded-xl p-4 space-y-2"
-                    style={comment.isInternal
+                    style={(comment as { isInternal?: boolean }).isInternal
                       ? { background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }
                       : panel}
                   >
                     <div className="flex items-center gap-2">
                       <div className="h-7 w-7 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-semibold">
-                        {(comment.author.displayName?.[0] ?? '?').toUpperCase()}
+                        {((comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '?')[0].toUpperCase()}
                       </div>
-                      <span className="text-sm font-medium text-gray-200">{comment.author.displayName}</span>
-                      {comment.isInternal && (
+                      <span className="text-sm font-medium text-gray-200">
+                        {(comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '—'}
+                      </span>
+                      {!isStudioUser && (comment as { isInternal?: boolean }).isInternal && (
                         <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded" style={{ color: '#d97706', background: 'rgba(234,179,8,0.15)' }}>
                           <Lock className="h-3 w-3" /> Internal
                         </span>
@@ -310,10 +319,10 @@ export default function TicketDetailPage() {
                   </div>
                 ))}
 
-                {/* Add comment */}
+                {/* Add comment (Studio users can add non-internal only; internal checkbox hidden for them via canManage) */}
                 <div className="rounded-xl p-4 space-y-3" style={panel}>
                   <Textarea
-                    placeholder="Write a comment..."
+                    placeholder={isStudioUser ? 'Add an update...' : 'Write a comment...'}
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     rows={3}
