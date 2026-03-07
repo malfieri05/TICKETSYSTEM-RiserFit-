@@ -113,7 +113,11 @@ export class NotificationFanoutProcessor extends WorkerHost {
     const { eventType, ticketId, actorId, payload } = job.data;
     this.logger.debug(`Fan-out: ${eventType} for ticket ${ticketId}`);
 
-    const rules = FANOUT_RULES[eventType] ?? [];
+    // Stage 11: COMMENT_ADDED recipients depend on isInternal (studio-visible vs internal-only)
+    let rules = FANOUT_RULES[eventType] ?? [];
+    if (eventType === 'COMMENT_ADDED') {
+      rules = payload.isInternal === true ? ['owner', 'watchers'] : ['requester', 'owner', 'watchers'];
+    }
     if (rules.length === 0) return;
 
     // Load ticket + watchers

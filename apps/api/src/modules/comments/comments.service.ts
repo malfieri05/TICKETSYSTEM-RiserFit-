@@ -89,7 +89,7 @@ export class CommentsService {
       },
     });
 
-    // Domain events
+    // Domain events (Stage 11: isInternal drives notification fan-out)
     await this.domainEvents.emit({
       type: 'COMMENT_ADDED',
       ticketId,
@@ -102,6 +102,7 @@ export class CommentsService {
         requesterId: ticket.requesterId,
         ownerId: ticket.ownerId ?? undefined,
         bodyPreview: dto.body.substring(0, 120),
+        isInternal,
       },
     });
 

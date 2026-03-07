@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Eye, Clock,
-  Lock, Send, Plus, User, Paperclip, Download, Trash2, Upload,
+  Send, Plus, User, Paperclip, Download, Trash2, Upload,
 } from 'lucide-react';
 import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
@@ -258,7 +258,7 @@ export default function TicketDetailPage() {
                     history: <Clock className="h-4 w-4" />,
                   };
                   const labels = {
-                    comments: `Updates (${visibleComments.length})`,
+                    comments: `Updates & Replies (${visibleComments.length})`,
                     subtasks: `Subtasks (${ticket.subtasks.length})`,
                     attachments: 'Attachments',
                     history: 'History',
@@ -283,12 +283,12 @@ export default function TicketDetailPage() {
               </nav>
             </div>
 
-            {/* ── Comments (Studio: "Updates" = non-internal only) ─── */}
+            {/* ── Conversation (Updates & Replies) ─── */}
             {activeTab === 'comments' && (
               <div className="space-y-4">
                 {visibleComments.length === 0 && (
                   <p className="text-sm text-center py-6" style={{ color: '#555555' }}>
-                    {isStudioUser ? 'No updates yet.' : 'No comments yet.'}
+                    {isStudioUser ? 'No updates yet.' : 'No replies yet.'}
                   </p>
                 )}
                 {visibleComments.map((comment) => (
@@ -307,8 +307,8 @@ export default function TicketDetailPage() {
                         {(comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '—'}
                       </span>
                       {!isStudioUser && (comment as { isInternal?: boolean }).isInternal && (
-                        <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded" style={{ color: '#d97706', background: 'rgba(234,179,8,0.15)' }}>
-                          <Lock className="h-3 w-3" /> Internal
+                        <span className="text-xs font-medium px-1.5 py-0.5 rounded" style={{ color: '#d97706', background: 'rgba(234,179,8,0.15)' }}>
+                          [Internal]
                         </span>
                       )}
                       <span className="ml-auto text-xs" style={{ color: '#555555' }}>
@@ -319,10 +319,10 @@ export default function TicketDetailPage() {
                   </div>
                 ))}
 
-                {/* Add comment (Studio users can add non-internal only; internal checkbox hidden for them via canManage) */}
+                {/* Add reply: studio = studio-visible only; dept/admin = studio-visible reply or internal note */}
                 <div className="rounded-xl p-4 space-y-3" style={panel}>
                   <Textarea
-                    placeholder={isStudioUser ? 'Add an update...' : 'Write a comment...'}
+                    placeholder={isStudioUser ? 'Add an update...' : 'Reply (visible to studio) or check Internal note below...'}
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     rows={3}
@@ -336,7 +336,7 @@ export default function TicketDetailPage() {
                           onChange={(e) => setIsInternal(e.target.checked)}
                           className="rounded"
                         />
-                        Internal note
+                        Internal note (not visible to studio)
                       </label>
                     )}
                     <Button
@@ -347,7 +347,7 @@ export default function TicketDetailPage() {
                       className="ml-auto"
                     >
                       <Send className="h-3.5 w-3.5" />
-                      Add Comment
+                      {canManage ? (isInternal ? 'Add internal note' : 'Reply') : 'Add update'}
                     </Button>
                   </div>
                 </div>

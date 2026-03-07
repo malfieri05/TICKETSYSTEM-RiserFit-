@@ -59,6 +59,7 @@ export interface CommentAddedPayload {
   requesterId: string;
   ownerId?: string;
   bodyPreview: string; // first 120 chars
+  isInternal: boolean;
 }
 
 export interface MentionInCommentPayload {
