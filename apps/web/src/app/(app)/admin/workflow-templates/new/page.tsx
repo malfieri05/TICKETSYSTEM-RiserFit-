@@ -36,9 +36,14 @@ export default function NewWorkflowTemplatePage() {
         maintenanceCategoryId: ticketClassId && taxonomy?.ticketClasses.find((c) => c.id === ticketClassId)?.code === 'MAINTENANCE' ? maintenanceCategoryId || undefined : undefined,
         name: name.trim() || undefined,
       }),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['workflow-templates'] });
-      router.push(`/admin/workflow-templates/${res.data.id}`);
+    onSuccess: async (res) => {
+      const id = res?.data?.id;
+      if (!id) {
+        setError('Template created but response did not include an id.');
+        return;
+      }
+      await qc.refetchQueries({ queryKey: ['workflow-templates'] });
+      router.push(`/admin/workflow-templates/${id}`);
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
       setError(err.response?.data?.message ?? 'Failed to create template.');

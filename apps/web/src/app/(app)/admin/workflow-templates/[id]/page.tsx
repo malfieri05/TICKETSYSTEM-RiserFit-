@@ -52,6 +52,13 @@ export default function WorkflowTemplateDetailPage() {
   });
   const template: WorkflowTemplateDetailDto | null = templateRes?.data ?? null;
 
+  const { data: statsRes } = useQuery({
+    queryKey: ['workflow-template', id, 'stats'],
+    queryFn: () => workflowTemplatesApi.getStats(id),
+    enabled: !!id,
+  });
+  const stats = statsRes?.data ?? null;
+
   const { data: taxonomyRes } = useQuery({
     queryKey: ['ticket-taxonomy'],
     queryFn: () => adminApi.getTicketTaxonomy(),
@@ -247,6 +254,27 @@ export default function WorkflowTemplateDetailPage() {
             </Button>
           </div>
         </div>
+
+        {/* Usage & execution (Stage 7A) */}
+        {stats != null && (
+          <div className="rounded-xl p-4" style={panel}>
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">Usage & execution</h3>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Tickets using template</p>
+                <p className="text-lg font-semibold text-gray-100 mt-0.5">{stats.ticketsUsingTemplate}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Active executions</p>
+                <p className="text-lg font-semibold text-amber-400 mt-0.5">{stats.activeExecutions}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wide">Completed executions</p>
+                <p className="text-lg font-semibold text-teal-400 mt-0.5">{stats.completedExecutions}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Workflow preview */}
         <div className="rounded-xl p-4" style={panel}>

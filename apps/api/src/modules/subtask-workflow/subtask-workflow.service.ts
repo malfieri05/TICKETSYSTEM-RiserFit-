@@ -2,7 +2,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
 const SATISFIED_STATUSES = ['DONE', 'SKIPPED'] as const;
 
@@ -205,16 +207,38 @@ export class SubtaskWorkflowService {
     name?: string | null;
     sortOrder?: number;
   }) {
-    return this.prisma.subtaskWorkflowTemplate.create({
-      data: {
-        ticketClassId: data.ticketClassId,
-        departmentId: data.departmentId ?? undefined,
-        supportTopicId: data.supportTopicId ?? undefined,
-        maintenanceCategoryId: data.maintenanceCategoryId ?? undefined,
-        name: data.name ?? undefined,
-        sortOrder: data.sortOrder ?? 0,
-      },
-    });
+    const sortOrder = typeof data.sortOrder === 'number' && !Number.isNaN(data.sortOrder) ? data.sortOrder : 0;
+    const departmentId = data.departmentId && String(data.departmentId).trim() ? data.departmentId : undefined;
+    const supportTopicId = data.supportTopicId && String(data.supportTopicId).trim() ? data.supportTopicId : undefined;
+    const maintenanceCategoryId = data.maintenanceCategoryId && String(data.maintenanceCategoryId).trim() ? data.maintenanceCategoryId : undefined;
+    const name = data.name != null && String(data.name).trim() !== '' ? data.name : undefined;
+
+    try {
+      return await this.prisma.subtaskWorkflowTemplate.create({
+        data: {
+          ticketClassId: data.ticketClassId,
+          departmentId,
+          supportTopicId,
+          maintenanceCategoryId,
+          name,
+          sortOrder,
+        },
+      });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError) {
+        if (err.code === 'P2002') {
+          throw new ConflictException(
+            'A workflow template already exists for this ticket context (same type and topic/category).',
+          );
+        }
+        if (err.code === 'P2003') {
+          throw new BadRequestException(
+            'Invalid ticket context: one or more selected IDs (ticket type, department, or topic) do not exist.',
+          );
+        }
+      }
+      throw err;
+    }
   }
 
   async createSubtaskTemplate(data: {
@@ -328,6 +352,41 @@ export class SubtaskWorkflowService {
         ...(data.isActive !== undefined && { isActive: data.isActive }),
       },
     });
+  }
+
+  async getTemplateStats(workflowTemplateId: string) {
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id: workflowTemplateId } });
+    const templateSubtaskIds = await this.prisma.subtaskTemplate
+      .findMany({
+        where: { workflowTemplateId },
+        select: { id: true },
+      })
+      .then((rows) => rows.map((r) => r.id));
+    if (templateSubtaskIds.length === 0) {
+      return { ticketsUsingTemplate: 0, activeExecutions: 0, completedExecutions: 0 };
+    }
+    const ticketsUsingTemplate = await this.prisma.subtask.groupBy({
+      by: ['ticketId'],
+      where: { subtaskTemplateId: { in: templateSubtaskIds } },
+    });
+    const ticketIds = ticketsUsingTemplate.map((r) => r.ticketId);
+    const ticketsWithActiveRequired = await this.prisma.subtask.findMany({
+      where: {
+        subtaskTemplateId: { in: templateSubtaskIds },
+        isRequired: true,
+        status: { notIn: ['DONE', 'SKIPPED'] },
+      },
+      select: { ticketId: true },
+      distinct: ['ticketId'],
+    });
+    const activeTicketIds = new Set(ticketsWithActiveRequired.map((r) => r.ticketId));
+    const activeExecutions = activeTicketIds.size;
+    const completedExecutions = ticketIds.length - activeExecutions;
+    return {
+      ticketsUsingTemplate: ticketIds.length,
+      activeExecutions,
+      completedExecutions,
+    };
   }
 
   async deleteWorkflowTemplate(id: string) {

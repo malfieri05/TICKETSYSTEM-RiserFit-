@@ -327,6 +327,8 @@ export const workflowTemplatesApi = {
     api.get<import('@/types').WorkflowTemplateListItemDto[]>('/subtask-workflow/templates', { params }),
   get: (id: string) =>
     api.get<import('@/types').WorkflowTemplateDetailDto>(`/subtask-workflow/templates/${id}`),
+  getStats: (id: string) =>
+    api.get<import('@/types').WorkflowTemplateStatsDto>(`/subtask-workflow/templates/${id}/stats`),
   create: (data: {
     ticketClassId: string;
     departmentId?: string | null;

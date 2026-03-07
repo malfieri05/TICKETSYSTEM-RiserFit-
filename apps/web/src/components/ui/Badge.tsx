@@ -29,10 +29,13 @@ const priorityColors: Record<TicketPriority, string> = {
 };
 
 const subtaskStatusColors: Record<SubtaskStatus, string> = {
+  LOCKED:      'bg-neutral-700 text-neutral-400 ring-1 ring-neutral-600/50',
+  READY:       'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30',
   TODO:        'bg-neutral-800 text-neutral-400 ring-1 ring-neutral-700/50',
   IN_PROGRESS: 'bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/30',
   BLOCKED:     'bg-red-500/20 text-red-300 ring-1 ring-red-500/30',
   DONE:        'bg-teal-500/20 text-teal-300 ring-1 ring-teal-500/30',
+  SKIPPED:     'bg-neutral-700 text-neutral-500 ring-1 ring-neutral-600/50',
 };
 
 export function StatusBadge({ status }: { status: TicketStatus }) {

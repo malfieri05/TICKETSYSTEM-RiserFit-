@@ -11,7 +11,7 @@ export type TicketStatus =
 
 export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export type SubtaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE';
+export type SubtaskStatus = 'LOCKED' | 'READY' | 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'SKIPPED';
 
 export type UserRole = 'ADMIN' | 'DEPARTMENT_USER' | 'STUDIO_USER';
 
@@ -131,8 +131,14 @@ export interface Subtask {
   status: SubtaskStatus;
   isRequired: boolean;
   createdAt: string;
-  owner?: { id: string; displayName: string };
+  departmentId?: string | null;
+  subtaskTemplateId?: string | null;
+  owner?: { id: string; name: string; email?: string; avatarUrl?: string };
   team?: { id: string; name: string };
+  department?: { id: string; code: string; name: string } | null;
+  /** IDs of subtasks this one depends on (must be DONE/SKIPPED before READY). */
+  dependencyFrom?: { dependsOnSubtaskId: string }[];
+  subtaskTemplate?: { sortOrder: number } | null;
 }
 
 export interface AuditEntry {
@@ -323,4 +329,11 @@ export interface WorkflowTemplateListItemDto {
   supportTopic: { id: string; name: string } | null;
   maintenanceCategory: { id: string; name: string } | null;
   _count: { subtaskTemplates: number };
+}
+
+/** Stage 7A: workflow execution visibility — GET /subtask-workflow/templates/:id/stats */
+export interface WorkflowTemplateStatsDto {
+  ticketsUsingTemplate: number;
+  activeExecutions: number;
+  completedExecutions: number;
 }

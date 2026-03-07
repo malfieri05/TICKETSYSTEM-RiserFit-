@@ -29,6 +29,8 @@ const SUBTASK_SELECT = {
   team: { select: { id: true, name: true } },
   owner: { select: { id: true, name: true, email: true, avatarUrl: true } },
   department: { select: { id: true, code: true, name: true } },
+  dependencyFrom: { select: { dependsOnSubtaskId: true } },
+  subtaskTemplate: { select: { sortOrder: true } },
 };
 
 @Injectable()
@@ -127,7 +129,7 @@ export class SubtasksService {
     return this.prisma.subtask.findMany({
       where: { ticketId },
       select: SUBTASK_SELECT,
-      orderBy: { createdAt: 'asc' },
+      orderBy: [{ subtaskTemplate: { sortOrder: 'asc' } }, { createdAt: 'asc' }],
     });
   }
 

@@ -39,6 +39,12 @@ export class SubtaskWorkflowController {
     });
   }
 
+  @Get('templates/:id/stats')
+  @Roles('ADMIN')
+  getTemplateStats(@Param('id') id: string) {
+    return this.workflow.getTemplateStats(id);
+  }
+
   @Get('templates/:id')
   @Roles('ADMIN')
   getWorkflowTemplate(@Param('id') id: string) {

@@ -368,7 +368,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           </p>
                           {s.owner && (
                             <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
-                              <User className="inline h-3 w-3 mr-1" />{s.owner.displayName}
+                              <User className="inline h-3 w-3 mr-1" />{s.owner.name}
                             </p>
                           )}
                         </div>

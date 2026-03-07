@@ -91,24 +91,30 @@ apps/api/src/
     ├── events/        # domain-events.service.ts — event → queue bridge
     ├── reporting/
     ├── admin/         # categories, users, teams, markets, studios
+    ├── subtask-workflow/  # workflow templates, subtask templates, dependencies (Stage 4 + 6.5 admin UI)
+    ├── ticket-forms/  # schema-driven create-ticket form schema (Stage 2/3)
     └── search/        # Postgres filtered search + pagination
 ```
 
 ---
 
-## 5. Database (Neon.tech — All 17 Tables Migrated ✅)
+## 5. Database (Neon.tech — Migrated ✅)
 
 All tables are live. Prisma schema is at `apps/api/prisma/schema.prisma`.
 
 **Tables:**
 - `users`, `teams`, `markets`, `studios`
 - `categories` (admin-configurable)
+- `ticket_classes`, `departments`, `support_topics`, `maintenance_categories` (taxonomy)
 - `tickets`, `ticket_comments`, `ticket_attachments`, `ticket_tags`, `ticket_watchers`
-- `subtasks`
+- `ticket_form_schemas` (schema-driven create)
+- `subtasks`, `subtask_dependencies`
+- `subtask_workflow_templates`, `subtask_templates`, `subtask_template_dependencies` (Stage 4 workflow)
 - `notifications`, `notification_deliveries`, `notification_preferences`
 - `comment_mentions`
 - `tags`
 - `audit_logs`
+- `knowledge_documents`, `document_chunks` (Phase 4 AI)
 
 **Key indexes (already in schema):**
 - tickets: status, owner_id, requester_id, studio_id, market_id, category_id, priority, created_at
@@ -169,6 +175,8 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 | **Phase 2** | Frontend UI: auth, ticket list/detail/create, notifications, admin panel | ✅ COMPLETE (frontend core) |
 | **Phase 3** | Advanced Service Ops: SLA engine, escalations, scheduled reminders, export enhancements | ✅ COMPLETE |
 | **Phase 4** | AI Assistant: RAG chatbot ingesting RiserU docs + pgvector | ✅ COMPLETE |
+| **Stage 6** | Inbox/notification center (actionable queue), schema-driven create-ticket UI | ✅ COMPLETE |
+| **Stage 6.5** | Admin Workflow Template Manager: list/create/edit/delete templates, subtask templates, dependencies, workflow preview | ✅ COMPLETE |
 
 ---
 
@@ -184,12 +192,17 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 
 **Phase 2 (Frontend) ✅**
 - Full Next.js UI at `apps/web/src/`
-- Routes: `/login`, `/tickets`, `/tickets/new`, `/tickets/[id]`, `/notifications`, `/admin/categories`, `/admin/markets`, `/admin/users`, `/admin/reporting`
+- Routes: `/login`, `/tickets`, `/tickets/new` (schema-driven), `/tickets/[id]`, `/notifications`, `/inbox` (actionable queue), `/admin/categories`, `/admin/markets`, `/admin/users`, `/admin/reporting`, `/admin/workflow-templates` (list/new/[id]), `/admin/knowledge-base`, `/assistant`, `/handbook`, `/dashboard`
 - Auth: JWT in localStorage → injected on every axios request → 401 auto-redirects
 - SSE: `useNotificationStream()` auto-connects, invalidates cache on events
 - Attachments: drag-drop upload → presigned S3 PutObject → confirm-upload; GetObject presigned download
 - Reporting: KPI cards, 30-day volume chart (CSS bars), by-status/priority/category/market breakdowns, avg resolution table, CSV export
 - Teams channel: Adaptive Card v1.2 via incoming webhook, dev-mode fallback
+
+**Stage 6 / 6.5 ✅**
+- Inbox: actionable notification queue with READY subtask context; relative timestamps; optimistic read
+- Create ticket: taxonomy + form schema (GET `/admin/config/ticket-taxonomy`, form schemas); workflow templates instantiate subtasks on create when context matches
+- Admin Workflow Templates: list, create (by ticket context), view/edit (name, isActive, subtask CRUD, add/remove dependencies, workflow preview). Create flow refetches list before redirect so the new template appears when returning to the list; redirect guarded on `res.data.id`
 
 **Phase 3 (Advanced Service Ops) ✅**
 - SLA engine: pure computation (`SlaService`) — `OK | AT_RISK | BREACHED | RESOLVED`; targets URGENT=4h, HIGH=24h, MEDIUM=72h, LOW=168h; AT_RISK = <20% remaining
@@ -331,4 +344,4 @@ OPENAI_API_KEY=sk-...
 - Build must comfortably handle 400–500 daily active users with zero unplanned downtime
 
 ---
-*Last updated: All Phases 0–4 complete. Full system built and ready for deployment.*
+*Last updated: Phases 0–4 and Stage 6 / 6.5 complete (inbox, schema-driven create, admin workflow template manager). Full system built and ready for deployment.*

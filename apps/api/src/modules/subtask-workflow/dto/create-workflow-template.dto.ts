@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsInt, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateWorkflowTemplateDto {
   @IsString()
@@ -21,6 +22,7 @@ export class CreateWorkflowTemplateDto {
   name?: string | null;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
   sortOrder?: number;

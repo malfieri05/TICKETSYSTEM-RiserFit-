@@ -72,6 +72,13 @@ export default function TicketDetailPage() {
     return () => clearTimeout(t);
   }, [ticket, searchParams]);
 
+  const { data: subtasksListRes } = useQuery({
+    queryKey: ['ticket', id, 'subtasks'],
+    queryFn: () => subtasksApi.list(id),
+    enabled: activeTab === 'subtasks' && !!id,
+  });
+  const subtasksList = subtasksListRes?.data ?? null;
+
   const { data: historyRes } = useQuery({
     queryKey: ['ticket', id, 'history'],
     queryFn: () => ticketsApi.history(id),
@@ -107,6 +114,7 @@ export default function TicketDetailPage() {
     mutationFn: () => subtasksApi.create(id, { title: newSubtask }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ticket', id] });
+      qc.invalidateQueries({ queryKey: ['ticket', id, 'subtasks'] });
       setNewSubtask('');
     },
   });
@@ -114,7 +122,10 @@ export default function TicketDetailPage() {
   const subtaskStatusMut = useMutation({
     mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) =>
       subtasksApi.update(id, subtaskId, { status }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', id] });
+      qc.invalidateQueries({ queryKey: ['ticket', id, 'subtasks'] });
+    },
   });
 
   const watchMut = useMutation({
@@ -334,20 +345,21 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            {/* ── Subtasks ─── */}
+            {/* ── Subtasks (Workflow Progress) ─── */}
             {activeTab === 'subtasks' && (
               <div className="space-y-3">
                 {/* Progress header */}
                 <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: '#111111', border: '1px solid #262626' }}>
                   {(() => {
-                    const total = ticket.subtasks.length;
-                    const done = ticket.subtasks.filter((s) => s.status === 'DONE').length;
+                    const list = subtasksList ?? ticket.subtasks;
+                    const total = list.length;
+                    const done = list.filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length;
                     const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                     return (
                       <>
                         <div className="flex flex-col gap-1">
                           <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#777777' }}>
-                            Subtask Progress
+                            Workflow Progress
                           </span>
                           <span className="text-sm font-medium" style={{ color: '#e5e5e5' }}>
                             {done} of {total} complete
@@ -375,27 +387,33 @@ export default function TicketDetailPage() {
                   })()}
                 </div>
 
-                {ticket.subtasks.length === 0 && (
+                {(subtasksList ?? ticket.subtasks).length === 0 && (
                   <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No subtasks yet.</p>
                 )}
-                {ticket.subtasks.map((subtask) => (
-                  <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex items-center gap-3" style={panel}>
+                {(subtasksList ?? ticket.subtasks).map((subtask) => (
+                  <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
                     <div className="flex-1 min-w-0">
-                      <p className={cn('text-sm font-medium', subtask.status === 'DONE' ? 'line-through' : 'text-gray-200')}
-                        style={subtask.status === 'DONE' ? { color: '#555555', textDecoration: 'line-through' } : undefined}>
+                      <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-gray-200')}
+                        style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: '#555555', textDecoration: 'line-through' } : undefined}>
                         {subtask.title}
                       </p>
-                      {subtask.owner && (
-                        <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
-                          <User className="inline h-3 w-3 mr-1" />{subtask.owner.displayName}
-                        </p>
-                      )}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs" style={{ color: '#555555' }}>
+                        {'department' in subtask && subtask.department && (
+                          <span>{subtask.department.name}</span>
+                        )}
+                        {'owner' in subtask && subtask.owner && (
+                          <span><User className="inline h-3 w-3 mr-1" />{subtask.owner.name}</span>
+                        )}
+                        {'dependencyFrom' in subtask && Array.isArray(subtask.dependencyFrom) && subtask.dependencyFrom.length > 0 && subtask.status === 'LOCKED' && (
+                          <span className="text-amber-400">Blocked by dependency</span>
+                        )}
+                      </div>
                     </div>
                     {subtask.isRequired && (
                       <span className="text-xs font-medium shrink-0" style={{ color: '#f87171' }}>Required</span>
                     )}
                     <SubtaskStatusBadge status={subtask.status} />
-                    {canManage && (
+                    {canManage && !['LOCKED'].includes(subtask.status) && (
                       <Select
                         value={subtask.status}
                         onChange={(e) =>
@@ -403,10 +421,11 @@ export default function TicketDetailPage() {
                         }
                         className="w-36 text-xs"
                       >
-                        <option value="TODO">TODO</option>
+                        <option value="READY">Ready</option>
                         <option value="IN_PROGRESS">In Progress</option>
                         <option value="BLOCKED">Blocked</option>
                         <option value="DONE">Done</option>
+                        <option value="SKIPPED">Skipped</option>
                       </Select>
                     )}
                   </div>
