@@ -88,9 +88,11 @@ export class SubtaskWorkflowService {
       depsByTemplate.get(d.subtaskTemplateId)?.add(d.dependsOnSubtaskTemplateId);
     }
 
+    const now = new Date();
     const createdIds = new Map<string, string>();
     for (const st of template.subtaskTemplates) {
       const hasDeps = (depsByTemplate.get(st.id)?.size ?? 0) > 0;
+      const isReady = !hasDeps;
       const subtask = await tx.subtask.create({
         data: {
           ticketId,
@@ -101,6 +103,7 @@ export class SubtaskWorkflowService {
           isRequired: st.isRequired,
           subtaskTemplateId: st.id,
           status: hasDeps ? 'LOCKED' : 'READY',
+          readyAt: isReady ? now : undefined,
         },
       });
       createdIds.set(st.id, subtask.id);
@@ -119,14 +122,15 @@ export class SubtaskWorkflowService {
 
   /**
    * When a subtask becomes DONE or SKIPPED, unlock downstream subtasks whose dependencies are all satisfied.
-   * Dependency is satisfied when upstream status is DONE or SKIPPED.
-   * Run inside same transaction as the status update.
+   * Sets status to READY and readyAt = now(). Returns IDs of subtasks that became READY (for notification emission).
    */
-  async unlockDownstreamIfSatisfied(tx: PrismaTx, completedSubtaskId: string): Promise<void> {
+  async unlockDownstreamIfSatisfied(tx: PrismaTx, completedSubtaskId: string): Promise<string[]> {
     const downstream = await tx.subtaskDependency.findMany({
       where: { dependsOnSubtaskId: completedSubtaskId },
       select: { subtaskId: true },
     });
+    const now = new Date();
+    const becameReady: string[] = [];
     for (const { subtaskId } of downstream) {
       const deps = await tx.subtaskDependency.findMany({
         where: { subtaskId },
@@ -142,10 +146,12 @@ export class SubtaskWorkflowService {
       if (allSatisfied) {
         await tx.subtask.update({
           where: { id: subtaskId },
-          data: { status: 'READY' },
+          data: { status: 'READY', readyAt: now },
         });
+        becameReady.push(subtaskId);
       }
     }
+    return becameReady;
   }
 
   /**

@@ -64,6 +64,7 @@ enum NotificationEventType {
   SUBTASK_ASSIGNED
   SUBTASK_COMPLETED
   SUBTASK_BLOCKED
+  SUBTASK_BECAME_READY
   ATTACHMENT_ADDED
   TICKET_SLA_BREACHED
 }
@@ -621,6 +622,7 @@ model Subtask {
   isRequired         Boolean       @default(true)
   dueDate            DateTime?
   completedAt       DateTime?
+  readyAt           DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

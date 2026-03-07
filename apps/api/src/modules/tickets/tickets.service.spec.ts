@@ -53,6 +53,9 @@ function buildPrismaMock() {
     ticketFormResponse: {
       create: jest.fn(),
     },
+    subtask: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $transaction: jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(prismaTx)),
   };
 }
@@ -190,6 +193,55 @@ describe('TicketsService', () => {
       );
       expect(result.ticketClass?.id).toBe(MAINTENANCE_CLASS_ID);
       expect(result.maintenanceCategory?.id).toBe(MAINT_CAT_ID);
+    });
+
+    it('emits SUBTASK_BECAME_READY for each initially READY subtask after create', async () => {
+      const actor = makeActor();
+      prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prismaTx.ticket.create.mockResolvedValue({
+        id: 'ticket-ready',
+        title: 'Ticket with workflow',
+        status: 'NEW',
+        ticketClassId: MAINTENANCE_CLASS_ID,
+        maintenanceCategoryId: MAINT_CAT_ID,
+        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
+        maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
+      });
+      prismaTx.ticketWatcher.create.mockResolvedValue({});
+      prisma.subtask.findMany.mockResolvedValue([
+        {
+          id: 'sub-ready-1',
+          title: 'Step A',
+          ticketId: 'ticket-ready',
+          departmentId: 'dept_hr',
+          ownerId: null,
+        },
+      ]);
+
+      await service.create(
+        {
+          title: 'Ticket with workflow',
+          description: '',
+          ticketClassId: MAINTENANCE_CLASS_ID,
+          maintenanceCategoryId: MAINT_CAT_ID,
+        },
+        actor,
+      );
+
+      expect(domainEvents.emit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'SUBTASK_BECAME_READY',
+          ticketId: 'ticket-ready',
+          payload: expect.objectContaining({
+            subtaskId: 'sub-ready-1',
+            subtaskTitle: 'Step A',
+            ticketId: 'ticket-ready',
+            departmentId: 'dept_hr',
+            ownerId: null,
+          }),
+        }),
+      );
     });
 
     it('invalid SUPPORT payload (missing departmentId and supportTopicId) fails with BadRequestException', async () => {

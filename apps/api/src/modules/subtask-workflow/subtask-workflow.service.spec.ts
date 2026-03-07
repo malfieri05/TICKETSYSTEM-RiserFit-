@@ -12,6 +12,13 @@ function buildPrismaMock() {
   };
 }
 
+function buildTxMock() {
+  return {
+    subtaskDependency: { findMany: jest.fn() },
+    subtask: { findMany: jest.fn(), update: jest.fn() },
+  };
+}
+
 describe('SubtaskWorkflowService', () => {
   let service: SubtaskWorkflowService;
   let prisma: ReturnType<typeof buildPrismaMock>;
@@ -69,6 +76,38 @@ describe('SubtaskWorkflowService', () => {
       await expect(
         service.addTemplateDependency('w1', 't1', 't2'),
       ).rejects.toThrow(/cycle/);
+    });
+  });
+
+  describe('unlockDownstreamIfSatisfied', () => {
+    it('sets downstream to READY with readyAt and returns their IDs when all deps satisfied', async () => {
+      const tx = buildTxMock();
+      tx.subtaskDependency.findMany
+        .mockResolvedValueOnce([{ subtaskId: 'sub-b' }])
+        .mockResolvedValueOnce([{ dependsOnSubtaskId: 'sub-a' }]);
+      tx.subtask.findMany.mockResolvedValue([{ status: 'DONE' }]);
+      tx.subtask.update.mockResolvedValue({});
+
+      const result = await service.unlockDownstreamIfSatisfied(tx as never, 'sub-a');
+
+      expect(result).toEqual(['sub-b']);
+      expect(tx.subtask.update).toHaveBeenCalledWith({
+        where: { id: 'sub-b' },
+        data: { status: 'READY', readyAt: expect.any(Date) },
+      });
+    });
+
+    it('returns empty when downstream still has unsatisfied deps', async () => {
+      const tx = buildTxMock();
+      tx.subtaskDependency.findMany
+        .mockResolvedValueOnce([{ subtaskId: 'sub-b' }])
+        .mockResolvedValueOnce([{ dependsOnSubtaskId: 'sub-a' }, { dependsOnSubtaskId: 'sub-c' }]);
+      tx.subtask.findMany.mockResolvedValue([{ status: 'DONE' }, { status: 'LOCKED' }]);
+
+      const result = await service.unlockDownstreamIfSatisfied(tx as never, 'sub-a');
+
+      expect(result).toEqual([]);
+      expect(tx.subtask.update).not.toHaveBeenCalled();
     });
   });
 });

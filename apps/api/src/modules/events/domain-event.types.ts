@@ -18,7 +18,8 @@ export type DomainEventPayload =
   | MentionInCommentPayload
   | SubtaskAssignedPayload
   | SubtaskCompletedPayload
-  | SubtaskBlockedPayload;
+  | SubtaskBlockedPayload
+  | SubtaskBecameReadyPayload;
 
 export interface TicketCreatedPayload {
   requesterId: string;
@@ -84,4 +85,12 @@ export interface SubtaskBlockedPayload {
   subtaskId: string;
   subtaskTitle: string;
   ticketOwnerId?: string;
+}
+
+export interface SubtaskBecameReadyPayload {
+  subtaskId: string;
+  subtaskTitle: string;
+  ticketId: string;
+  departmentId: string | null;
+  ownerId: string | null;
 }

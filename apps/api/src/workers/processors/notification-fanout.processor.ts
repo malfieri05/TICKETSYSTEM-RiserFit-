@@ -10,11 +10,14 @@ import {
 } from '../../common/queue/queue.constants';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { NotificationEventType } from '@prisma/client';
+import { Department, NotificationEventType } from '@prisma/client';
+
+/** Max recipients per event to prevent notification storms. */
+const MAX_RECIPIENTS_PER_EVENT = 200;
 
 /**
  * Fan-out rules: which "roles" get notified for each event type.
- * 'requester' | 'owner' | 'watchers' | 'mentioned' | 'subtaskOwner'
+ * 'requester' | 'owner' | 'watchers' | 'mentioned' | 'subtaskOwner' | 'departmentUsers'
  */
 const FANOUT_RULES: Record<string, string[]> = {
   TICKET_CREATED: ['owner'],
@@ -28,6 +31,7 @@ const FANOUT_RULES: Record<string, string[]> = {
   SUBTASK_ASSIGNED: ['subtaskOwner'],
   SUBTASK_COMPLETED: ['owner'],
   SUBTASK_BLOCKED: ['owner'],
+  SUBTASK_BECAME_READY: ['departmentUsers', 'subtaskOwner'],
   ATTACHMENT_ADDED: ['owner', 'watchers'],
 };
 
@@ -81,6 +85,11 @@ function buildNotificationContent(
       return {
         title: 'Subtask blocked',
         body: `"${payload.subtaskTitle}" is now blocked.`,
+      };
+    case 'SUBTASK_BECAME_READY':
+      return {
+        title: "It's your turn",
+        body: `"${payload.subtaskTitle}" on ticket "${ticketTitle}" is ready for you.`,
       };
     default:
       return { title: 'New notification', body: 'You have a new notification.' };
@@ -145,17 +154,41 @@ export class NotificationFanoutProcessor extends WorkerHost {
         case 'subtaskOwner':
           if (payload.ownerId) recipientIds.add(payload.ownerId as string);
           break;
+        case 'departmentUsers':
+          if (payload.departmentId) {
+            const dept = await this.prisma.taxonomyDepartment.findUnique({
+              where: { id: payload.departmentId as string },
+              select: { code: true },
+            });
+            if (dept?.code && Object.values(Department).includes(dept.code as Department)) {
+              const userIdsInDept = await this.prisma.userDepartment.findMany({
+                where: { department: dept.code as Department },
+                select: { userId: true },
+              });
+              userIdsInDept.forEach((r) => recipientIds.add(r.userId));
+            }
+          }
+          break;
       }
     }
 
     // Don't notify the actor who triggered the event
     recipientIds.delete(actorId);
 
-    if (recipientIds.size === 0) return;
+    // Safety cap to prevent notification storms
+    let recipientArray = Array.from(recipientIds);
+    if (recipientArray.length > MAX_RECIPIENTS_PER_EVENT) {
+      this.logger.warn(
+        `Fan-out capped recipients from ${recipientArray.length} to ${MAX_RECIPIENTS_PER_EVENT} for ${eventType} ticket ${ticketId}`,
+      );
+      recipientArray = recipientArray.slice(0, MAX_RECIPIENTS_PER_EVENT);
+    }
+
+    if (recipientArray.length === 0) return;
 
     // Load users + their preferences
     const users = await this.prisma.user.findMany({
-      where: { id: { in: Array.from(recipientIds) }, isActive: true },
+      where: { id: { in: recipientArray }, isActive: true },
       select: { id: true, email: true, name: true },
     });
 
@@ -193,7 +226,8 @@ export class NotificationFanoutProcessor extends WorkerHost {
 
       // Create email delivery record and enqueue dispatch job
       if (wantsEmail) {
-        const idempotencyKey = `email_${eventType}_${ticketId}_${user.id}_${job.data.occurredAt}`;
+        const subtaskIdPart = (payload.subtaskId as string) ?? '';
+        const idempotencyKey = `${eventType}_${ticketId}_${subtaskIdPart}_${user.id}_EMAIL_${job.data.occurredAt}`;
 
         // Check idempotency — don't create duplicate delivery record
         const existing = await this.prisma.notificationDelivery.findUnique({

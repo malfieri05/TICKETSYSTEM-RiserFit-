@@ -142,7 +142,7 @@ export class SubtasksService {
     const now = new Date();
     const completing = dto.status === 'DONE' || dto.status === 'SKIPPED';
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const { updated, becameReadyIds } = await this.prisma.$transaction(async (tx) => {
       const out = await tx.subtask.update({
         where: { id: subtaskId },
         data: {
@@ -160,10 +160,10 @@ export class SubtasksService {
         },
         select: SUBTASK_SELECT,
       });
-      if (completing) {
-        await this.subtaskWorkflow.unlockDownstreamIfSatisfied(tx, subtaskId);
-      }
-      return out;
+      const becameReadyIds = completing
+        ? await this.subtaskWorkflow.unlockDownstreamIfSatisfied(tx, subtaskId)
+        : [];
+      return { updated: out, becameReadyIds };
     });
 
     await this.auditLog.log({
@@ -195,7 +195,29 @@ export class SubtasksService {
             ticketOwnerId: ticket?.ownerId ?? undefined,
           },
         });
-      } else if (dto.status === 'BLOCKED') {
+      }
+      for (const readyId of becameReadyIds) {
+        const readySubtask = await this.prisma.subtask.findUnique({
+          where: { id: readyId },
+          select: { title: true, ticketId: true, departmentId: true, ownerId: true },
+        });
+        if (readySubtask) {
+          await this.domainEvents.emit({
+            type: 'SUBTASK_BECAME_READY',
+            ticketId: readySubtask.ticketId,
+            actorId: actor.id,
+            occurredAt: now,
+            payload: {
+              subtaskId: readyId,
+              subtaskTitle: readySubtask.title,
+              ticketId: readySubtask.ticketId,
+              departmentId: readySubtask.departmentId,
+              ownerId: readySubtask.ownerId,
+            },
+          });
+        }
+      }
+      if (dto.status === 'BLOCKED') {
         await this.domainEvents.emit({
           type: 'SUBTASK_BLOCKED',
           ticketId: subtask.ticketId,

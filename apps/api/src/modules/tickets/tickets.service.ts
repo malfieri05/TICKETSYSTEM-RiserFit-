@@ -364,6 +364,28 @@ export class TicketsService {
       },
     });
 
+    // Stage 5: emit SUBTASK_BECAME_READY for each initially READY subtask (workflow instantiation)
+    const initialReadySubtasks = await this.prisma.subtask.findMany({
+      where: { ticketId: ticket.id, status: 'READY' },
+      select: { id: true, title: true, ticketId: true, departmentId: true, ownerId: true },
+    });
+    const occurredAt = new Date();
+    for (const s of initialReadySubtasks) {
+      await this.domainEvents.emit({
+        type: 'SUBTASK_BECAME_READY',
+        ticketId: s.ticketId,
+        actorId: actor.id,
+        occurredAt,
+        payload: {
+          subtaskId: s.id,
+          subtaskTitle: s.title,
+          ticketId: s.ticketId,
+          departmentId: s.departmentId,
+          ownerId: s.ownerId,
+        },
+      });
+    }
+
     return ticket;
   }
 
