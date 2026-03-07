@@ -235,6 +235,8 @@ export const aiApi = {
       sizeBytes: number | null;
       documentType: string | null;
       isActive: boolean;
+      ingestionStatus: string;
+      lastIndexedAt: string | null;
       createdAt: string;
       uploadedBy: { id: string; name: string };
       _count: { chunks: number };
@@ -254,15 +256,19 @@ export const aiApi = {
     });
   },
 
-  /** Upload a PDF for handbook ingestion (admin). Max 15MB. */
+  /** Upload a PDF for handbook ingestion (admin). Max 15MB. Stores in S3 and enqueues ingestion. */
   ingestPdf: (title: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
     form.append('title', title);
-    return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/pdf', form, {
+    return api.post<{ documentId: string; status: string; message: string }>('/ai/ingest/pdf', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  /** Re-index a knowledge document (admin). Requires document to have stored file (s3Key). */
+  reindexDocument: (id: string) =>
+    api.post<{ message: string }>(`/ai/knowledge/${id}/reindex`),
 
   /** Enable / disable a document */
   toggleDocument: (id: string, isActive: boolean) =>

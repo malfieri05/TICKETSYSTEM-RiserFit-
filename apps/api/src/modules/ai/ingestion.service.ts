@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
+import { AttachmentsService } from '../attachments/attachments.service';
+import { QUEUES, KnowledgeIngestionJobData, KNOWLEDGE_INGESTION_JOB_OPTIONS } from '../../common/queue/queue.constants';
 
 // How many characters per chunk (~300 tokens ≈ 1200 chars for English text)
 const CHUNK_SIZE = 1200;
@@ -18,6 +22,8 @@ export class IngestionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly attachmentsService: AttachmentsService,
+    @InjectQueue(QUEUES.KNOWLEDGE_INGESTION) private readonly knowledgeIngestionQueue: Queue,
   ) {
     const key = this.config.get<string>('OPENAI_API_KEY');
     if (!key) {
@@ -93,13 +99,108 @@ export class IngestionService {
       chunkIndex += batch.length;
     }
 
+    await this.prisma.knowledgeDocument.update({
+      where: { id: doc.id },
+      data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
+    });
     this.logger.log(`Ingestion complete: docId=${doc.id}, chunks=${chunks.length}`);
     return { documentId: doc.id, chunksCreated: chunks.length };
   }
 
-  /** Delete a document and all its chunks */
+  /** Enqueue a knowledge ingestion job (upload or reindex). */
+  async enqueueIngestionJob(documentId: string): Promise<void> {
+    await this.knowledgeIngestionQueue.add(
+      'ingest',
+      { documentId },
+      KNOWLEDGE_INGESTION_JOB_OPTIONS,
+    );
+  }
+
+  /**
+   * Run full ingestion for a document: fetch PDF from S3, extract text, chunk, embed, replace chunks.
+   * Called by the knowledge-ingestion worker. On failure sets ingestionStatus = 'failed' and rethrows (worker logs).
+   */
+  async runIngestionForDocument(documentId: string): Promise<void> {
+    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    if (!doc) {
+      throw new Error(`Document ${documentId} not found`);
+    }
+    if (!doc.s3Key) {
+      throw new Error(`Document ${documentId} has no s3Key`);
+    }
+
+    await this.prisma.knowledgeDocument.update({
+      where: { id: documentId },
+      data: { ingestionStatus: 'indexing' },
+    });
+
+    try {
+      const buffer = await this.attachmentsService.getObjectBuffer(doc.s3Key);
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const pdfParse = require('pdf-parse');
+      const data = await pdfParse(buffer);
+      const text = data?.text?.trim() ?? '';
+      if (!text) {
+        await this.prisma.knowledgeDocument.update({
+          where: { id: documentId },
+          data: { ingestionStatus: 'failed' },
+        });
+        throw new Error('PDF produced no extractable text');
+      }
+
+      await this.prisma.documentChunk.deleteMany({ where: { documentId } });
+
+      const chunks = this.splitIntoChunks(text);
+      this.logger.log(`Ingesting document ${documentId} → ${chunks.length} chunks`);
+
+      const BATCH = 20;
+      let chunkIndex = 0;
+      for (let i = 0; i < chunks.length; i += BATCH) {
+        const batch = chunks.slice(i, i + BATCH);
+        const embeddings = await this.embedBatch(batch);
+        await Promise.all(
+          batch.map((content, j) =>
+            this.prisma.$executeRaw`
+              INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt")
+              VALUES (
+                ${this.generateId()},
+                ${doc.id},
+                ${chunkIndex + j},
+                ${content},
+                ${`[${embeddings[j].join(',')}]`}::vector,
+                ${Math.ceil(content.length / 4)},
+                NOW()
+              )
+            `,
+          ),
+        );
+        chunkIndex += batch.length;
+      }
+
+      await this.prisma.knowledgeDocument.update({
+        where: { id: documentId },
+        data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
+      });
+      this.logger.log(`Ingestion complete: documentId=${documentId}, chunks=${chunks.length}`);
+    } catch (err) {
+      await this.prisma.knowledgeDocument.update({
+        where: { id: documentId },
+        data: { ingestionStatus: 'failed' },
+      });
+      throw err;
+    }
+  }
+
+  /** Delete a document and all its chunks. Removes S3 object if s3Key is set. */
   async deleteDocument(documentId: string): Promise<void> {
-    // Chunks are cascade-deleted via FK
+    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    if (doc?.s3Key) {
+      try {
+        await this.attachmentsService.deleteObjectByKey(doc.s3Key);
+      } catch (e) {
+        this.logger.warn(`Failed to delete S3 object ${doc.s3Key}: ${e}`);
+      }
+    }
     await this.prisma.knowledgeDocument.delete({ where: { id: documentId } });
   }
 

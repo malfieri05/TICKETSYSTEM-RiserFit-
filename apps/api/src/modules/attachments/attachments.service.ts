@@ -138,6 +138,45 @@ export class AttachmentsService {
     return { downloadUrl, filename: attachment.filename, expiresIn: DOWNLOAD_URL_TTL };
   }
 
+  /** Upload a buffer to S3 (server-side). Used e.g. for knowledge base PDFs. */
+  async uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<void> {
+    await this.s3.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      }),
+    );
+  }
+
+  /** Get object body from S3 as Buffer. Used e.g. by ingestion worker to fetch PDF. */
+  async getObjectBuffer(key: string): Promise<Buffer> {
+    const response = await this.s3.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+    const chunks: Uint8Array[] = [];
+    if (response.Body) {
+      for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+        chunks.push(chunk);
+      }
+    }
+    return Buffer.concat(chunks);
+  }
+
+  /** Delete an object by key (e.g. when deleting a knowledge document). */
+  async deleteObjectByKey(key: string): Promise<void> {
+    await this.s3.send(
+      new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+  }
+
   // ── Delete an attachment ──────────────────────────────────────────────────
   async deleteAttachment(attachmentId: string, requesterId: string) {
     const attachment = await this.prisma.ticketAttachment.findUnique({

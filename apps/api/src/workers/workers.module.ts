@@ -6,7 +6,9 @@ import { StaleTicketProcessor } from './processors/stale-ticket.processor';
 import { SchedulerService } from './scheduler.service';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { SlaModule } from '../modules/sla/sla.module';
+import { AiModule } from '../modules/ai/ai.module';
 import { QUEUES } from '../common/queue/queue.constants';
+import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.processor';
 
 @Module({
   imports: [
@@ -14,15 +16,17 @@ import { QUEUES } from '../common/queue/queue.constants';
       { name: QUEUES.NOTIFICATION_FANOUT },
       { name: QUEUES.NOTIFICATION_DISPATCH },
       { name: QUEUES.SCHEDULED },
+      { name: QUEUES.KNOWLEDGE_INGESTION },
     ),
     NotificationsModule, // provides NotificationsService + channel adapters
     SlaModule,           // provides SlaService for breach computation
-    // PrismaService is available globally via @Global() DatabaseModule
+    AiModule,            // provides IngestionService for knowledge-ingestion processor
   ],
   providers: [
     NotificationFanoutProcessor,
     NotificationDispatchProcessor,
     StaleTicketProcessor,
+    KnowledgeIngestionProcessor,
     SchedulerService,
   ],
 })

@@ -3,6 +3,7 @@ export const QUEUES = {
   NOTIFICATION_DISPATCH: 'notification-dispatch',
   DEAD_LETTER: 'dead-letter',
   SCHEDULED: 'scheduled-jobs',
+  KNOWLEDGE_INGESTION: 'knowledge-ingestion',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -31,6 +32,10 @@ export interface DeadLetterJobData {
   failedAt: string;
 }
 
+export interface KnowledgeIngestionJobData {
+  documentId: string;
+}
+
 // ─── Queue Options ───────────────────────────────────────────────────────────
 
 export const FANOUT_JOB_OPTIONS = {
@@ -45,4 +50,11 @@ export const DISPATCH_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 5_000 },
   removeOnComplete: 200,
   removeOnFail: 500,
+};
+
+export const KNOWLEDGE_INGESTION_JOB_OPTIONS = {
+  attempts: 3,
+  backoff: { type: 'exponential' as const, delay: 5_000 },
+  removeOnComplete: 100,
+  removeOnFail: 200,
 };

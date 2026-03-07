@@ -1,14 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { IngestionService } from './ingestion.service';
 
-// How many chunks to retrieve for context
+// How many chunks to retrieve for context (general chat)
 const TOP_K = 5;
-const TOP_K_HANDBOOK = 8;
-// Cosine distance threshold — only use chunks that are sufficiently similar
-const DISTANCE_THRESHOLD = 0.4;
+// Handbook defaults (overridden by env)
+const RAG_TOP_K_DEFAULT = 10;
+const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.5;
 // Model to use for chat completions
 const CHAT_MODEL = 'gpt-4o-mini';
 
@@ -67,7 +67,7 @@ export class AiService {
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
       WHERE kd."isActive" = true
         AND dc.embedding IS NOT NULL
-        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${DISTANCE_THRESHOLD}
+        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${this.getDistanceThreshold()}
       ORDER BY distance ASC
       LIMIT ${TOP_K}
     `;
@@ -131,6 +131,8 @@ Keep answers concise and professional.`;
   /** Handbook-only RAG: same as chat() but filters to documentType = 'handbook'. Studio users only. */
   async chatHandbook(userMessage: string): Promise<ChatResponse> {
     const queryEmbedding = await this.ingestion.embedOne(userMessage);
+    const threshold = this.getDistanceThreshold();
+    const topK = this.getTopK();
 
     const chunks = await this.prisma.$queryRaw<ChunkRow[]>`
       SELECT
@@ -144,9 +146,9 @@ Keep answers concise and professional.`;
       WHERE kd."isActive" = true
         AND kd."documentType" = 'handbook'
         AND dc.embedding IS NOT NULL
-        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${DISTANCE_THRESHOLD}
+        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${threshold}
       ORDER BY distance ASC
-      LIMIT ${TOP_K_HANDBOOK}
+      LIMIT ${topK}
     `;
     this.logger.debug(`Handbook RAG retrieved ${chunks.length} chunks`);
 
@@ -194,7 +196,55 @@ ${contextBlocks}`;
     return { answer, sources, usedContext };
   }
 
+  private getDistanceThreshold(): number {
+    const v = this.config.get<string>('RAG_DISTANCE_THRESHOLD');
+    const n = v != null ? parseFloat(v) : RAG_DISTANCE_THRESHOLD_DEFAULT;
+    return Number.isFinite(n) ? n : RAG_DISTANCE_THRESHOLD_DEFAULT;
+  }
+
+  private getTopK(): number {
+    const v = this.config.get<string>('RAG_TOP_K');
+    const n = v != null ? parseInt(v, 10) : RAG_TOP_K_DEFAULT;
+    return Number.isInteger(n) && n > 0 ? n : RAG_TOP_K_DEFAULT;
+  }
+
   // ── Document management ───────────────────────────────────────────────────
+
+  async createHandbookDocument(
+    title: string,
+    uploadedById: string,
+    opts: { mimeType?: string; sizeBytes?: number },
+  ) {
+    return this.prisma.knowledgeDocument.create({
+      data: {
+        title,
+        sourceType: 'file',
+        mimeType: opts.mimeType ?? null,
+        sizeBytes: opts.sizeBytes ?? null,
+        documentType: 'handbook',
+        ingestionStatus: 'pending',
+        uploadedById,
+      },
+    });
+  }
+
+  async updateDocumentS3Key(documentId: string, s3Key: string) {
+    return this.prisma.knowledgeDocument.update({
+      where: { id: documentId },
+      data: { s3Key },
+    });
+  }
+
+  async reindexDocument(documentId: string): Promise<void> {
+    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
+    if (!doc.s3Key) throw new NotFoundException('Document has no stored file to re-index');
+    await this.prisma.knowledgeDocument.update({
+      where: { id: documentId },
+      data: { ingestionStatus: 'indexing' },
+    });
+    await this.ingestion.enqueueIngestionJob(documentId);
+  }
 
   async listDocuments() {
     return this.prisma.knowledgeDocument.findMany({
@@ -208,6 +258,8 @@ ${contextBlocks}`;
         sizeBytes: true,
         documentType: true,
         isActive: true,
+        ingestionStatus: true,
+        lastIndexedAt: true,
         createdAt: true,
         uploadedBy: { select: { id: true, name: true } },
         _count: { select: { chunks: true } },

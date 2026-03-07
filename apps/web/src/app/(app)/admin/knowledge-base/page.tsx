@@ -3,7 +3,7 @@
 import { useState, useRef, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -20,6 +20,8 @@ interface DocRow {
   sizeBytes: number | null;
   documentType: string | null;
   isActive: boolean;
+  ingestionStatus: string;
+  lastIndexedAt: string | null;
   createdAt: string;
   uploadedBy: { id: string; name: string };
   _count: { chunks: number };
@@ -76,6 +78,11 @@ export default function KnowledgeBasePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-documents'] }),
   });
 
+  const reindexMut = useMutation({
+    mutationFn: (id: string) => aiApi.reindexDocument(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-documents'] }),
+  });
+
   const handleIngest = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
@@ -87,15 +94,16 @@ export default function KnowledgeBasePage() {
     setIngestResult(null);
 
     try {
-      let res: { data: { documentId: string; chunksCreated: number } };
       if (mode === 'text') {
-        res = await aiApi.ingestText(title.trim(), textContent.trim());
+        const res = await aiApi.ingestText(title.trim(), textContent.trim());
+        setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       } else if (mode === 'pdf') {
-        res = await aiApi.ingestPdf(title.trim(), pdfFile!);
+        const res = await aiApi.ingestPdf(title.trim(), pdfFile!);
+        setIngestResult({ ok: true, message: res.data.message ?? `✓ Uploaded "${title}". Indexing in progress.` });
       } else {
-        res = await aiApi.ingestFile(title.trim(), file!);
+        const res = await aiApi.ingestFile(title.trim(), file!);
+        setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       }
-      setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       setTitle(''); setTextContent(''); setFile(null); setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (pdfInputRef.current) pdfInputRef.current.value = '';
@@ -279,7 +287,7 @@ export default function KnowledgeBasePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
-                  {['Title', 'Type', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Status', ''].map((h) => (
+                  {['Title', 'Type', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Index status', 'Active', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>{h}</th>
                   ))}
                 </tr>
@@ -310,15 +318,42 @@ export default function KnowledgeBasePage() {
                     <td className="px-4 py-3">
                       <span
                         className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+                        style={
+                          doc.ingestionStatus === 'indexed'
+                            ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
+                            : doc.ingestionStatus === 'indexing' || doc.ingestionStatus === 'pending'
+                              ? { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }
+                              : doc.ingestionStatus === 'failed'
+                                ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
+                                : { background: '#222222', color: '#666666' }
+                        }
+                      >
+                        {doc.ingestionStatus === 'indexed' ? 'Ready' : doc.ingestionStatus === 'indexing' || doc.ingestionStatus === 'pending' ? 'Indexing' : doc.ingestionStatus === 'failed' ? 'Failed' : doc.ingestionStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                         style={doc.isActive
                           ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
                           : { background: '#222222', color: '#666666' }}
                       >
-                        {doc.isActive ? 'Active' : 'Disabled'}
+                        {doc.isActive ? 'On' : 'Off'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 justify-end">
+                        <button
+                          title="Re-index document"
+                          disabled={doc.ingestionStatus === 'indexing' || reindexMut.isPending}
+                          onClick={() => reindexMut.mutate(doc.id)}
+                          className="p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{ color: '#555555' }}
+                          onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = '#14b8a6'; }}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </button>
                         <button
                           title={doc.isActive ? 'Disable' : 'Enable'}
                           onClick={() => toggleMut.mutate({ id: doc.id, isActive: !doc.isActive })}

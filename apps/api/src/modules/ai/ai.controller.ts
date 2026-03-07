@@ -18,6 +18,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { AiService } from './ai.service';
 import { IngestionService } from './ingestion.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 import { ChatDto, IngestTextDto } from './dto/ai.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
@@ -36,6 +37,7 @@ export class AiController {
   constructor(
     private readonly aiService: AiService,
     private readonly ingestionService: IngestionService,
+    private readonly attachmentsService: AttachmentsService,
   ) {}
 
   // ── Chat (all authenticated users) ───────────────────────────────────────
@@ -134,7 +136,7 @@ export class AiController {
 
   /**
    * POST /api/ai/ingest/pdf
-   * Upload a PDF for handbook ingestion (multipart: file, title). ADMIN only.
+   * Upload a PDF for handbook ingestion. Stores in S3, creates document record, enqueues ingestion job.
    */
   @Post('ingest/pdf')
   @Roles(Role.ADMIN)
@@ -159,18 +161,29 @@ export class AiController {
   ) {
     if (!file) throw new BadRequestException('No file provided');
     if (!title?.trim()) throw new BadRequestException('title is required');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse');
-    const data = await pdfParse(file.buffer);
-    const text = data?.text?.trim() ?? '';
-    if (!text) throw new BadRequestException('PDF produced no extractable text');
-    this.logger.log(`Admin ${user.id} ingesting PDF: "${file.originalname}" (${file.size} bytes) → ${text.length} chars`);
-    return this.ingestionService.ingestText(title.trim(), text, user.id, {
-      sourceType: 'file',
+
+    const doc = await this.aiService.createHandbookDocument(title.trim(), user.id, {
       mimeType: 'application/pdf',
       sizeBytes: file.size,
-      documentType: 'handbook',
     });
+    const s3Key = `knowledge/${doc.id}.pdf`;
+    await this.attachmentsService.uploadBuffer(s3Key, file.buffer, 'application/pdf');
+    await this.aiService.updateDocumentS3Key(doc.id, s3Key);
+    await this.ingestionService.enqueueIngestionJob(doc.id);
+    this.logger.log(`Admin ${user.id} uploaded PDF: "${file.originalname}" → documentId=${doc.id}, job enqueued`);
+    return { documentId: doc.id, status: 'pending', message: 'Document uploaded. Indexing in progress.' };
+  }
+
+  /**
+   * POST /api/ai/knowledge/:id/reindex
+   * Re-run ingestion for a document (fetch from S3, re-extract, re-chunk, re-embed).
+   */
+  @Post('knowledge/:id/reindex')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  async reindexKnowledgeDocument(@Param('id') id: string) {
+    await this.aiService.reindexDocument(id);
+    return { message: 'Re-indexing started.' };
   }
 
   /**

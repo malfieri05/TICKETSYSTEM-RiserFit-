@@ -756,18 +756,20 @@ model NotificationPreference {
 // ============================================================
 
 model KnowledgeDocument {
-  id           String   @id @default(cuid())
-  title        String
-  sourceType   String   @default("manual") // "manual" | "url" | "file"
-  sourceUrl    String?
-  s3Key        String?  // populated when sourceType = "file"
-  mimeType     String?
-  sizeBytes    Int?
-  isActive     Boolean  @default(true)
-  documentType String?  @default("general") // "general" | "handbook" — handbook chat only searches handbook
-  uploadedById String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String    @id @default(cuid())
+  title            String
+  sourceType       String    @default("manual") // "manual" | "url" | "file"
+  sourceUrl        String?
+  s3Key            String?   // populated when sourceType = "file" (e.g. knowledge/<id>.pdf)
+  mimeType         String?
+  sizeBytes        Int?
+  isActive         Boolean   @default(true)
+  documentType     String?   @default("general") // "general" | "handbook"
+  ingestionStatus  String    @default("pending") // pending | indexing | indexed | failed
+  lastIndexedAt    DateTime?
+  uploadedById     String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   uploadedBy User            @relation(fields: [uploadedById], references: [id])
   chunks     DocumentChunk[]
@@ -775,6 +777,7 @@ model KnowledgeDocument {
   @@index([uploadedById])
   @@index([isActive])
   @@index([documentType])
+  @@index([ingestionStatus])
   @@map("knowledge_documents")
 }
 
