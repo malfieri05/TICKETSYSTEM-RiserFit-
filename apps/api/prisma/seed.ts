@@ -195,6 +195,110 @@ async function main() {
   }
   console.log('📋 Form fields: default "additional_details" per schema');
 
+  // Schema-driven: HR → New Hire topic fields (from ticket-form.seed spec)
+  const newHireTopic = await prisma.supportTopic.findFirst({
+    where: { name: 'New Hire', departmentId: 'dept_hr', isActive: true },
+    select: { id: true },
+  });
+  if (newHireTopic) {
+    const newHireSchema = await prisma.ticketFormSchema.findFirst({
+      where: { ticketClassId: 'tclass_support', supportTopicId: newHireTopic.id, isActive: true },
+      select: { id: true },
+    });
+    if (newHireSchema) {
+      const newHireFields: Array<{
+        fieldKey: string;
+        type: string;
+        label: string;
+        required: boolean;
+        sortOrder: number;
+        conditionalFieldKey?: string;
+        conditionalValue?: string;
+        options?: Array<{ value: string; label: string; sortOrder: number }>;
+      }> = [
+        { fieldKey: 'legal_first_name', type: 'text', label: 'Legal first name', required: true, sortOrder: 10 },
+        { fieldKey: 'legal_last_name', type: 'text', label: 'Legal last name', required: true, sortOrder: 11 },
+        { fieldKey: 'alternate_name', type: 'text', label: 'Alternate name', required: false, sortOrder: 12 },
+        { fieldKey: 'employee_phone', type: 'text', label: 'Employee phone', required: false, sortOrder: 13 },
+        { fieldKey: 'employee_personal_email', type: 'text', label: 'Personal email', required: false, sortOrder: 14 },
+        {
+          fieldKey: 'position',
+          type: 'select',
+          label: 'Position',
+          required: true,
+          sortOrder: 15,
+          options: [
+            'Corporate', 'RM', 'DM', 'GM', 'AGM', 'SA', 'EDC', 'Lead Instructor', 'Instructor',
+            'Junior Instructor', 'Apprentice Instructor', 'Junior Apprentice Instructor', 'Pilates Trainer',
+          ].map((label, i) => ({ value: label.replace(/\s+/g, '_').toUpperCase(), label, sortOrder: i })),
+        },
+        { fieldKey: 'reports_to', type: 'text', label: 'Reports to (Supervisor)', required: false, sortOrder: 16 },
+        { fieldKey: 'date_of_offer', type: 'date', label: 'Date of offer', required: false, sortOrder: 17 },
+        { fieldKey: 'start_date', type: 'date', label: 'Start date', required: true, sortOrder: 18 },
+        { fieldKey: 'pay_rate', type: 'text', label: 'Pay rate ($)', required: false, sortOrder: 19 },
+        {
+          fieldKey: 'employment_type',
+          type: 'select',
+          label: 'Part-time or Full-time?',
+          required: true,
+          sortOrder: 20,
+          options: [
+            { value: 'PART_TIME', label: 'Part-time', sortOrder: 0 },
+            { value: 'FULL_TIME', label: 'Full-time', sortOrder: 1 },
+          ],
+        },
+        { fieldKey: 'referred', type: 'checkbox', label: 'Was this candidate referred by a current employee?', required: false, sortOrder: 21 },
+        { fieldKey: 'referring_employee_name', type: 'text', label: 'Referring employee full name', required: false, sortOrder: 22, conditionalFieldKey: 'referred', conditionalValue: 'true' },
+        {
+          fieldKey: 'candidate_source',
+          type: 'select',
+          label: 'Candidate source',
+          required: false,
+          sortOrder: 23,
+          options: [
+            { value: 'JAZZHR', label: 'JazzHR', sortOrder: 0 },
+            { value: 'REFERRAL', label: 'Referral', sortOrder: 1 },
+            { value: 'CAREER_PAGE', label: 'Career Page', sortOrder: 2 },
+            { value: 'OTHER', label: 'Other', sortOrder: 3 },
+          ],
+        },
+        { fieldKey: 'candidate_source_other', type: 'text', label: 'What source? (if Other)', required: false, sortOrder: 24, conditionalFieldKey: 'candidate_source', conditionalValue: 'OTHER' },
+        { fieldKey: 'candidate_application_date', type: 'date', label: 'Candidate application date', required: false, sortOrder: 25 },
+      ];
+      for (const f of newHireFields) {
+        const existingField = await prisma.ticketFormField.findFirst({
+          where: { formSchemaId: newHireSchema.id, fieldKey: f.fieldKey },
+        });
+        if (!existingField) {
+          const { options, ...rest } = f;
+          const field = await prisma.ticketFormField.create({
+            data: {
+              formSchemaId: newHireSchema.id,
+              ...rest,
+              conditionalFieldKey: f.conditionalFieldKey ?? undefined,
+              conditionalValue: f.conditionalValue ?? undefined,
+            },
+          });
+          if (options?.length) {
+            for (let i = 0; i < options.length; i++) {
+              const o = options[i];
+              const opt = typeof o === 'string' ? { value: (o as string).replace(/\s+/g, '_').toUpperCase(), label: o as string, sortOrder: i } : o;
+              const exists = await prisma.ticketFormFieldOption.findFirst({
+                where: { formFieldId: field.id, value: opt.value },
+              });
+              if (!exists) {
+                await prisma.ticketFormFieldOption.create({
+                  data: { formFieldId: field.id, value: opt.value, label: opt.label, sortOrder: opt.sortOrder ?? i },
+                });
+              }
+            }
+          }
+        }
+      }
+      console.log('📋 Form fields: HR → New Hire schema fields seeded');
+    }
+  }
+
   console.log('\n✅ Seed complete!');
   console.log(`\n🔑 All accounts use password: ${DEFAULT_PASSWORD}`);
   console.log('\nAccounts seeded:');
