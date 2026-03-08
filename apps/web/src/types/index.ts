@@ -196,8 +196,10 @@ export interface TicketFilters {
   priority?: TicketPriority;
   categoryId?: string;
   departmentId?: string;
+  ticketClassId?: string;
   studioId?: string;
   marketId?: string;
+  maintenanceCategoryId?: string;
   ownerId?: string;
   requesterId?: string;
   teamId?: string;

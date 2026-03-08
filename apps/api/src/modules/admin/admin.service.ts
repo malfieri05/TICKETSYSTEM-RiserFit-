@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import {
   CreateCategoryDto,
@@ -149,16 +149,27 @@ export class AdminService {
   async createStudio(dto: CreateStudioDto) {
     await this.findMarketOrThrow(dto.marketId);
 
+    const name = dto.name.trim();
+    const formattedAddress = dto.formattedAddress.trim();
+    if (!name) throw new BadRequestException('name must be non-empty after trim');
+    if (!formattedAddress) throw new BadRequestException('formattedAddress must be non-empty after trim');
+
     const existing = await this.prisma.studio.findFirst({
       where: {
         marketId: dto.marketId,
-        name: { equals: dto.name, mode: 'insensitive' },
+        name: { equals: name, mode: 'insensitive' },
       },
     });
-    if (existing) throw new ConflictException(`Studio "${dto.name}" already exists in this market`);
+    if (existing) throw new ConflictException(`Studio "${name}" already exists in this market`);
 
     return this.prisma.studio.create({
-      data: { name: dto.name, marketId: dto.marketId },
+      data: {
+        name,
+        marketId: dto.marketId,
+        formattedAddress,
+        latitude: dto.latitude,
+        longitude: dto.longitude,
+      },
       include: { market: true },
     });
   }
@@ -167,9 +178,30 @@ export class AdminService {
     const studio = await this.prisma.studio.findUnique({ where: { id } });
     if (!studio) throw new NotFoundException(`Studio ${id} not found`);
 
+    if (studio.latitude != null && dto.latitude === null) {
+      throw new BadRequestException('Latitude cannot be removed once set; update with a new value or omit to keep existing.');
+    }
+    if (studio.longitude != null && dto.longitude === null) {
+      throw new BadRequestException('Longitude cannot be removed once set; update with a new value or omit to keep existing.');
+    }
+
+    const data: { name?: string; formattedAddress?: string; latitude?: number; longitude?: number } = {};
+    if (dto.name != null) {
+      const trimmed = dto.name.trim();
+      if (!trimmed) throw new BadRequestException('name must be non-empty after trim');
+      data.name = trimmed;
+    }
+    if (dto.formattedAddress != null) {
+      const trimmed = dto.formattedAddress.trim();
+      if (!trimmed) throw new BadRequestException('formattedAddress must be non-empty after trim');
+      data.formattedAddress = trimmed;
+    }
+    if (typeof dto.latitude === 'number') data.latitude = dto.latitude;
+    if (typeof dto.longitude === 'number') data.longitude = dto.longitude;
+
     return this.prisma.studio.update({
       where: { id },
-      data: { ...(dto.name && { name: dto.name }) },
+      data,
       include: { market: true },
     });
   }

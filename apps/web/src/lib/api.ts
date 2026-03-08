@@ -443,8 +443,23 @@ export const adminApi = {
 
   // Studios
   listStudios: () => api.get('/admin/studios'),
-  createStudio: (data: { name: string; marketId: string }) => api.post('/admin/studios', data),
-  updateStudio: (id: string, data: { isActive?: boolean }) => api.patch(`/admin/studios/${id}`, data),
+  createStudio: (data: {
+    name: string;
+    marketId: string;
+    formattedAddress: string;
+    latitude: number;
+    longitude: number;
+  }) => api.post('/admin/studios', data),
+  updateStudio: (
+    id: string,
+    data: {
+      name?: string;
+      formattedAddress?: string;
+      latitude?: number;
+      longitude?: number;
+      isActive?: boolean;
+    },
+  ) => api.patch(`/admin/studios/${id}`, data),
 };
 
 export const usersApi = {

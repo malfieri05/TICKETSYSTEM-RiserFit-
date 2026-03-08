@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
 interface MarketWithStudios extends Market {
-  studios: (Studio & { formattedAddress?: string | null })[];
+  studios: (Studio & { formattedAddress?: string | null; latitude?: number | null; longitude?: number | null })[];
 }
 
 interface NearbyStudio {
@@ -29,15 +29,27 @@ export default function AdminMarketsPage() {
   const [addingMarket, setAddingMarket] = useState(false);
   const [addingStudioFor, setAddingStudioFor] = useState<string | null>(null);
   const [marketName, setMarketName] = useState('');
-  const [studioName, setStudioName] = useState('');
   const [selectedStudio, setSelectedStudio] = useState<{
     id: string;
     name: string;
     formattedAddress?: string | null;
     marketName: string;
+    latitude?: number | null;
+    longitude?: number | null;
+  } | null>(null);
+  const [editingStudio, setEditingStudio] = useState<{
+    id: string;
+    name: string;
+    formattedAddress: string;
+    latitude: string;
+    longitude: string;
+    marketName: string;
   } | null>(null);
   const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(25);
+
+  // Add studio form state
+  const [addForm, setAddForm] = useState({ name: '', formattedAddress: '', latitude: '', longitude: '' });
 
   const { data, isLoading } = useQuery({
     queryKey: ['markets'],
@@ -51,9 +63,54 @@ export default function AdminMarketsPage() {
   });
 
   const createStudioMut = useMutation({
-    mutationFn: ({ marketId }: { marketId: string }) => api.post('/admin/studios', { name: studioName, marketId }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['markets'] }); setStudioName(''); setAddingStudioFor(null); },
+    mutationFn: ({ marketId }: { marketId: string }) =>
+      api.post('/admin/studios', {
+        name: addForm.name.trim(),
+        marketId,
+        formattedAddress: addForm.formattedAddress.trim(),
+        latitude: parseFloat(addForm.latitude),
+        longitude: parseFloat(addForm.longitude),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['markets'] });
+      setAddForm({ name: '', formattedAddress: '', latitude: '', longitude: '' });
+      setAddingStudioFor(null);
+    },
   });
+
+  const updateStudioMut = useMutation({
+    mutationFn: (payload: { id: string; name: string; formattedAddress: string; latitude: number; longitude: number }) =>
+      api.patch(`/admin/studios/${payload.id}`, {
+        name: payload.name.trim(),
+        formattedAddress: payload.formattedAddress.trim(),
+        latitude: payload.latitude,
+        longitude: payload.longitude,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['markets'] });
+      setEditingStudio(null);
+    },
+  });
+
+  const validLat = (v: string) => {
+    const n = parseFloat(v);
+    return v !== '' && !Number.isNaN(n) && n >= -90 && n <= 90;
+  };
+  const validLng = (v: string) => {
+    const n = parseFloat(v);
+    return v !== '' && !Number.isNaN(n) && n >= -180 && n <= 180;
+  };
+  const addFormValid =
+    addForm.name.trim() !== '' &&
+    addForm.formattedAddress.trim() !== '' &&
+    validLat(addForm.latitude) &&
+    validLng(addForm.longitude);
+  const editFormValid =
+    editingStudio != null &&
+    editingStudio.name.trim() !== '' &&
+    editingStudio.formattedAddress.trim() !== '' &&
+    validLat(editingStudio.latitude) &&
+    validLng(editingStudio.longitude);
 
   const { data: nearbyData, isLoading: nearbyLoading, error: nearbyError } = useQuery({
     queryKey: ['admin', 'studios', selectedStudio?.id, 'nearby', radiusMiles],
@@ -136,6 +193,8 @@ export default function AdminMarketsPage() {
                             name: studio.name,
                             formattedAddress: studio.formattedAddress ?? null,
                             marketName: market.name,
+                            latitude: studio.latitude ?? null,
+                            longitude: studio.longitude ?? null,
                           })
                         }
                       >
@@ -143,16 +202,26 @@ export default function AdminMarketsPage() {
                       </button>
                     ))}
                     {addingStudioFor === market.id ? (
-                      <div className="pl-10 pr-4 py-3 space-y-2" style={{ borderTop: '1px solid #222222' }}>
-                        <Input placeholder="Studio name" value={studioName} onChange={(e) => setStudioName(e.target.value)} />
+                      <div className="pl-10 pr-4 py-3 space-y-3" style={{ borderTop: '1px solid #222222' }}>
+                        <Input label="Name" placeholder="Studio name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
+                        <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
+                        <div>
+                          <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
+                          <input type="number" step="any" placeholder="-90 to 90" value={addForm.latitude} onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
+                          <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                        </div>
+                        <p className="text-xs text-gray-500">Coordinates are used to calculate nearby studios for dispatching.</p>
                         <div className="flex gap-2">
-                          <Button size="sm" onClick={() => createStudioMut.mutate({ marketId: market.id })} disabled={!studioName.trim()} loading={createStudioMut.isPending}>Add</Button>
+                          <Button size="sm" onClick={() => createStudioMut.mutate({ marketId: market.id })} disabled={!addFormValid} loading={createStudioMut.isPending}>Add</Button>
                           <Button size="sm" variant="secondary" onClick={() => setAddingStudioFor(null)}>Cancel</Button>
                         </div>
                       </div>
                     ) : (
                       <button
-                        onClick={() => setAddingStudioFor(market.id)}
+                        onClick={() => { setAddingStudioFor(market.id); setAddForm({ name: '', formattedAddress: '', latitude: '', longitude: '' }); }}
                         className="w-full text-left pl-10 pr-4 py-2 text-sm flex items-center gap-1 transition-colors"
                         style={{ color: '#14b8a6', borderTop: '1px solid #222222' }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
@@ -179,20 +248,45 @@ export default function AdminMarketsPage() {
                 <h3 className="text-sm font-semibold text-gray-100">Location details</h3>
                 <button
                   type="button"
-                  onClick={() => setSelectedStudio(null)}
+                  onClick={() => { setSelectedStudio(null); setEditingStudio(null); }}
                   className="p-1 rounded hover:bg-white/10"
                   aria-label="Close"
                 >
                   <X className="h-4 w-4 text-gray-400" />
                 </button>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-200">{selectedStudio.name}</p>
-                {selectedStudio.formattedAddress && (
-                  <p className="text-sm mt-1" style={{ color: '#888888' }}>{selectedStudio.formattedAddress}</p>
-                )}
-                <p className="text-xs mt-1" style={{ color: '#666666' }}>Market: {selectedStudio.marketName}</p>
-              </div>
+
+              {editingStudio ? (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium text-gray-200">Edit location</h4>
+                  <Input label="Name" value={editingStudio.name} onChange={(e) => setEditingStudio((s) => (s ? { ...s, name: e.target.value } : null))} />
+                  <Input label="Formatted address" value={editingStudio.formattedAddress} onChange={(e) => setEditingStudio((s) => (s ? { ...s, formattedAddress: e.target.value } : null))} />
+                  <div>
+                    <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
+                    <input type="number" step="any" placeholder="-90 to 90" value={editingStudio.latitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, latitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
+                    <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                  </div>
+                  <p className="text-xs text-gray-500">Coordinates are used to calculate nearby studios for dispatching.</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => updateStudioMut.mutate({ id: editingStudio.id, name: editingStudio.name, formattedAddress: editingStudio.formattedAddress, latitude: parseFloat(editingStudio.latitude), longitude: parseFloat(editingStudio.longitude) })} disabled={!editFormValid} loading={updateStudioMut.isPending}>Save</Button>
+                    <Button size="sm" variant="secondary" onClick={() => setEditingStudio(null)}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-gray-200">{selectedStudio.name}</p>
+                    {selectedStudio.formattedAddress && (
+                      <p className="text-sm mt-1" style={{ color: '#888888' }}>{selectedStudio.formattedAddress}</p>
+                    )}
+                    <p className="text-xs mt-1" style={{ color: '#666666' }}>Market: {selectedStudio.marketName}</p>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={() => setEditingStudio(selectedStudio ? { id: selectedStudio.id, name: selectedStudio.name, formattedAddress: selectedStudio.formattedAddress ?? '', latitude: selectedStudio.latitude != null ? String(selectedStudio.latitude) : '', longitude: selectedStudio.longitude != null ? String(selectedStudio.longitude) : '', marketName: selectedStudio.marketName } : null)}>Edit location</Button>
+                </>
+              )}
 
               <div className="pt-4 border-t" style={{ borderColor: '#2a2a2a' }}>
                 <h4 className="text-sm font-semibold text-gray-200 mb-3">Nearby Studios</h4>
