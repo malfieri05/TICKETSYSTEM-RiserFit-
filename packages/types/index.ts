@@ -73,6 +73,8 @@ export interface TicketFilters {
   categoryId?: string;
   studioId?: string;
   marketId?: string;
+  ticketClassId?: string;
+  maintenanceCategoryId?: string;
   ownerId?: string;
   requesterId?: string;
   search?: string;

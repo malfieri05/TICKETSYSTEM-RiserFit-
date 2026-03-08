@@ -1,9 +1,29 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
+import type { DispatchFiltersDto } from './dto/dispatch-filters.dto';
 
 @Injectable()
 export class ReportingService {
   constructor(private prisma: PrismaService) {}
+
+  /** Build where clause for OPEN maintenance tickets only (Stage 13 dispatch). */
+  buildOpenMaintenanceWhere(filters: DispatchFiltersDto): Prisma.TicketWhereInput {
+    const where: Prisma.TicketWhereInput = {
+      ticketClass: { code: 'MAINTENANCE' },
+      status: { notIn: ['RESOLVED', 'CLOSED'] },
+    };
+    if (filters.studioId) where.studioId = filters.studioId;
+    if (filters.marketId) where.marketId = filters.marketId;
+    if (filters.maintenanceCategoryId) where.maintenanceCategoryId = filters.maintenanceCategoryId;
+    if (filters.priority) where.priority = filters.priority;
+    if (filters.createdAfter || filters.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) where.createdAt.gte = new Date(filters.createdAfter);
+      if (filters.createdBefore) where.createdAt.lte = new Date(filters.createdBefore);
+    }
+    return where;
+  }
 
   // ── Overall summary stats ─────────────────────────────────────────────────
   async getSummary() {
@@ -197,6 +217,113 @@ export class ReportingService {
         avgHours: r.avg_hours ? Number(r.avg_hours.toFixed(1)) : null,
         closedCount: Number(r.closed_count),
       }));
+  }
+
+  // ── Dispatch: open maintenance only (Stage 13) ─────────────────────────────
+  async getDispatchByStudio(filters: DispatchFiltersDto) {
+    const where = this.buildOpenMaintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['studioId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { studioId: 'desc' } },
+    });
+    const studioIds = rows.map((r) => r.studioId).filter((id): id is string => id !== null);
+    const studios = await this.prisma.studio.findMany({
+      where: { id: { in: studioIds } },
+      select: { id: true, name: true, marketId: true },
+    });
+    const markets = studioIds.length
+      ? await this.prisma.market.findMany({
+          where: { id: { in: studios.map((s) => s.marketId).filter(Boolean) as string[] } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
+    const studioMap = Object.fromEntries(studios.map((s) => [s.id, { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' }]));
+    return rows.map((r) => ({
+      studioId: r.studioId,
+      studioName: r.studioId ? (studioMap[r.studioId]?.name ?? 'Unknown') : 'No Studio',
+      marketName: r.studioId ? (studioMap[r.studioId]?.marketName ?? '') : '',
+      count: r._count._all,
+    }));
+  }
+
+  async getDispatchByCategory(filters: DispatchFiltersDto) {
+    const where = this.buildOpenMaintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['maintenanceCategoryId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { maintenanceCategoryId: 'desc' } },
+    });
+    const categoryIds = rows.map((r) => r.maintenanceCategoryId).filter((id): id is string => id !== null);
+    const categories = categoryIds.length
+      ? await this.prisma.maintenanceCategory.findMany({
+          where: { id: { in: categoryIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nameMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+    return rows.map((r) => ({
+      maintenanceCategoryId: r.maintenanceCategoryId,
+      categoryName: r.maintenanceCategoryId ? (nameMap[r.maintenanceCategoryId] ?? 'Unknown') : 'Uncategorized',
+      count: r._count._all,
+    }));
+  }
+
+  async getDispatchByMarket(filters: DispatchFiltersDto) {
+    const where = this.buildOpenMaintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['marketId'],
+      where,
+      _count: { _all: true },
+      orderBy: { _count: { marketId: 'desc' } },
+    });
+    const marketIds = rows.map((r) => r.marketId).filter((id): id is string => id !== null);
+    const markets = marketIds.length
+      ? await this.prisma.market.findMany({
+          where: { id: { in: marketIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const nameMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
+    return rows.map((r) => ({
+      marketId: r.marketId,
+      marketName: r.marketId ? (nameMap[r.marketId] ?? 'Unknown') : 'No Market',
+      count: r._count._all,
+    }));
+  }
+
+  async getDispatchStudiosWithMultiple(filters: DispatchFiltersDto) {
+    const where = this.buildOpenMaintenanceWhere(filters);
+    const rows = await this.prisma.ticket.groupBy({
+      by: ['studioId'],
+      where,
+      _count: { _all: true },
+    });
+    const filtered = rows.filter((r) => r._count._all >= 2);
+    const studioIds = filtered.map((r) => r.studioId).filter((id): id is string => id !== null);
+    const studios = studioIds.length
+      ? await this.prisma.studio.findMany({
+          where: { id: { in: studioIds } },
+          select: { id: true, name: true, marketId: true },
+        })
+      : [];
+    const markets = studios.length
+      ? await this.prisma.market.findMany({
+          where: { id: { in: studios.map((s) => s.marketId).filter(Boolean) as string[] } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
+    const studioMap = Object.fromEntries(studios.map((s) => [s.id, { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' }]));
+    return filtered.map((r) => ({
+      studioId: r.studioId,
+      studioName: r.studioId ? (studioMap[r.studioId]?.name ?? 'Unknown') : 'No Studio',
+      marketName: r.studioId ? (studioMap[r.studioId]?.marketName ?? '') : '',
+      count: r._count._all,
+    }));
   }
 
   // ── CSV export of all tickets ─────────────────────────────────────────────

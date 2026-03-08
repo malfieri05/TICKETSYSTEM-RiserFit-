@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -21,11 +22,33 @@ const ACTIVE_STATUSES: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITI
 const COMPLETED_STATUSES: TicketStatus[] = ['RESOLVED', 'CLOSED'];
 
 export default function TicketsPage() {
+  const searchParams = useSearchParams();
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const hasInitializedFromUrl = useRef(false);
+
+  // Sync filters from URL once on mount (e.g. when coming from dispatch dashboard)
+  useEffect(() => {
+    if (hasInitializedFromUrl.current) return;
+    hasInitializedFromUrl.current = true;
+    const ticketClassId = searchParams.get('ticketClassId');
+    const studioId = searchParams.get('studioId');
+    const marketId = searchParams.get('marketId');
+    const maintenanceCategoryId = searchParams.get('maintenanceCategoryId');
+    if (ticketClassId || studioId || marketId || maintenanceCategoryId) {
+      setFilters((f) => ({
+        ...f,
+        ...(ticketClassId && { ticketClassId }),
+        ...(studioId && { studioId }),
+        ...(marketId && { marketId }),
+        ...(maintenanceCategoryId && { maintenanceCategoryId }),
+        page: 1,
+      }));
+    }
+  }, [searchParams]);
 
   // Debounce search input — fires query 300ms after user stops typing
   useEffect(() => {
@@ -194,7 +217,7 @@ export default function TicketsPage() {
             ))}
           </Select>
 
-          {(filters.status || filters.priority || filters.categoryId || filters.teamId || filters.search) && (
+          {(filters.status || filters.priority || filters.categoryId || filters.teamId || filters.search || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId) && (
             <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
               Clear filters
             </Button>

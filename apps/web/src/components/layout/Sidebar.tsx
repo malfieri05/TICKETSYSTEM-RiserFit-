@@ -41,6 +41,7 @@ const adminItems = [
   { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: LayoutDashboard },
   { href: '/admin/workflow-analytics', label: 'Workflow Analytics', icon: BarChart2 },
   { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
+  { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: BarChart2 },
   { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
 ];
 

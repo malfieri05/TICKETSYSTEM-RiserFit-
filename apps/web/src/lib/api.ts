@@ -207,6 +207,16 @@ export const reportingApi = {
     api.get<{ userId: string; userName: string; avgHours: number | null; closedCount: number }[]>(
       '/reporting/completion-time/owners',
     ),
+
+  // Dispatch: open maintenance only (Stage 13, ADMIN only)
+  dispatchByStudio: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
+    api.get<{ studioId: string | null; studioName: string; marketName: string; count: number }[]>('/reporting/dispatch/by-studio', { params }),
+  dispatchByCategory: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
+    api.get<{ maintenanceCategoryId: string | null; categoryName: string; count: number }[]>('/reporting/dispatch/by-category', { params }),
+  dispatchByMarket: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
+    api.get<{ marketId: string | null; marketName: string; count: number }[]>('/reporting/dispatch/by-market', { params }),
+  dispatchStudiosWithMultiple: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
+    api.get<{ studioId: string | null; studioName: string; marketName: string; count: number }[]>('/reporting/dispatch/studios-with-multiple', { params }),
 };
 
 // ─── AI Assistant ───────────────────────────────────────────────────────────

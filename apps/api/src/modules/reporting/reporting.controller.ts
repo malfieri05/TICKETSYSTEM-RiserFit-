@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { ReportingService } from './reporting.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { DispatchFiltersDto } from './dto/dispatch-filters.dto';
 
 @Controller('reporting')
 @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
@@ -69,5 +70,30 @@ export class ReportingController {
   async exportCsv(@Res() res: Response) {
     const csv = await this.reportingService.exportTicketsCsv();
     res.send(csv);
+  }
+
+  // ── Dispatch: open maintenance only (Stage 13, ADMIN only) ─────────────────
+  @Get('dispatch/by-studio')
+  @Roles(Role.ADMIN)
+  getDispatchByStudio(@Query() filters: DispatchFiltersDto) {
+    return this.reportingService.getDispatchByStudio(filters);
+  }
+
+  @Get('dispatch/by-category')
+  @Roles(Role.ADMIN)
+  getDispatchByCategory(@Query() filters: DispatchFiltersDto) {
+    return this.reportingService.getDispatchByCategory(filters);
+  }
+
+  @Get('dispatch/by-market')
+  @Roles(Role.ADMIN)
+  getDispatchByMarket(@Query() filters: DispatchFiltersDto) {
+    return this.reportingService.getDispatchByMarket(filters);
+  }
+
+  @Get('dispatch/studios-with-multiple')
+  @Roles(Role.ADMIN)
+  getDispatchStudiosWithMultiple(@Query() filters: DispatchFiltersDto) {
+    return this.reportingService.getDispatchStudiosWithMultiple(filters);
   }
 }
