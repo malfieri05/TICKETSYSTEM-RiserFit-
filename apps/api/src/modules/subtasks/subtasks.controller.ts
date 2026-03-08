@@ -21,8 +21,11 @@ export class SubtasksController {
 
   // GET /api/tickets/:ticketId/subtasks
   @Get()
-  findAll(@Param('ticketId') ticketId: string) {
-    return this.subtasksService.findByTicket(ticketId);
+  findAll(
+    @Param('ticketId') ticketId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.subtasksService.findByTicket(ticketId, user);
   }
 
   // PATCH /api/tickets/:ticketId/subtasks/:subtaskId

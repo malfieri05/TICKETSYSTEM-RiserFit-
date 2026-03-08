@@ -8,6 +8,7 @@ import {
   CreateStudioDto,
   UpdateStudioDto,
 } from './dto/admin.dto';
+import { haversineMiles } from '../../utils/geoDistance';
 
 @Injectable()
 export class AdminService {
@@ -171,5 +172,54 @@ export class AdminService {
       data: { ...(dto.name && { name: dto.name }) },
       include: { market: true },
     });
+  }
+
+  /** Studios within radiusMiles of the given studio (Haversine). Target and results must have coordinates. Max 50 results. */
+  async getNearbyStudios(
+    studioId: string,
+    radiusMiles: number,
+  ): Promise<{ id: string; name: string; formattedAddress: string | null; marketName: string; distanceMiles: number }[]> {
+    const target = await this.prisma.studio.findUnique({
+      where: { id: studioId },
+      select: { id: true, latitude: true, longitude: true },
+    });
+    if (!target) throw new NotFoundException(`Studio ${studioId} not found`);
+    if (target.latitude == null || target.longitude == null) {
+      throw new NotFoundException('This studio has no coordinates; nearby search is not available.');
+    }
+
+    const others = await this.prisma.studio.findMany({
+      where: {
+        id: { not: studioId },
+        latitude: { not: null },
+        longitude: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        formattedAddress: true,
+        latitude: true,
+        longitude: true,
+        market: { select: { name: true } },
+      },
+    });
+
+    const results: { id: string; name: string; formattedAddress: string | null; marketName: string; distanceMiles: number }[] = [];
+    for (const s of others) {
+      const lat = s.latitude!;
+      const lon = s.longitude!;
+      const dist = haversineMiles(target.latitude!, target.longitude!, lat, lon);
+      if (dist <= radiusMiles) {
+        results.push({
+          id: s.id,
+          name: s.name,
+          formattedAddress: s.formattedAddress,
+          marketName: s.market.name,
+          distanceMiles: Math.round(dist * 10) / 10,
+        });
+      }
+    }
+    results.sort((a, b) => a.distanceMiles - b.distanceMiles);
+    return results.slice(0, 50);
   }
 }

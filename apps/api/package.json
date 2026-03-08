@@ -6,6 +6,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "seed:locations": "ts-node prisma/seed-locations.ts",
+    "cleanup:studios": "ts-node prisma/cleanup-legacy-studios.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

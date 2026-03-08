@@ -71,6 +71,16 @@ export class AdminController {
 
   // ─── Studios ─────────────────────────────────────────────────────────────
 
+  @Get('studios/:id/nearby')
+  getNearbyStudios(
+    @Param('id') id: string,
+    @Query('radiusMiles') radiusMiles?: string,
+  ) {
+    const parsed = radiusMiles != null ? parseFloat(radiusMiles) : 25;
+    const radius = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 25, 0), 100);
+    return this.adminService.getNearbyStudios(id, radius);
+  }
+
   @Get('studios')
   listStudios(@Query('marketId') marketId?: string) {
     return this.adminService.listStudios(marketId);

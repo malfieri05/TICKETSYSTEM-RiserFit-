@@ -8,9 +8,18 @@ import { PrismaService } from '../../common/database/prisma.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { MentionParserService } from './mention-parser.service';
+import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Role } from '@prisma/client';
+
+const TICKET_FOR_VISIBILITY_SELECT = {
+  id: true,
+  requesterId: true,
+  ownerId: true,
+  studioId: true,
+  owner: { select: { team: { select: { name: true } } } },
+} as const;
 
 @Injectable()
 export class CommentsService {
@@ -21,21 +30,21 @@ export class CommentsService {
     private auditLog: AuditLogService,
     private domainEvents: DomainEventsService,
     private mentionParser: MentionParserService,
+    private visibility: TicketVisibilityService,
   ) {}
 
   async create(ticketId: string, dto: CreateCommentDto, actor: RequestUser) {
-    // Verify ticket exists
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
       select: {
-        id: true,
+        ...TICKET_FOR_VISIBILITY_SELECT,
         title: true,
-        requesterId: true,
-        ownerId: true,
         status: true,
       },
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+
+    this.visibility.assertCanView(ticket, actor);
 
     // Requesters cannot post internal notes
     const isInternal = dto.isInternal ?? false;
@@ -129,9 +138,11 @@ export class CommentsService {
   async findByTicket(ticketId: string, actor: RequestUser) {
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
-      select: { id: true, requesterId: true },
+      select: TICKET_FOR_VISIBILITY_SELECT,
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+
+    this.visibility.assertCanView(ticket, actor);
 
     const where = {
       ticketId,

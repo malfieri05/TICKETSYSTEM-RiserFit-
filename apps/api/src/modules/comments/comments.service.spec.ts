@@ -1,0 +1,107 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { CommentsService } from './comments.service';
+import { PrismaService } from '../../common/database/prisma.service';
+import { AuditLogService } from '../../common/audit-log/audit-log.service';
+import { DomainEventsService } from '../events/domain-events.service';
+import { MentionParserService } from './mention-parser.service';
+import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
+import { RequestUser } from '../auth/strategies/jwt.strategy';
+
+function makeActor(overrides: Partial<RequestUser> = {}): RequestUser {
+  return {
+    id: 'user-1',
+    email: 'test@test.com',
+    displayName: 'Test User',
+    role: 'DEPARTMENT_USER',
+    teamId: 'team-1',
+    studioId: null,
+    marketId: null,
+    isActive: true,
+    departments: [],
+    scopeStudioIds: [],
+    ...overrides,
+  };
+}
+
+function makeTicketForVisibility(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'ticket-1',
+    requesterId: 'requester-1',
+    ownerId: 'owner-1',
+    studioId: 'studio-1',
+    owner: { team: { name: 'HR' } },
+    ...overrides,
+  };
+}
+
+describe('CommentsService', () => {
+  let service: CommentsService;
+  let prisma: jest.Mocked<PrismaService>;
+  let visibility: { assertCanView: jest.Mock };
+
+  beforeEach(() => {
+    prisma = {
+      ticket: { findUnique: jest.fn() },
+      ticketComment: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
+      $transaction: jest.fn((fn) => (typeof fn === 'function' ? fn(prisma) : Promise.resolve())),
+    } as unknown as jest.Mocked<PrismaService>;
+
+    visibility = { assertCanView: jest.fn() };
+
+    service = new CommentsService(
+      prisma,
+      { log: jest.fn() } as unknown as AuditLogService,
+      { emit: jest.fn() } as unknown as DomainEventsService,
+      { extractMentions: jest.fn().mockResolvedValue([]) } as unknown as MentionParserService,
+      visibility as unknown as TicketVisibilityService,
+    );
+  });
+
+  describe('create', () => {
+    it('throws ForbiddenException when user cannot view ticket', async () => {
+      const ticketId = 'ticket-1';
+      (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(
+        makeTicketForVisibility({ id: ticketId }),
+      );
+      visibility.assertCanView.mockImplementation(() => {
+        throw new ForbiddenException('You do not have access to this ticket');
+      });
+
+      await expect(
+        service.create(ticketId, { body: 'Hello' }, makeActor()),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(visibility.assertCanView).toHaveBeenCalledTimes(1);
+      expect(prisma.ticketComment.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findByTicket', () => {
+    it('throws ForbiddenException when user cannot view ticket', async () => {
+      const ticketId = 'ticket-1';
+      (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(
+        makeTicketForVisibility({ id: ticketId }),
+      );
+      visibility.assertCanView.mockImplementation(() => {
+        throw new ForbiddenException('You do not have access to this ticket');
+      });
+
+      await expect(
+        service.findByTicket(ticketId, makeActor()),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(visibility.assertCanView).toHaveBeenCalledTimes(1);
+      expect(prisma.ticketComment.findMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when ticket does not exist', async () => {
+      (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.findByTicket('missing-ticket', makeActor()),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(visibility.assertCanView).not.toHaveBeenCalled();
+    });
+  });
+});

@@ -115,12 +115,16 @@ model Market {
 }
 
 model Studio {
-  id        String   @id @default(cuid())
-  name      String
-  marketId  String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  marketId        String
+  isActive        Boolean  @default(true)
+  externalCode    String?  @unique
+  formattedAddress String?
+  latitude        Float?
+  longitude       Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   market      Market            @relation(fields: [marketId], references: [id])
   tickets     Ticket[]

@@ -79,6 +79,16 @@ const TICKET_LIST_SELECT_LIGHT = {
 
 const TICKET_DETAIL_SELECT = {
   ...TICKET_LIST_SELECT,
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+      teamId: true,
+      team: { select: { name: true } },
+    },
+  },
   description: true,
   comments: {
     orderBy: { createdAt: 'asc' as const },

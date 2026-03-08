@@ -65,13 +65,14 @@ export class TicketVisibilityService {
   /**
    * Throws ForbiddenException if the actor cannot view the given ticket.
    * Call this after fetching the ticket (so the caller already knows it exists).
+   * For DEPARTMENT_USER, caller must include ticket.owner.team.name in the ticket select.
    */
   assertCanView(
     ticket: {
       requesterId: string;
       ownerId: string | null;
       studioId: string | null;
-      owner?: { teamId?: string | null } | null;
+      owner?: { teamId?: string | null; team?: { name: string } | null } | null;
     },
     actor: RequestUser,
   ): void {
@@ -81,10 +82,8 @@ export class TicketVisibilityService {
       if (ticket.ownerId === actor.id) return;
 
       const teamNames = actor.departments.map((d) => DEPARTMENT_TO_TEAM_NAME[d]).filter(Boolean);
-      if (teamNames.length > 0 && ticket.owner?.teamId) {
-        // We'd need the team name here; the caller must include owner.team.name
-        // This path is covered by the WHERE clause in findAll; for findById
-        // we re-check using the where clause result.
+      if (teamNames.length > 0 && ticket.owner?.team?.name && teamNames.includes(ticket.owner.team.name)) {
+        return;
       }
 
       if (actor.scopeStudioIds.includes(ticket.studioId ?? '')) return;

@@ -4,9 +4,10 @@ import { SubtasksService } from './subtasks.service';
 import { AuditLogModule } from '../../common/audit-log/audit-log.module';
 import { EventsModule } from '../events/events.module';
 import { SubtaskWorkflowModule } from '../subtask-workflow/subtask-workflow.module';
+import { PermissionsModule } from '../../common/permissions/permissions.module';
 
 @Module({
-  imports: [AuditLogModule, EventsModule, SubtaskWorkflowModule],
+  imports: [AuditLogModule, EventsModule, SubtaskWorkflowModule, PermissionsModule],
   controllers: [SubtasksController],
   providers: [SubtasksService],
   exports: [SubtasksService],

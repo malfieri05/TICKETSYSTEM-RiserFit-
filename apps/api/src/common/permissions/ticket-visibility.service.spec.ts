@@ -24,7 +24,7 @@ function makeTicket(overrides: Partial<{
   requesterId: string;
   ownerId: string | null;
   studioId: string | null;
-  owner: { teamId: string | null } | null;
+  owner: { teamId: string | null; team?: { name: string } | null } | null;
 }> = {}) {
   return {
     requesterId: 'other-user',
@@ -183,6 +183,26 @@ describe('TicketVisibilityService', () => {
       expect(() =>
         service.assertCanView(makeTicket({ requesterId: 'other', ownerId: 'other', studioId: 'studio-Z' }), actor),
       ).toThrow(ForbiddenException);
+    });
+
+    it('DEPARTMENT_USER can view ticket owned by teammate in same department', () => {
+      const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1', departments: ['HR'], scopeStudioIds: [] });
+      const ticket = makeTicket({
+        ownerId: 'teammate-id',
+        studioId: 'other-studio',
+        owner: { teamId: 'team-1', team: { name: 'HR' } },
+      });
+      expect(() => service.assertCanView(ticket, actor)).not.toThrow();
+    });
+
+    it('DEPARTMENT_USER cannot view ticket when owner is in different department', () => {
+      const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1', departments: ['HR'], scopeStudioIds: [] });
+      const ticket = makeTicket({
+        ownerId: 'other-user',
+        studioId: 'other-studio',
+        owner: { teamId: 'team-2', team: { name: 'Marketing' } },
+      });
+      expect(() => service.assertCanView(ticket, actor)).toThrow(ForbiddenException);
     });
   });
 
