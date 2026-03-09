@@ -233,25 +233,6 @@ model UserStudioScope {
 }
 
 // ============================================================
-// CATEGORIES (admin-configurable) — legacy; prefer taxonomy
-// ============================================================
-
-model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  color       String?
-  isActive    Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  tickets     Ticket[]
-
-  @@map("categories")
-}
-
-// ============================================================
 // TICKET TAXONOMY (Stage 2 config entities)
 // ============================================================
 
@@ -418,8 +399,6 @@ model Ticket {
   description          String
   status               TicketStatus @default(NEW)
   priority             Priority     @default(MEDIUM)
-  /// @deprecated Use ticketClassId + departmentId/supportTopicId or maintenanceCategoryId. Kept for safety; removal in later migration.
-  categoryId           String?
   ticketClassId        String
   departmentId         String?
   supportTopicId       String?
@@ -433,7 +412,6 @@ model Ticket {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
-  category             Category?            @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   ticketClass          TicketClass          @relation(fields: [ticketClassId], references: [id])
   department           TaxonomyDepartment?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   supportTopic         SupportTopic?       @relation(fields: [supportTopicId], references: [id], onDelete: SetNull)
@@ -457,14 +435,12 @@ model Ticket {
   @@index([requesterId])
   @@index([studioId])
   @@index([marketId])
-  @@index([categoryId])
   @@index([ticketClassId])
   @@index([departmentId])
   @@index([supportTopicId])
   @@index([maintenanceCategoryId])
   @@index([priority])
   @@index([createdAt])
-  @@index([status, categoryId])
   @@index([status, ownerId])
   @@index([requesterId, status])
   @@map("tickets")

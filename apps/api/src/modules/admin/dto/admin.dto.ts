@@ -1,31 +1,4 @@
-import { IsString, IsOptional, IsBoolean, MinLength, IsNumber, Min, Max, ValidateIf } from 'class-validator';
-
-// ─── Categories ────────────────────────────────────────────────────────────
-
-export class CreateCategoryDto {
-  @IsString()
-  @MinLength(1)
-  name: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-}
-
-export class UpdateCategoryDto {
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  name?: string;
-
-  @IsOptional()
-  @IsString()
-  description?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  isActive?: boolean;
-}
+import { IsString, IsOptional, MinLength, IsNumber, Min, Max, ValidateIf } from 'class-validator';
 
 // ─── Markets ───────────────────────────────────────────────────────────────
 

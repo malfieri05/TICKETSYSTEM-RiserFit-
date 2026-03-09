@@ -8,6 +8,7 @@
   "scripts": {
     "seed:locations": "ts-node prisma/seed-locations.ts",
     "cleanup:studios": "ts-node prisma/cleanup-legacy-studios.ts",
+    "reset:tickets": "ts-node --transpile-only prisma/reset-ticket-runtime-data.ts",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",

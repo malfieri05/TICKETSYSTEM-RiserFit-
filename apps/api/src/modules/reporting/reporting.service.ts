@@ -112,31 +112,58 @@ export class ReportingService {
       .map((r) => ({ priority: r.priority, count: r._count._all }));
   }
 
-  // ── Breakdown by category ─────────────────────────────────────────────────
+  // ── Breakdown by taxonomy (maintenance category + support topic) ───────────
   async getByCategory() {
-    const rows = await this.prisma.ticket.groupBy({
-      by: ['categoryId'],
-      _count: { _all: true },
-      orderBy: { _count: { categoryId: 'desc' } },
-    });
+    const [byMaintenance, bySupport] = await Promise.all([
+      this.prisma.ticket.groupBy({
+        by: ['maintenanceCategoryId'],
+        where: { maintenanceCategoryId: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { maintenanceCategoryId: 'desc' } },
+      }),
+      this.prisma.ticket.groupBy({
+        by: ['supportTopicId'],
+        where: { supportTopicId: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { supportTopicId: 'desc' } },
+      }),
+    ]);
 
-    // Fetch category names
-    const categoryIds = rows
-      .map((r) => r.categoryId)
-      .filter((id): id is string => id !== null);
+    const maintIds = byMaintenance.map((r) => r.maintenanceCategoryId).filter((id): id is string => id != null);
+    const topicIds = bySupport.map((r) => r.supportTopicId).filter((id): id is string => id != null);
 
-    const categories = await this.prisma.category.findMany({
-      where: { id: { in: categoryIds } },
-      select: { id: true, name: true },
-    });
+    const [maintenanceCategories, supportTopics] = await Promise.all([
+      maintIds.length > 0
+        ? this.prisma.maintenanceCategory.findMany({
+            where: { id: { in: maintIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      topicIds.length > 0
+        ? this.prisma.supportTopic.findMany({
+            where: { id: { in: topicIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
 
-    const nameMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
+    const maintMap = Object.fromEntries(maintenanceCategories.map((c) => [c.id, c.name]));
+    const topicMap = Object.fromEntries(supportTopics.map((t) => [t.id, t.name]));
 
-    return rows.map((r) => ({
-      categoryId: r.categoryId,
-      categoryName: r.categoryId ? (nameMap[r.categoryId] ?? 'Unknown') : 'Uncategorized',
-      count: r._count._all,
-    }));
+    const result: { categoryId: string | null; categoryName: string; count: number }[] = [
+      ...byMaintenance.map((r) => ({
+        categoryId: r.maintenanceCategoryId,
+        categoryName: r.maintenanceCategoryId ? (maintMap[r.maintenanceCategoryId] ?? 'Unknown') : 'Uncategorized',
+        count: r._count._all,
+      })),
+      ...bySupport.map((r) => ({
+        categoryId: r.supportTopicId,
+        categoryName: r.supportTopicId ? (topicMap[r.supportTopicId] ?? 'Unknown') : 'Uncategorized',
+        count: r._count._all,
+      })),
+    ];
+    result.sort((a, b) => b.count - a.count);
+    return result;
   }
 
   // ── Breakdown by market ───────────────────────────────────────────────────
@@ -165,28 +192,29 @@ export class ReportingService {
     }));
   }
 
-  // ── Resolution time by category (avg hours) ───────────────────────────────
+  // ── Resolution time by taxonomy (avg hours) ─────────────────────────────
   async getResolutionTimeByCategory() {
     const rows = await this.prisma.$queryRaw<
-      { category_name: string; avg_hours: number; ticket_count: bigint }[]
+      { taxonomy_name: string; avg_hours: number; ticket_count: bigint }[]
     >`
       SELECT
-        COALESCE(c.name, 'Uncategorized') AS category_name,
+        COALESCE(m.name, s.name, 'Uncategorized') AS taxonomy_name,
         ROUND(
           AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
           1
-        )::float                          AS avg_hours,
-        COUNT(*)                          AS ticket_count
-      FROM   tickets t
-      LEFT   JOIN categories c ON c.id = t.category_id
-      WHERE  t.resolved_at IS NOT NULL
-        AND  t.status IN ('RESOLVED', 'CLOSED')
-      GROUP  BY c.name
-      ORDER  BY avg_hours ASC
+        )::float AS avg_hours,
+        COUNT(*)::bigint AS ticket_count
+      FROM tickets t
+      LEFT JOIN maintenance_categories m ON m.id = t.maintenance_category_id
+      LEFT JOIN support_topics s ON s.id = t.support_topic_id
+      WHERE t.resolved_at IS NOT NULL
+        AND t.status IN ('RESOLVED', 'CLOSED')
+      GROUP BY m.name, s.name
+      ORDER BY avg_hours ASC
     `;
 
     return rows.map((r) => ({
-      categoryName: r.category_name,
+      categoryName: r.taxonomy_name,
       avgHours: Number(r.avg_hours),
       ticketCount: Number(r.ticket_count),
     }));
@@ -342,7 +370,8 @@ export class ReportingService {
         description: true,
         requester: { select: { name: true, email: true } },
         owner: { select: { name: true, email: true } },
-        category: { select: { name: true } },
+        supportTopic: { select: { name: true } },
+        maintenanceCategory: { select: { name: true } },
         market: { select: { name: true } },
         studio: { select: { name: true } },
         _count: { select: { comments: true, subtasks: true, attachments: true } },
@@ -384,7 +413,7 @@ export class ReportingService {
       escape(t.title),
       t.status,
       t.priority,
-      escape(t.category?.name),
+      escape(t.maintenanceCategory?.name ?? t.supportTopic?.name ?? null),
       escape(t.market?.name),
       escape(t.studio?.name),
       escape(t.requester?.name),

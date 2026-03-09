@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Inbox as InboxIcon } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
@@ -14,8 +15,24 @@ const PAGE_SIZE = 20;
 
 export default function InboxPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [page, setPage] = useState(1);
-  const filters: TicketFilters = { actionableForMe: true, page, limit: PAGE_SIZE };
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+
+  const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';
+  const { data: foldersData } = useQuery({
+    queryKey: ['inbox-folders'],
+    queryFn: () => ticketsApi.inboxFolders(),
+    enabled: canSeeFolders,
+  });
+  const folders = foldersData?.data?.folders ?? [];
+
+  const filters: TicketFilters = {
+    actionableForMe: true,
+    page,
+    limit: PAGE_SIZE,
+    ...(selectedFolderId !== 'all' && { supportTopicId: selectedFolderId }),
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['tickets', 'actionable', filters],
@@ -30,7 +47,37 @@ export default function InboxPage() {
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
       <Header title="Actionable" />
 
-      <div className="flex-1 p-6 max-w-4xl">
+      <div className="flex-1 flex overflow-hidden">
+        {/* Stage 23: folder list for department users */}
+        {canSeeFolders && folders.length > 0 && (
+          <aside className="w-52 shrink-0 flex flex-col border-r" style={{ borderColor: '#2a2a2a', background: '#111111' }}>
+            <div className="p-3 border-b" style={{ borderColor: '#2a2a2a' }}>
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Topics</span>
+            </div>
+            <nav className="p-2 space-y-0.5 overflow-y-auto">
+              {folders.map((folder) => (
+                <button
+                  key={folder.id}
+                  type="button"
+                  onClick={() => { setSelectedFolderId(folder.id); setPage(1); }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
+                  style={{
+                    background: selectedFolderId === folder.id ? 'rgba(20,184,166,0.15)' : 'transparent',
+                    color: selectedFolderId === folder.id ? '#14b8a6' : '#cccccc',
+                    border: selectedFolderId === folder.id ? '1px solid rgba(20,184,166,0.4)' : '1px solid transparent',
+                  }}
+                >
+                  <span className="truncate">{folder.label}</span>
+                  <span className="shrink-0 text-xs tabular-nums" style={{ color: selectedFolderId === folder.id ? '#14b8a6' : '#888888' }}>
+                    {folder.activeCount}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </aside>
+        )}
+
+        <div className="flex-1 p-6 max-w-4xl overflow-y-auto">
         {isLoading ? (
           <div className="flex justify-center py-12">
             <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
@@ -114,6 +161,7 @@ export default function InboxPage() {
             )}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

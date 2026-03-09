@@ -34,15 +34,36 @@ const navItemsStudioUser = [
 /** Shown when user can have READY subtasks (department or admin). */
 const actionableNavItem = { href: '/inbox', label: 'Actionable', icon: Inbox };
 
-const adminItems = [
-  { href: '/admin/categories', label: 'Categories', icon: LayoutDashboard },
-  { href: '/admin/markets', label: 'Markets & Studios', icon: LayoutDashboard },
-  { href: '/admin/users', label: 'Users', icon: Settings },
-  { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: LayoutDashboard },
-  { href: '/admin/workflow-analytics', label: 'Workflow Analytics', icon: BarChart2 },
-  { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
-  { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: BarChart2 },
-  { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+/** Admin nav grouped for clarity. */
+const adminGroups: { label: string; items: { href: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
+  {
+    label: 'Configuration',
+    items: [
+      { href: '/admin/markets', label: 'Locations', icon: LayoutDashboard },
+      { href: '/admin/users', label: 'Users', icon: Settings },
+    ],
+  },
+  {
+    label: 'Workflows',
+    items: [
+      { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: LayoutDashboard },
+      { href: '/admin/workflow-analytics', label: 'Workflow Analytics', icon: BarChart2 },
+    ],
+  },
+  {
+    label: 'Reporting & Dispatch',
+    items: [
+      { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
+      { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: BarChart2 },
+    ],
+  },
+  {
+    label: 'Content / Tools',
+    items: [
+      { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+      { href: '/assistant', label: 'Assistant', icon: BookOpen },
+    ],
+  },
 ];
 
 const BG     = '#111111';
@@ -194,26 +215,35 @@ export function Sidebar() {
                 Admin
               </p>
             </div>
-            {adminItems.map(({ href, label, icon: Icon }) => {
-              const active = pathname.startsWith(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    background: active ? ACTIVE : 'transparent',
-                    color: active ? '#ffffff' : '#888888',
-                    borderLeft: `3px solid ${active ? ACCENT : 'transparent'}`,
-                  }}
-                  onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = HOVER; e.currentTarget.style.color = '#cccccc'; } }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = active ? ACTIVE : 'transparent'; e.currentTarget.style.color = active ? '#ffffff' : '#888888'; }}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {label}
-                </Link>
-              );
-            })}
+            {adminGroups.map((group) => (
+              <div key={group.label}>
+                <div className="pt-3 pb-1 px-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#555555' }}>
+                    {group.label}
+                  </p>
+                </div>
+                {group.items.map(({ href, label, icon: Icon }) => {
+                  const active = pathname.startsWith(href) || (href === '/assistant' && pathname === '/assistant');
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                      style={{
+                        background: active ? ACTIVE : 'transparent',
+                        color: active ? '#ffffff' : '#888888',
+                        borderLeft: `3px solid ${active ? ACCENT : 'transparent'}`,
+                      }}
+                      onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = HOVER; e.currentTarget.style.color = '#cccccc'; } }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = active ? ACTIVE : 'transparent'; e.currentTarget.style.color = active ? '#ffffff' : '#888888'; }}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </>
         )}
       </nav>

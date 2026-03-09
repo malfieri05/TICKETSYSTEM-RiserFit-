@@ -126,7 +126,6 @@ export class ToolRouterService {
       take: limit,
       select: {
         id: true, title: true, status: true, priority: true, createdAt: true, updatedAt: true,
-        category: { select: { id: true, name: true } },
         ticketClass: { select: { code: true, name: true } },
         department: { select: { name: true } },
         supportTopic: { select: { name: true } },
@@ -151,7 +150,6 @@ export class ToolRouterService {
       select: {
         id: true, title: true, description: true, status: true, priority: true,
         createdAt: true, updatedAt: true, resolvedAt: true, closedAt: true,
-        category: { select: { id: true, name: true } },
         ticketClass: { select: { code: true, name: true } },
         department: { select: { name: true } },
         supportTopic: { select: { name: true } },
@@ -345,7 +343,7 @@ export class ToolRouterService {
       if (statusFilter?.length) where.status = { in: statusFilter };
       if (priorityFilter?.length) where.priority = { in: priorityFilter };
 
-      const groupField: 'status' | 'priority' | 'maintenanceCategoryId' | 'categoryId' | 'marketId' =
+      const groupField: 'status' | 'priority' | 'maintenanceCategoryId' | 'marketId' =
         groupBy === 'priority' ? 'priority'
           : groupBy === 'category' ? 'maintenanceCategoryId'
           : groupBy === 'market' ? 'marketId'

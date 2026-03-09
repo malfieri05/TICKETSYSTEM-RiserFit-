@@ -106,55 +106,7 @@ describe('TicketsService', () => {
   });
 
   describe('create (taxonomy compatibility)', () => {
-    it('legacy payload with only categoryId succeeds and maps to MAINTENANCE + maintenanceCategoryId', async () => {
-      const actor = makeActor();
-      const categoryId = MAINT_CAT_ID;
-
-      prisma.ticketClass.findFirst.mockResolvedValue({ id: MAINTENANCE_CLASS_ID });
-      prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: categoryId });
-      prisma.category.findUnique.mockResolvedValue({ id: categoryId });
-      prismaTx.ticket.create.mockResolvedValue({
-        id: 'ticket-1',
-        title: 'Legacy ticket',
-        status: 'NEW',
-        ticketClassId: MAINTENANCE_CLASS_ID,
-        maintenanceCategoryId: categoryId,
-        categoryId,
-        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
-        maintenanceCategory: { id: categoryId, name: 'Plumbing', color: null },
-      });
-      prismaTx.ticketWatcher.create.mockResolvedValue({});
-
-      const result = await service.create(
-        {
-          title: 'Legacy ticket',
-          description: '',
-          priority: 'MEDIUM',
-          categoryId,
-        },
-        actor,
-      );
-
-      expect(prisma.ticketClass.findFirst).toHaveBeenCalledWith({
-        where: { code: 'MAINTENANCE', isActive: true },
-        select: { id: true },
-      });
-      expect(prismaTx.ticket.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            ticketClassId: MAINTENANCE_CLASS_ID,
-            maintenanceCategoryId: categoryId,
-            categoryId,
-            title: 'Legacy ticket',
-          }),
-        }),
-      );
-      expect(result.ticketClass?.id).toBe(MAINTENANCE_CLASS_ID);
-      expect(result.maintenanceCategory?.id).toBe(categoryId);
-    });
-
-    it('new payload with ticketClassId + maintenanceCategoryId still works', async () => {
+    it('payload with ticketClassId + maintenanceCategoryId works', async () => {
       const actor = makeActor();
 
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
@@ -363,26 +315,24 @@ describe('TicketsService', () => {
       expect(prismaTx.ticket.create).not.toHaveBeenCalled();
     });
 
-    it('legacy create without formResponses does not call ticketForms.getSchema', async () => {
+    it('create without formResponses does not call ticketForms.getSchema', async () => {
       const actor = makeActor();
       prisma.ticketClass.findFirst.mockResolvedValue({ id: MAINTENANCE_CLASS_ID });
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
       prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
-      prisma.category.findUnique.mockResolvedValue({ id: MAINT_CAT_ID });
       prismaTx.ticket.create.mockResolvedValue({
         id: 'ticket-1',
         title: 'Legacy',
         status: 'NEW',
         ticketClassId: MAINTENANCE_CLASS_ID,
         maintenanceCategoryId: MAINT_CAT_ID,
-        categoryId: MAINT_CAT_ID,
         ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
         maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
       });
       prismaTx.ticketWatcher.create.mockResolvedValue({});
 
       await service.create(
-        { title: 'Legacy', description: '', categoryId: MAINT_CAT_ID },
+        { title: 'Legacy', description: '', ticketClassId: MAINTENANCE_CLASS_ID, maintenanceCategoryId: MAINT_CAT_ID },
         actor,
       );
 

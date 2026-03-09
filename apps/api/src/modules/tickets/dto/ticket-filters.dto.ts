@@ -9,10 +9,6 @@ export class TicketFiltersDto {
 
   @IsOptional()
   @IsString()
-  categoryId?: string;
-
-  @IsOptional()
-  @IsString()
   ticketClassId?: string;
 
   @IsOptional()
@@ -27,6 +23,7 @@ export class TicketFiltersDto {
   @IsString()
   maintenanceCategoryId?: string;
 
+  /** For STUDIO_USER: must be one of the user's allowed studios (primary + scope) or request returns 403. */
   @IsOptional()
   @IsString()
   studioId?: string;

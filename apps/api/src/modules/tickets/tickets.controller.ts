@@ -9,11 +9,15 @@ import {
   Delete,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
+import { Role } from '@prisma/client';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
@@ -21,6 +25,7 @@ import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { TransitionStatusDto } from './dto/transition-status.dto';
 
 @Controller('tickets')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
@@ -51,7 +56,14 @@ export class TicketsController {
     return this.ticketsService.getScopeSummary(user);
   }
 
-  // GET /api/tickets?status=&categoryId=&page=&limit=
+  // GET /api/tickets/inbox-folders — Department inbox topic folders with active counts (Stage 23)
+  @Get('inbox-folders')
+  @Roles(Role.DEPARTMENT_USER, Role.ADMIN)
+  getInboxFolders(@CurrentUser() user: RequestUser) {
+    return this.ticketsService.getInboxFolders(user);
+  }
+
+  // GET /api/tickets?status=&ticketClassId=&supportTopicId=&maintenanceCategoryId=&page=&limit=
   @Get()
   findAll(
     @Query() filters: TicketFiltersDto,
@@ -90,8 +102,9 @@ export class TicketsController {
     return this.ticketsService.assign(id, dto.ownerId, user);
   }
 
-  // PATCH /api/tickets/:id/status
+  // PATCH /api/tickets/:id/status — DEPARTMENT_USER and ADMIN only (Stage 23: studio users cannot transition)
   @Patch(':id/status')
+  @Roles(Role.DEPARTMENT_USER, Role.ADMIN)
   transitionStatus(
     @Param('id') id: string,
     @Body() dto: TransitionStatusDto,

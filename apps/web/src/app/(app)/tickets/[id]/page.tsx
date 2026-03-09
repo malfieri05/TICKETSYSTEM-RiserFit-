@@ -5,14 +5,13 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
-  ArrowLeft, MessageSquare, CheckSquare, Eye, Clock,
+  ArrowLeft, MessageSquare, CheckSquare, Clock,
   Send, Plus, User, Paperclip, Download, Trash2, Upload,
 } from 'lucide-react';
 import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { StatusBadge, PriorityBadge, SubtaskStatusBadge } from '@/components/ui/Badge';
-import { SlaBadge, SlaProgressBar } from '@/components/ui/SlaBadge';
+import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,7 +41,7 @@ export default function TicketDetailPage() {
   const [commentBody, setCommentBody] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
-  const [activeTab, setActiveTab] = useState<'comments' | 'subtasks' | 'attachments' | 'history'>('comments');
+  const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -141,7 +140,7 @@ export default function TicketDetailPage() {
   const { data: attachmentsRes } = useQuery({
     queryKey: ['ticket', id, 'attachments'],
     queryFn: () => attachmentsApi.list(id),
-    enabled: activeTab === 'attachments',
+    enabled: activeTab === 'submission' && !!id,
   });
   const attachments: Attachment[] = attachmentsRes?.data ?? [];
 
@@ -212,76 +211,75 @@ export default function TicketDetailPage() {
     ? (ticket.comments ?? []).filter((c) => !(c as { isInternal?: boolean }).isInternal)
     : (ticket.comments ?? []);
 
+  const subtaskDone = (ticket.subtasks ?? []).filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length;
+  const subtaskTotal = (ticket.subtasks ?? []).length;
+  const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] }).formResponses ?? [];
+
   return (
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
-      <Header title={`Ticket #${ticket.id.slice(0, 8)}`} />
+      <Header title="Ticket" />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6 flex gap-6">
+        <div className="max-w-4xl mx-auto p-6 space-y-5">
+          <Button variant="ghost" size="sm" onClick={() => router.push(isStudioUser ? '/portal' : '/tickets')}>
+            <ArrowLeft className="h-4 w-4" />
+            {isStudioUser ? 'Back to My Tickets' : 'Back to tickets'}
+          </Button>
 
-          {/* ── Main content ─────────────────────────────────────────────── */}
-          <div className="flex-1 min-w-0 space-y-5">
-            <Button variant="ghost" size="sm" onClick={() => router.push(isStudioUser ? '/portal' : '/tickets')}>
-              <ArrowLeft className="h-4 w-4" />
-              {isStudioUser ? 'Back to My Tickets' : 'Back to tickets'}
-            </Button>
-
-            {/* Ticket header card */}
-            <div className="rounded-xl p-5 space-y-3" style={panel}>
-              <div className="flex items-start gap-3 flex-wrap">
-                <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} muted={ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'} />
-                {ticket.category && (
-                  <span className="px-2 py-0.5 rounded text-xs font-medium" style={{ background: '#2a2a2a', color: '#aaaaaa' }}>
-                    {ticket.category.name}
-                  </span>
-                )}
-              </div>
-              <h1 className="text-xl font-semibold text-gray-100">{ticket.title}</h1>
-              {ticket.description && (
-                <p className="text-sm whitespace-pre-wrap" style={{ color: '#888888' }}>{ticket.description}</p>
+          {/* Stage 22: header — title, created, requester, location, progress; ticket ID demoted */}
+          <div className="rounded-xl p-5 space-y-2" style={panel}>
+            <h1 className="text-xl font-semibold text-gray-100">{ticket.title}</h1>
+            <p className="text-sm" style={{ color: '#888888' }}>
+              Created {format(new Date(ticket.createdAt), 'MMM d')} • Requested by {ticket.requester.displayName}
+            </p>
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              {(ticket as { studio?: { name: string } }).studio?.name && (
+                <span style={{ color: '#666666' }}>{(ticket as { studio: { name: string } }).studio.name}</span>
               )}
-              <div className="flex items-center gap-4 text-xs pt-1" style={{ color: '#555555' }}>
-                <span>Opened by <strong style={{ color: '#888888' }}>{ticket.requester.displayName}</strong></span>
-                <span>{format(new Date(ticket.createdAt), 'MMM d, yyyy h:mm a')}</span>
-              </div>
+              <span className="text-xs font-medium tabular-nums" style={{ color: '#14b8a6' }}>
+                Progress {subtaskDone} / {subtaskTotal}
+              </span>
             </div>
+            <p className="text-xs" style={{ color: '#555555' }}>
+              Ticket #{ticket.id.slice(0, 8)}
+            </p>
+          </div>
 
-            {/* Tabs */}
-            <div style={{ borderBottom: '1px solid #2a2a2a' }}>
-              <nav className="flex gap-6">
-                {(['comments', 'subtasks', 'attachments', 'history'] as const).map((tab) => {
-                  const icons = {
-                    comments: <MessageSquare className="h-4 w-4" />,
-                    subtasks: <CheckSquare className="h-4 w-4" />,
-                    attachments: <Paperclip className="h-4 w-4" />,
-                    history: <Clock className="h-4 w-4" />,
-                  };
-                  const labels = {
-                    comments: `Updates & Replies (${visibleComments.length})`,
-                    subtasks: `Subtasks (${ticket.subtasks.length})`,
-                    attachments: 'Attachments',
-                    history: 'History',
-                  };
-                  return (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      className="pb-3 text-sm font-medium border-b-2 transition-colors"
-                      style={{
-                        borderBottomColor: activeTab === tab ? '#14b8a6' : 'transparent',
-                        color: activeTab === tab ? '#14b8a6' : '#666666',
-                      }}
-                    >
-                      <span className="flex items-center gap-1.5">
-                        {icons[tab]}
-                        {labels[tab]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
+          {/* Tabs: Subtasks, Comments, Ticket Submission, History */}
+          <div style={{ borderBottom: '1px solid #2a2a2a' }}>
+            <nav className="flex gap-6">
+              {(['subtasks', 'comments', 'submission', 'history'] as const).map((tab) => {
+                const icons = {
+                  subtasks: <CheckSquare className="h-4 w-4" />,
+                  comments: <MessageSquare className="h-4 w-4" />,
+                  submission: <User className="h-4 w-4" />,
+                  history: <Clock className="h-4 w-4" />,
+                };
+                const labels = {
+                  subtasks: `Subtasks (${ticket.subtasks?.length ?? 0})`,
+                  comments: `Comments (${visibleComments.length})`,
+                  submission: 'Ticket Submission',
+                  history: 'History',
+                };
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className="pb-3 text-sm font-medium border-b-2 transition-colors"
+                    style={{
+                      borderBottomColor: activeTab === tab ? '#14b8a6' : 'transparent',
+                      color: activeTab === tab ? '#14b8a6' : '#666666',
+                    }}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {icons[tab]}
+                      {labels[tab]}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
             {/* ── Conversation (Updates & Replies) ─── */}
             {activeTab === 'comments' && (
@@ -462,91 +460,93 @@ export default function TicketDetailPage() {
               </div>
             )}
 
-            {/* ── Attachments ─── */}
-            {activeTab === 'attachments' && (
+            {/* ── Ticket Submission (read-only form data + attachments) ─── */}
+            {activeTab === 'submission' && (
               <div className="space-y-4">
-                <div
-                  className="rounded-xl p-8 text-center cursor-pointer transition-colors"
-                  style={{ background: '#111111', border: '2px dashed #333333' }}
-                  onClick={() => !uploading && fileInputRef.current?.click()}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#333333')}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const file = e.dataTransfer.files[0];
-                    if (file) handleFileUpload(file);
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
+                {formResponses.length > 0 ? (
+                  <div className="rounded-xl p-4 space-y-2" style={panel}>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Submitted form data</p>
+                    <dl className="space-y-1.5 text-sm">
+                      {formResponses.map((r) => (
+                        <div key={r.fieldKey} className="flex gap-2">
+                          <dt className="shrink-0" style={{ color: '#888888' }}>
+                            {r.fieldKey.split('_').join(' ').split(' ').map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '')).join(' ')}:
+                          </dt>
+                          <dd className="min-w-0 text-gray-200 break-words">{r.value || '—'}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ) : (
+                  <p className="text-sm py-4" style={{ color: '#555555' }}>No submitted form data.</p>
+                )}
+
+                <div className="rounded-xl p-4 space-y-3" style={panel}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Attachments</p>
+                  <div
+                    className="rounded-lg p-6 text-center cursor-pointer transition-colors"
+                    style={{ background: '#111111', border: '2px dashed #333333' }}
+                    onClick={() => !uploading && fileInputRef.current?.click()}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#333333')}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files[0];
                       if (file) handleFileUpload(file);
                     }}
-                  />
-                  {uploading ? (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
-                      <p className="text-sm font-medium text-teal-400">Uploading…</p>
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleFileUpload(file);
+                      }}
+                    />
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+                        <p className="text-sm font-medium text-teal-400">Uploading…</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8" style={{ color: '#444444' }} />
+                        <p className="text-sm font-medium" style={{ color: '#888888' }}>Click to upload or drag &amp; drop</p>
+                        <p className="text-xs" style={{ color: '#555555' }}>Any file type · Max 25 MB</p>
+                      </div>
+                    )}
+                  </div>
+                  {uploadError && (
+                    <div className="rounded-lg px-4 py-2 text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
+                      {uploadError}
                     </div>
+                  )}
+                  {attachments.length === 0 && !uploading ? (
+                    <p className="text-sm text-center py-2" style={{ color: '#555555' }}>No attachments yet.</p>
                   ) : (
-                    <div className="flex flex-col items-center gap-2">
-                      <Upload className="h-8 w-8" style={{ color: '#444444' }} />
-                      <p className="text-sm font-medium" style={{ color: '#888888' }}>Click to upload or drag &amp; drop</p>
-                      <p className="text-xs" style={{ color: '#555555' }}>Any file type · Max 25 MB</p>
+                    <div className="rounded-lg overflow-hidden" style={{ background: '#111111', border: '1px solid #2a2a2a' }}>
+                      {attachments.map((att, i) => (
+                        <div key={att.id} className="flex items-center gap-3 px-4 py-3" style={i > 0 ? panelSection : undefined}>
+                          <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-200 truncate">{att.filename}</p>
+                            <p className="text-xs" style={{ color: '#555555' }}>{formatBytes(att.sizeBytes)} · {att.uploadedBy.name}</p>
+                          </div>
+                          <button type="button" onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')} title="Download">
+                            <Download className="h-4 w-4" />
+                          </button>
+                          {canManage && (
+                            <button type="button" onClick={() => deleteAttachmentMut.mutate(att.id)} disabled={deleteAttachmentMut.isPending} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')} title="Delete">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
-
-                {uploadError && (
-                  <div className="rounded-lg px-4 py-2 text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
-                    {uploadError}
-                  </div>
-                )}
-
-                {attachments.length === 0 && !uploading ? (
-                  <p className="text-sm text-center py-4" style={{ color: '#555555' }}>No attachments yet.</p>
-                ) : (
-                  <div className="rounded-xl overflow-hidden" style={panel}>
-                    {attachments.map((att, i) => (
-                      <div key={att.id} className="flex items-center gap-3 px-4 py-3" style={i > 0 ? panelSection : undefined}>
-                        <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-200 truncate">{att.filename}</p>
-                          <p className="text-xs" style={{ color: '#555555' }}>
-                            {formatBytes(att.sizeBytes)} · uploaded by {att.uploadedBy.name}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => handleDownload(att)}
-                          className="p-1.5 rounded transition-colors"
-                          style={{ color: '#555555' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
-                          title="Download"
-                        >
-                          <Download className="h-4 w-4" />
-                        </button>
-                        {canManage && (
-                          <button
-                            onClick={() => deleteAttachmentMut.mutate(att.id)}
-                            disabled={deleteAttachmentMut.isPending}
-                            className="p-1.5 rounded transition-colors"
-                            style={{ color: '#555555' }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
 
@@ -562,7 +562,7 @@ export default function TicketDetailPage() {
                     <div>
                       <span className="font-medium text-gray-300">{entry.actor?.displayName ?? 'System'}</span>
                       {' '}
-                      <span style={{ color: '#666666' }}>{entry.action.toLowerCase().replace(/_/g, ' ')}</span>
+                      <span style={{ color: '#666666' }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
                       <span className="block text-xs" style={{ color: '#555555' }}>
                         {format(new Date(entry.createdAt), 'MMM d, yyyy h:mm a')}
                       </span>
@@ -571,102 +571,6 @@ export default function TicketDetailPage() {
                 ))}
               </div>
             )}
-          </div>
-
-          {/* ── Right sidebar panels ────────────────────────────────────── */}
-          <div className="w-64 shrink-0 space-y-4">
-
-            {/* Status transition */}
-            {canManage && validTransitions.length > 0 && (
-              <div className="rounded-xl p-4 space-y-2" style={panel}>
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Move to</p>
-                <div className="flex flex-col gap-1.5">
-                  {validTransitions.map((status) => (
-                    <Button
-                      key={status}
-                      variant="secondary"
-                      size="sm"
-                      loading={transitionMut.isPending}
-                      onClick={() => transitionMut.mutate(status)}
-                      className="justify-start"
-                    >
-                      <StatusBadge status={status} />
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Assignment */}
-            {canManage && (
-              <div className="rounded-xl p-4 space-y-2" style={panel}>
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Assigned to</p>
-                <Select
-                  value={ticket.owner?.id ?? ''}
-                  onChange={(e) => assignMut.mutate(e.target.value)}
-                >
-                  <option value="">Unassigned</option>
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>{a.displayName}</option>
-                  ))}
-                </Select>
-              </div>
-            )}
-
-            {/* SLA Status */}
-            {ticket.sla && (
-              <div className="rounded-xl p-4 space-y-2.5" style={panel}>
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>SLA</p>
-                  <SlaBadge sla={ticket.sla} showTime={ticket.sla.status !== 'RESOLVED'} />
-                </div>
-                <SlaProgressBar sla={ticket.sla} />
-                <div className="text-xs space-y-0.5" style={{ color: '#666666' }}>
-                  <div>Target: {ticket.sla.targetHours}h resolution</div>
-                  <div>Elapsed: {ticket.sla.elapsedHours.toFixed(1)}h</div>
-                  {ticket.sla.status !== 'RESOLVED' && ticket.sla.remainingHours > 0 && (
-                    <div>Remaining: {ticket.sla.remainingHours.toFixed(1)}h</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Details */}
-            <div className="rounded-xl p-4 space-y-3 text-sm" style={panel}>
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Details</p>
-              <div className="space-y-2" style={{ color: '#888888' }}>
-                {ticket.studio && <div><span style={{ color: '#555555' }}>Studio: </span>{ticket.studio.name}</div>}
-                {ticket.market && <div><span style={{ color: '#555555' }}>Market: </span>{ticket.market.name}</div>}
-                <div><span style={{ color: '#555555' }}>Created: </span>{format(new Date(ticket.createdAt), 'MMM d, yyyy')}</div>
-                {ticket.resolvedAt && <div><span style={{ color: '#555555' }}>Resolved: </span>{format(new Date(ticket.resolvedAt), 'MMM d, yyyy')}</div>}
-              </div>
-            </div>
-
-            {/* Watchers */}
-            <div className="rounded-xl p-4 space-y-2" style={panel}>
-              <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Watchers</p>
-              {ticket.watchers.length > 0 ? (
-                <div className="flex flex-wrap gap-1">
-                  {ticket.watchers.map((w) => (
-                    <span key={w.userId} className="text-xs px-2 py-0.5 rounded" style={{ background: '#2a2a2a', color: '#888888' }}>
-                      {w.user.displayName}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs" style={{ color: '#555555' }}>No watchers</p>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => isWatching ? unwatchMut.mutate() : watchMut.mutate()}
-                className="w-full mt-1"
-              >
-                <Eye className="h-3.5 w-3.5" />
-                {isWatching ? 'Unwatch' : 'Watch'}
-              </Button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

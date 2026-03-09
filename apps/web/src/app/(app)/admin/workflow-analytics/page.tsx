@@ -73,8 +73,9 @@ export default function AdminWorkflowAnalyticsPage() {
           <h2 className="text-lg font-semibold text-gray-200 mb-3">Workflow Template Analytics</h2>
           <div className="rounded-xl overflow-hidden" style={panel}>
             {loading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                <span className="text-sm text-gray-500">Loading…</span>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -118,8 +119,9 @@ export default function AdminWorkflowAnalyticsPage() {
           <h2 className="text-lg font-semibold text-gray-200 mb-3">Department Workflow Metrics</h2>
           <div className="rounded-xl overflow-hidden" style={panel}>
             {loading ? (
-              <div className="flex justify-center py-12">
+              <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                <span className="text-sm text-gray-500">Loading…</span>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -162,8 +164,9 @@ export default function AdminWorkflowAnalyticsPage() {
             <h2 className="text-lg font-semibold text-gray-200 mb-3">Longest-running subtask types</h2>
             <div className="rounded-xl overflow-hidden" style={panel}>
               {loading ? (
-                <div className="flex justify-center py-12">
+                <div className="flex flex-col items-center justify-center py-12 gap-2">
                   <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                  <span className="text-sm text-gray-500">Loading…</span>
                 </div>
               ) : bottlenecks.longestSubtasks.length === 0 ? (
                 <div className="py-8 text-center text-gray-500 text-sm">No completed subtasks to rank.</div>
@@ -183,8 +186,9 @@ export default function AdminWorkflowAnalyticsPage() {
             <h2 className="text-lg font-semibold text-gray-200 mb-3">Most blocked subtask types</h2>
             <div className="rounded-xl overflow-hidden" style={panel}>
               {loading ? (
-                <div className="flex justify-center py-12">
+                <div className="flex flex-col items-center justify-center py-12 gap-2">
                   <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                  <span className="text-sm text-gray-500">Loading…</span>
                 </div>
               ) : bottlenecks.mostBlockedSubtasks.length === 0 ? (
                 <div className="py-8 text-center text-gray-500 text-sm">No blocked subtasks.</div>

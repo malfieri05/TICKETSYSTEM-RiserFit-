@@ -198,10 +198,11 @@ export default function DispatchPage() {
         </div>
 
         {/* Open Issues by Studio */}
-        <SectionCard title="Open Issues by Studio">
+        <SectionCard title="Open Issues by Location">
           {loadingStudio ? (
-            <div className="flex justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="text-xs text-gray-500">Loading…</span>
             </div>
           ) : byStudio.length === 0 ? (
             <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
@@ -223,8 +224,9 @@ export default function DispatchPage() {
         {/* Open Issues by Category */}
         <SectionCard title="Open Issues by Category">
           {loadingCategory ? (
-            <div className="flex justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="text-xs text-gray-500">Loading…</span>
             </div>
           ) : byCategory.length === 0 ? (
             <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
@@ -245,8 +247,9 @@ export default function DispatchPage() {
         {/* Open Issues by Market */}
         <SectionCard title="Open Issues by Market">
           {loadingMarket ? (
-            <div className="flex justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="text-xs text-gray-500">Loading…</span>
             </div>
           ) : byMarket.length === 0 ? (
             <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
@@ -265,13 +268,14 @@ export default function DispatchPage() {
         </SectionCard>
 
         {/* Studios With Multiple Open Issues */}
-        <SectionCard title="Studios With Multiple Open Issues">
+        <SectionCard title="Locations With Multiple Open Issues">
           {loadingMultiple ? (
-            <div className="flex justify-center py-8">
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="text-xs text-gray-500">Loading…</span>
             </div>
           ) : studiosWithMultiple.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">No studios with 2+ open issues</p>
+            <p className="text-sm text-gray-500 py-4">No locations with 2+ open issues</p>
           ) : (
             <div className="space-y-0.5">
               {studiosWithMultiple.map((r) => (

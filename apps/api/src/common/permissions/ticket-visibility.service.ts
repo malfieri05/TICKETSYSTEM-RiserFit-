@@ -19,7 +19,8 @@ export class TicketVisibilityService {
    * DEPARTMENT_USER → tickets assigned to them OR assigned to any user in
    *                   their department(s) OR in their studio scope grants
    * STUDIO_USER  → tickets they submitted OR tickets for their primary studio
-   *                OR tickets for their extra scope-granted studios
+   *                OR tickets for their extra scope-granted studios (requesterId = self
+   *                OR studioId in [primary + scopeStudioIds])
    */
   buildWhereClause(actor: RequestUser): Prisma.TicketWhereInput {
     if (actor.role === Role.ADMIN) {

@@ -3,6 +3,13 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcryptjs';
 import * as dotenv from 'dotenv';
+import { applySchemaFields } from './seed-data/apply-schema-fields';
+import type { FormFieldDef } from './seed-data/field-types';
+import { HR_TOPIC_FIELDS } from './seed-data/support/hr.schema';
+import { MARKETING_TOPIC_FIELDS } from './seed-data/support/marketing.schema';
+import { RETAIL_TOPIC_FIELDS } from './seed-data/support/retail.schema';
+import { OPERATIONS_TOPIC_FIELDS } from './seed-data/support/operations.schema';
+import { MAINTENANCE_FIELDS } from './seed-data/maintenance.schema';
 
 dotenv.config();
 
@@ -27,17 +34,6 @@ const USERS = [
   { email: 'lisa.nguyen@riserfitness.dev',   name: 'Lisa Nguyen',       role: 'STUDIO_USER'     as const },
   { email: 'carlos.ruiz@riserfitness.dev',   name: 'Carlos Ruiz',       role: 'STUDIO_USER'     as const },
   { email: 'ashley.kim@riserfitness.dev',    name: 'Ashley Kim',        role: 'STUDIO_USER'     as const },
-];
-
-const CATEGORIES = [
-  { name: 'Plumbing',    color: '#3b82f6' },
-  { name: 'HVAC',        color: '#f59e0b' },
-  { name: 'Electrical',  color: '#ef4444' },
-  { name: 'IT Support',  color: '#8b5cf6' },
-  { name: 'Facilities',  color: '#10b981' },
-  { name: 'Cleaning',    color: '#06b6d4' },
-  { name: 'Security',    color: '#f97316' },
-  { name: 'General',     color: '#6b7280' },
 ];
 
 // Stage 2 taxonomy: stable ids aligned with migration for idempotent upsert
@@ -82,16 +78,6 @@ async function main() {
       create: { email: u.email, name: u.name, role: u.role, passwordHash: hash },
     });
     console.log(`✅ User: ${user.name} <${user.email}> [${user.role}]`);
-  }
-
-  // Upsert categories (legacy)
-  for (const c of CATEGORIES) {
-    const cat = await prisma.category.upsert({
-      where: { name: c.name },
-      update: { color: c.color, isActive: true },
-      create: { name: c.name, color: c.color },
-    });
-    console.log(`📂 Category: ${cat.name}`);
   }
 
   // Stage 2: Taxonomy (idempotent; migration may have already populated)
@@ -174,130 +160,43 @@ async function main() {
   }
   console.log('📋 Form schemas: one per support topic + one per maintenance category');
 
-  // Stage 3: Add one default field per schema (idempotent by formSchemaId + fieldKey)
-  const schemas = await prisma.ticketFormSchema.findMany({ where: { isActive: true }, select: { id: true } });
-  for (const schema of schemas) {
-    const hasDetails = await prisma.ticketFormField.findFirst({
-      where: { formSchemaId: schema.id, fieldKey: 'additional_details' },
-    });
-    if (!hasDetails) {
-      await prisma.ticketFormField.create({
-        data: {
-          formSchemaId: schema.id,
-          fieldKey: 'additional_details',
-          type: 'textarea',
-          label: 'Additional details',
-          required: false,
-          sortOrder: 100,
-        },
-      });
-    }
-  }
-  console.log('📋 Form fields: default "additional_details" per schema');
-
-  // Schema-driven: HR → New Hire topic fields (from ticket-form.seed spec)
-  const newHireTopic = await prisma.supportTopic.findFirst({
-    where: { name: 'New Hire', departmentId: 'dept_hr', isActive: true },
-    select: { id: true },
+  // Stage 20: Full schema field definitions (idempotent upsert per formSchemaId + fieldKey)
+  const supportTopicFieldsByDept: Record<string, Record<string, FormFieldDef[]>> = {
+    dept_hr: HR_TOPIC_FIELDS,
+    dept_marketing: MARKETING_TOPIC_FIELDS,
+    dept_retail: RETAIL_TOPIC_FIELDS,
+    dept_operations: OPERATIONS_TOPIC_FIELDS,
+  };
+  const allSupportTopics = await prisma.supportTopic.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, departmentId: true },
   });
-  if (newHireTopic) {
-    const newHireSchema = await prisma.ticketFormSchema.findFirst({
-      where: { ticketClassId: 'tclass_support', supportTopicId: newHireTopic.id, isActive: true },
+  for (const topic of allSupportTopics) {
+    const schema = await prisma.ticketFormSchema.findFirst({
+      where: { ticketClassId: 'tclass_support', supportTopicId: topic.id, isActive: true },
       select: { id: true },
     });
-    if (newHireSchema) {
-      const newHireFields: Array<{
-        fieldKey: string;
-        type: string;
-        label: string;
-        required: boolean;
-        sortOrder: number;
-        conditionalFieldKey?: string;
-        conditionalValue?: string;
-        options?: Array<{ value: string; label: string; sortOrder: number }>;
-      }> = [
-        { fieldKey: 'legal_first_name', type: 'text', label: 'Legal first name', required: true, sortOrder: 10 },
-        { fieldKey: 'legal_last_name', type: 'text', label: 'Legal last name', required: true, sortOrder: 11 },
-        { fieldKey: 'alternate_name', type: 'text', label: 'Alternate name', required: false, sortOrder: 12 },
-        { fieldKey: 'employee_phone', type: 'text', label: 'Employee phone', required: false, sortOrder: 13 },
-        { fieldKey: 'employee_personal_email', type: 'text', label: 'Personal email', required: false, sortOrder: 14 },
-        {
-          fieldKey: 'position',
-          type: 'select',
-          label: 'Position',
-          required: true,
-          sortOrder: 15,
-          options: [
-            'Corporate', 'RM', 'DM', 'GM', 'AGM', 'SA', 'EDC', 'Lead Instructor', 'Instructor',
-            'Junior Instructor', 'Apprentice Instructor', 'Junior Apprentice Instructor', 'Pilates Trainer',
-          ].map((label, i) => ({ value: label.replace(/\s+/g, '_').toUpperCase(), label, sortOrder: i })),
-        },
-        { fieldKey: 'reports_to', type: 'text', label: 'Reports to (Supervisor)', required: false, sortOrder: 16 },
-        { fieldKey: 'date_of_offer', type: 'date', label: 'Date of offer', required: false, sortOrder: 17 },
-        { fieldKey: 'start_date', type: 'date', label: 'Start date', required: true, sortOrder: 18 },
-        { fieldKey: 'pay_rate', type: 'text', label: 'Pay rate ($)', required: false, sortOrder: 19 },
-        {
-          fieldKey: 'employment_type',
-          type: 'select',
-          label: 'Part-time or Full-time?',
-          required: true,
-          sortOrder: 20,
-          options: [
-            { value: 'PART_TIME', label: 'Part-time', sortOrder: 0 },
-            { value: 'FULL_TIME', label: 'Full-time', sortOrder: 1 },
-          ],
-        },
-        { fieldKey: 'referred', type: 'checkbox', label: 'Was this candidate referred by a current employee?', required: false, sortOrder: 21 },
-        { fieldKey: 'referring_employee_name', type: 'text', label: 'Referring employee full name', required: false, sortOrder: 22, conditionalFieldKey: 'referred', conditionalValue: 'true' },
-        {
-          fieldKey: 'candidate_source',
-          type: 'select',
-          label: 'Candidate source',
-          required: false,
-          sortOrder: 23,
-          options: [
-            { value: 'JAZZHR', label: 'JazzHR', sortOrder: 0 },
-            { value: 'REFERRAL', label: 'Referral', sortOrder: 1 },
-            { value: 'CAREER_PAGE', label: 'Career Page', sortOrder: 2 },
-            { value: 'OTHER', label: 'Other', sortOrder: 3 },
-          ],
-        },
-        { fieldKey: 'candidate_source_other', type: 'text', label: 'What source? (if Other)', required: false, sortOrder: 24, conditionalFieldKey: 'candidate_source', conditionalValue: 'OTHER' },
-        { fieldKey: 'candidate_application_date', type: 'date', label: 'Candidate application date', required: false, sortOrder: 25 },
-      ];
-      for (const f of newHireFields) {
-        const existingField = await prisma.ticketFormField.findFirst({
-          where: { formSchemaId: newHireSchema.id, fieldKey: f.fieldKey },
-        });
-        if (!existingField) {
-          const { options, ...rest } = f;
-          const field = await prisma.ticketFormField.create({
-            data: {
-              formSchemaId: newHireSchema.id,
-              ...rest,
-              conditionalFieldKey: f.conditionalFieldKey ?? undefined,
-              conditionalValue: f.conditionalValue ?? undefined,
-            },
-          });
-          if (options?.length) {
-            for (let i = 0; i < options.length; i++) {
-              const o = options[i];
-              const opt = typeof o === 'string' ? { value: (o as string).replace(/\s+/g, '_').toUpperCase(), label: o as string, sortOrder: i } : o;
-              const exists = await prisma.ticketFormFieldOption.findFirst({
-                where: { formFieldId: field.id, value: opt.value },
-              });
-              if (!exists) {
-                await prisma.ticketFormFieldOption.create({
-                  data: { formFieldId: field.id, value: opt.value, label: opt.label, sortOrder: opt.sortOrder ?? i },
-                });
-              }
-            }
-          }
-        }
-      }
-      console.log('📋 Form fields: HR → New Hire schema fields seeded');
+    const topicFields = supportTopicFieldsByDept[topic.departmentId]?.[topic.name];
+    if (schema && topicFields?.length) {
+      await applySchemaFields(prisma, schema.id, topicFields);
     }
   }
+  console.log('📋 Form fields: support topics (HR, Marketing, Retail, Operations)');
+
+  const maintenanceCatsForSchema = await prisma.maintenanceCategory.findMany({
+    where: { isActive: true },
+    select: { id: true },
+  });
+  for (const mcat of maintenanceCatsForSchema) {
+    const schema = await prisma.ticketFormSchema.findFirst({
+      where: { ticketClassId: 'tclass_maintenance', maintenanceCategoryId: mcat.id, isActive: true },
+      select: { id: true },
+    });
+    if (schema) {
+      await applySchemaFields(prisma, schema.id, MAINTENANCE_FIELDS);
+    }
+  }
+  console.log('📋 Form fields: maintenance (common schema per category)');
 
   console.log('\n✅ Seed complete!');
   console.log(`\n🔑 All accounts use password: ${DEFAULT_PASSWORD}`);

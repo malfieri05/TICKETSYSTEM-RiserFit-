@@ -12,11 +12,6 @@ export class UpdateTicketDto {
   @IsString()
   description?: string;
 
-  /** @deprecated Prefer ticketClassId + departmentId/supportTopicId or maintenanceCategoryId */
-  @IsOptional()
-  @IsString()
-  categoryId?: string;
-
   @IsOptional()
   @IsString()
   ticketClassId?: string;

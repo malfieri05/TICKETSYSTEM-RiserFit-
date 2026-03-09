@@ -256,6 +256,41 @@ export class UsersService {
     return this.listStudioScopes(targetUserId);
   }
 
+  // ─── SET DEFAULT STUDIO (Stage 23) ───────────────────────────────────────────
+
+  async setDefaultStudio(
+    targetUserId: string,
+    studioId: string | null,
+    requestingUser: RequestUser,
+  ) {
+    if (requestingUser.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only admins can set a user\'s default location');
+    }
+
+    await this.assertUserExists(targetUserId);
+    if (studioId != null) {
+      await this.assertStudioExists(studioId);
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { studioId },
+      select: {
+        id: true,
+        studioId: true,
+        studio: { select: { id: true, name: true } },
+      },
+    });
+
+    this.userCache.invalidate(targetUserId);
+
+    return {
+      id: updated.id,
+      studioId: updated.studioId,
+      studio: updated.studio,
+    };
+  }
+
   // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────────
 
   private async assertUserExists(userId: string) {

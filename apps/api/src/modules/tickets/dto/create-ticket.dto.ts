@@ -2,28 +2,21 @@ import {
   IsString,
   IsOptional,
   IsEnum,
-  IsNotEmpty,
   MaxLength,
-  MinLength,
   IsObject,
 } from 'class-validator';
 import { Priority } from '@prisma/client';
 
 export class CreateTicketDto {
+  /** Optional when taxonomy + formResponses present (backend will auto-generate). Required for fallback/create without schema. */
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  @MinLength(3)
   @MaxLength(255)
-  title: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
   description?: string;
-
-  /** @deprecated Prefer ticketClassId + departmentId/supportTopicId or maintenanceCategoryId */
-  @IsOptional()
-  @IsString()
-  categoryId?: string;
 
   /** Required for full taxonomy. Optional for legacy: when missing, treated as MAINTENANCE. */
   @IsOptional()

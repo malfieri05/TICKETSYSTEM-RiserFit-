@@ -60,6 +60,8 @@ export const ticketsApi = {
     }>('/tickets/my-summary', { params }),
   scopeSummary: () =>
     api.get<import('@/types').ScopeSummaryResponse>('/tickets/scope-summary'),
+  inboxFolders: () =>
+    api.get<import('@/types').InboxFoldersResponse>('/tickets/inbox-folders'),
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),
@@ -427,14 +429,6 @@ export const adminApi = {
   getTicketTaxonomy: () =>
     api.get<import('@/types').TicketTaxonomyResponse>('/admin/config/ticket-taxonomy'),
 
-  // Categories
-  listCategories: () =>
-    api.get<{ id: string; name: string; color: string | null; isActive: boolean }[]>('/admin/categories'),
-  createCategory: (data: { name: string; description?: string; color?: string }) =>
-    api.post('/admin/categories', data),
-  updateCategory: (id: string, data: { isActive?: boolean; name?: string; color?: string }) =>
-    api.patch(`/admin/categories/${id}`, data),
-
   // Markets
   listMarkets: () =>
     api.get<{ id: string; name: string; isActive: boolean; studios: { id: string; name: string }[] }[]>('/admin/markets'),
@@ -470,4 +464,12 @@ export const usersApi = {
   setDepartments: (id: string, departments: import('@/types').Department[]) =>
     api.patch(`/users/${id}/departments`, { departments }),
   deactivate: (id: string) => api.patch(`/users/${id}/deactivate`),
+  setDefaultStudio: (userId: string, studioId: string | null) =>
+    api.patch<{ id: string; studioId: string | null; studio: { id: string; name: string } | null }>(`/users/${userId}/default-studio`, { studioId }),
+  listStudioScopes: (userId: string) =>
+    api.get<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes`),
+  addStudioScope: (userId: string, studioId: string) =>
+    api.post<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes`, { studioId }),
+  removeStudioScope: (userId: string, studioId: string) =>
+    api.delete<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes/${studioId}`),
 };

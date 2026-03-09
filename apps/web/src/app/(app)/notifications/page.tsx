@@ -64,13 +64,15 @@ export default function NotificationsPage() {
 
       <div className="flex-1 p-6 max-w-2xl">
         {isLoading ? (
-          <div className="flex justify-center py-12">
+          <div className="flex flex-col items-center justify-center py-12 gap-2">
             <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+            <span className="text-sm text-gray-500">Loading…</span>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16" style={{ color: '#555555' }}>
-            <Bell className="h-10 w-10 mb-3" style={{ color: '#333333' }} />
-            <p className="text-sm">No notifications yet</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: '#555555' }}>
+            <Bell className="h-10 w-10 mb-1" style={{ color: '#333333' }} />
+            <p className="text-sm font-medium text-gray-300">No notifications yet</p>
+            <p className="text-xs text-center max-w-sm">When ticket and subtask updates happen, they'll appear here.</p>
           </div>
         ) : (
           <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>

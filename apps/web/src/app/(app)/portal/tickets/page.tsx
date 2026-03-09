@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
-import type { TicketFilters, TicketStatus, TicketListItem } from '@/types';
+import type { TicketFilters, TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -16,9 +16,22 @@ const PAGE_SIZE = 20;
 
 export default function PortalTicketsPage() {
   const router = useRouter();
-  const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
+  const searchParams = useSearchParams();
+  const studioIdFromUrl = searchParams.get('studioId') ?? undefined;
+
+  const [filters, setFilters] = useState<TicketFilters>(() => ({
+    page: 1,
+    limit: PAGE_SIZE,
+    ...(studioIdFromUrl && { studioId: studioIdFromUrl }),
+  }));
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  useEffect(() => {
+    if (studioIdFromUrl !== undefined) {
+      setFilters((f) => ({ ...f, studioId: studioIdFromUrl || undefined, page: 1 }));
+    }
+  }, [studioIdFromUrl]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -27,6 +40,12 @@ export default function PortalTicketsPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  const { data: scopeData } = useQuery({
+    queryKey: ['scope-summary'],
+    queryFn: () => ticketsApi.scopeSummary(),
+  });
+  const allowedStudios = scopeData?.data?.allowedStudios ?? [];
 
   const { data, isLoading } = useQuery({
     queryKey: ['tickets', filters, debouncedSearch],
@@ -37,20 +56,27 @@ export default function PortalTicketsPage() {
   const total = data?.data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  // Derive studio and department options from current result set (for filter dropdowns)
+  // Location options: Stage 23 use allowedStudios when available; else derive from result set
   const { studioOptions, departmentOptions } = useMemo(() => {
-    const studios = new Map<string, string>();
     const departments = new Map<string, string>();
     tickets.forEach((t) => {
-      if (t.studio?.id && t.studio?.name) studios.set(t.studio.id, t.studio.name);
       const dept = (t as TicketListItem & { department?: { id: string; name: string } }).department;
       if (dept?.id && dept?.name) departments.set(dept.id, dept.name);
     });
+    const studioOptionsFromAllowed =
+      allowedStudios.length > 0
+        ? allowedStudios.map((s) => ({ id: s.id, name: s.name }))
+        : [];
+    const studiosFromTickets = new Map<string, string>();
+    tickets.forEach((t) => {
+      if (t.studio?.id && t.studio?.name) studiosFromTickets.set(t.studio.id, t.studio.name);
+    });
+    const studioOptionsFromTickets = Array.from(studiosFromTickets.entries()).map(([id, name]) => ({ id, name }));
     return {
-      studioOptions: Array.from(studios.entries()).map(([id, name]) => ({ id, name })),
+      studioOptions: studioOptionsFromAllowed.length > 0 ? studioOptionsFromAllowed : studioOptionsFromTickets,
       departmentOptions: Array.from(departments.entries()).map(([id, name]) => ({ id, name })),
     };
-  }, [tickets]);
+  }, [tickets, allowedStudios]);
 
   const setFilter = (key: keyof TicketFilters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
@@ -118,22 +144,33 @@ export default function PortalTicketsPage() {
           {/* Table */}
           <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
             {isLoading ? (
-              <div className="flex justify-center items-center h-48">
+              <div className="flex flex-col items-center justify-center h-48 gap-2">
                 <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+                <span className="text-sm text-gray-500">Loading…</span>
               </div>
             ) : tickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48" style={{ color: '#555555' }}>
-                <p className="text-sm">No tickets found</p>
-                {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" className="mt-2" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
+              <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: '#555555' }}>
+                {hasActiveFilters ? (
+                  <>
+                    <p className="text-sm font-medium text-gray-300">No tickets found</p>
+                    <p className="text-xs text-center">Try adjusting your filters.</p>
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-medium text-gray-300">No tickets yet</p>
+                    <p className="text-xs text-center max-w-sm">Tickets you've requested will appear here.</p>
+                  </>
                 )}
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Topic / Category</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Created</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Title</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Location</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Status</th>
@@ -142,7 +179,9 @@ export default function PortalTicketsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tickets.map((ticket) => (
+                  {tickets.map((ticket) => {
+                    const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '—';
+                    return (
                     <tr
                       key={ticket.id}
                       onClick={() => router.push(`/tickets/${ticket.id}`)}
@@ -151,6 +190,10 @@ export default function PortalTicketsPage() {
                       onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
+                      <td className="px-4 py-3 text-sm" style={{ color: '#aaaaaa' }}>{topicLabel}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#aaaaaa' }}>
+                        {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                      </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
                         <span className="block text-xs mt-0.5" style={{ color: '#555555' }}>
@@ -173,7 +216,7 @@ export default function PortalTicketsPage() {
                         {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             )}

@@ -286,6 +286,7 @@ OPENAI_API_KEY=sk-...
 - k6 load tests show a single API instance cleanly handles 150–200 very active virtual users (0% errors) with p95 latency between ~5–8 seconds under synthetic, worst-case clicking.
 - My-summary and ticket list endpoints have been optimized (caching, pooled DB connections, optional lightweight list mode) to keep real-world response times snappy for ~50 concurrent human users.
 - AI Agent sidebar (tool-calling assistant) is fully wired into tickets/subtasks/users/reporting with confirmation flow and audit logs; it is an optional UX helper, not required for core workflows.
+- **Stage 23 (User Visibility & Inbox):** Admin can set a studio user’s default location and add/remove additional locations (Admin → Users → Locations). Studio users see a location filter on the portal when they have multiple allowed studios; GET /tickets returns 403 if a STUDIO_USER filters by a studio outside their allowed set. Department users see inbox topic folders (All + support topics) with active counts (grouped count by supportTopicId). Studio users cannot create/update subtasks or transition ticket status; they can view progress, comment (non-internal), and receive notifications. Actionable nav remains visible for DEPARTMENT_USER and ADMIN.
 
 ---
 
@@ -344,4 +345,4 @@ OPENAI_API_KEY=sk-...
 - Build must comfortably handle 400–500 daily active users with zero unplanned downtime
 
 ---
-*Last updated: Phases 0–4 and Stage 6 / 6.5 complete (inbox, schema-driven create, admin workflow template manager). Full system built and ready for deployment.*
+*Last updated: Phases 0–4, Stage 6/6.5, and Stage 23 (user visibility, studio locations, department inbox folders) complete. Full system built and ready for deployment.*

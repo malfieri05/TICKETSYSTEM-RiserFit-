@@ -275,13 +275,15 @@ export default function KnowledgeBasePage() {
           </div>
 
           {isLoading ? (
-            <div className="flex items-center justify-center h-40">
+            <div className="flex flex-col items-center justify-center h-40 gap-2">
               <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
+              <span className="text-sm text-gray-500">Loading…</span>
             </div>
           ) : docs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 gap-2" style={{ color: '#555555' }}>
+            <div className="flex flex-col items-center justify-center h-40 gap-3" style={{ color: '#555555' }}>
               <BookOpen className="h-8 w-8" style={{ color: '#333333' }} />
-              <p className="text-sm">No documents yet — add one above</p>
+              <p className="text-sm font-medium text-gray-300">No documents yet</p>
+              <p className="text-xs text-center max-w-sm">Add your first document above to power the Assistant and Handbook.</p>
             </div>
           ) : (
             <table className="w-full text-sm">

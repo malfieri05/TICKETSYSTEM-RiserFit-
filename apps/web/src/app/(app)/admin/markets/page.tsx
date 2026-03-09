@@ -56,6 +56,21 @@ export default function AdminMarketsPage() {
     queryFn: () => api.get<MarketWithStudios[]>('/admin/markets'),
   });
   const markets = data?.data ?? [];
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredMarkets = (() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return markets;
+    return markets.filter((m) => {
+      const marketName = (m.name ?? '').toLowerCase();
+      const studioMatch = (m.studios ?? []).some(
+        (s) =>
+          (s.name ?? '').toLowerCase().includes(q) ||
+          ((s.formattedAddress ?? '').toLowerCase().includes(q)),
+      );
+      return marketName.includes(q) || studioMatch;
+    });
+  })();
 
   const createMarketMut = useMutation({
     mutationFn: () => api.post('/admin/markets', { name: marketName }),
@@ -131,7 +146,7 @@ export default function AdminMarketsPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
       <Header
-        title="Markets & Studios"
+        title="Locations"
         action={
           <Button size="sm" onClick={() => setAddingMarket(true)}>
             <Plus className="h-4 w-4" />
@@ -142,6 +157,14 @@ export default function AdminMarketsPage() {
 
       <div className="flex flex-1 overflow-hidden">
         <div className="p-6 space-y-4 max-w-2xl overflow-auto flex-shrink-0">
+        <div className="mb-2">
+          <Input
+            placeholder="Search locations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
         {addingMarket && (
           <div className="rounded-xl p-4 space-y-3" style={panel}>
             <h3 className="text-sm font-semibold text-gray-100">New Market</h3>
@@ -154,14 +177,28 @@ export default function AdminMarketsPage() {
         )}
 
         {isLoading ? (
-          <div className="flex justify-center py-10">
+          <div className="flex flex-col items-center justify-center py-10 gap-2">
             <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+            <span className="text-sm text-gray-500">Loading…</span>
           </div>
-        ) : markets.length === 0 ? (
-          <p className="text-sm text-center py-10" style={{ color: '#555555' }}>No markets yet.</p>
+        ) : filteredMarkets.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: '#555555' }}>
+            {markets.length === 0 ? (
+              <>
+                <p className="text-sm font-medium text-gray-300">No markets yet</p>
+                <p className="text-xs text-center max-w-sm">Add a market to organize locations by region, then add locations under each market.</p>
+                <Button size="sm" onClick={() => setAddingMarket(true)}>
+                  <Plus className="h-4 w-4" />
+                  Add Market
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm text-gray-400">No locations match your search.</p>
+            )}
+          </div>
         ) : (
           <div className="rounded-xl overflow-hidden" style={panel}>
-            {markets.map((market, i) => (
+            {filteredMarkets.map((market, i) => (
               <div key={market.id} style={i > 0 ? { borderTop: '1px solid #2a2a2a' } : undefined}>
                 <div
                   className="flex items-center gap-2 px-4 py-3 cursor-pointer transition-colors"
@@ -174,7 +211,7 @@ export default function AdminMarketsPage() {
                     ? <ChevronDown className="h-4 w-4" style={{ color: '#555555' }} />
                     : <ChevronRight className="h-4 w-4" style={{ color: '#555555' }} />}
                   <span className="font-medium text-gray-200">{market.name}</span>
-                  <span className="ml-auto text-xs" style={{ color: '#555555' }}>{market.studios?.length ?? 0} studios</span>
+                  <span className="ml-auto text-xs" style={{ color: '#555555' }}>{market.studios?.length ?? 0} locations</span>
                 </div>
 
                 {expanded.has(market.id) && (
@@ -203,7 +240,7 @@ export default function AdminMarketsPage() {
                     ))}
                     {addingStudioFor === market.id ? (
                       <div className="pl-10 pr-4 py-3 space-y-3" style={{ borderTop: '1px solid #222222' }}>
-                        <Input label="Name" placeholder="Studio name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
+                        <Input label="Name" placeholder="Location name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
                         <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
                         <div>
                           <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
@@ -213,7 +250,7 @@ export default function AdminMarketsPage() {
                           <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
                           <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
                         </div>
-                        <p className="text-xs text-gray-500">Coordinates are used to calculate nearby studios for dispatching.</p>
+                        <p className="text-xs text-gray-500">Coordinates are used to calculate nearby locations for dispatching.</p>
                         <div className="flex gap-2">
                           <Button size="sm" onClick={() => createStudioMut.mutate({ marketId: market.id })} disabled={!addFormValid} loading={createStudioMut.isPending}>Add</Button>
                           <Button size="sm" variant="secondary" onClick={() => setAddingStudioFor(null)}>Cancel</Button>
@@ -227,7 +264,7 @@ export default function AdminMarketsPage() {
                         onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
-                        <Plus className="h-3.5 w-3.5" /> Add studio
+                        <Plus className="h-3.5 w-3.5" /> Add Location
                       </button>
                     )}
                   </div>
@@ -269,7 +306,7 @@ export default function AdminMarketsPage() {
                     <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
                     <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
                   </div>
-                  <p className="text-xs text-gray-500">Coordinates are used to calculate nearby studios for dispatching.</p>
+                  <p className="text-xs text-gray-500">Coordinates are used to calculate nearby locations for dispatching.</p>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => updateStudioMut.mutate({ id: editingStudio.id, name: editingStudio.name, formattedAddress: editingStudio.formattedAddress, latitude: parseFloat(editingStudio.latitude), longitude: parseFloat(editingStudio.longitude) })} disabled={!editFormValid} loading={updateStudioMut.isPending}>Save</Button>
                     <Button size="sm" variant="secondary" onClick={() => setEditingStudio(null)}>Cancel</Button>
@@ -289,7 +326,7 @@ export default function AdminMarketsPage() {
               )}
 
               <div className="pt-4 border-t" style={{ borderColor: '#2a2a2a' }}>
-                <h4 className="text-sm font-semibold text-gray-200 mb-3">Nearby Studios</h4>
+                <h4 className="text-sm font-semibold text-gray-200 mb-3">Nearby Locations</h4>
                 <label className="flex items-center gap-2 mb-3 cursor-pointer">
                   <input
                     type="checkbox"
@@ -314,24 +351,25 @@ export default function AdminMarketsPage() {
                       />
                     </div>
                     {nearbyLoading && (
-                      <div className="flex justify-center py-4">
+                      <div className="flex flex-col items-center justify-center py-4 gap-2">
                         <div className="animate-spin h-5 w-5 rounded-full border-2 border-teal-500 border-t-transparent" />
+                        <span className="text-xs text-gray-500">Loading…</span>
                       </div>
                     )}
                     {nearbyError && (
                       <p className="text-sm text-amber-500 py-2">
                         {nearbyError instanceof Error && 'response' in nearbyError
-                          ? (nearbyError as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Could not load nearby studios.'
-                          : 'Could not load nearby studios.'}
+                          ? (nearbyError as { response?: { data?: { message?: string } } }).response?.data?.message ?? 'Could not load nearby locations.'
+                          : 'Could not load nearby locations.'}
                       </p>
                     )}
                     {!nearbyLoading && !nearbyError && nearbyStudios.length === 0 && (
-                      <p className="text-sm text-gray-500 py-2">No other studios within this radius.</p>
+                      <p className="text-sm text-gray-500 py-2">No other locations within this radius.</p>
                     )}
                     {!nearbyLoading && !nearbyError && nearbyStudios.length > 0 && (
                       <>
                         <p className="text-xs text-gray-500 mb-2">
-                          Nearby studios within {radiusMiles} miles ({nearbyStudios.length} found)
+                          Nearby locations within {radiusMiles} miles ({nearbyStudios.length} found)
                         </p>
                         <ul className="space-y-1.5">
                           {nearbyStudios.map((s) => (

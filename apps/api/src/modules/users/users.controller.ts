@@ -54,6 +54,17 @@ export class UsersController {
     return this.usersService.deactivate(id, user);
   }
 
+  // PATCH /api/users/:id/default-studio — ADMIN only (Stage 23: set default/home location for studio user)
+  @Roles(Role.ADMIN)
+  @Patch(':id/default-studio')
+  setDefaultStudio(
+    @Param('id') id: string,
+    @Body() body: { studioId: string | null },
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.usersService.setDefaultStudio(id, body.studioId, user);
+  }
+
   // ─── Department management (ADMIN only) ─────────────────────────────────────
 
   // GET /api/users/:id/departments

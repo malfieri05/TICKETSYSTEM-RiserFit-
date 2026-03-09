@@ -5,12 +5,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare, Paperclip,
-  Clock, Lock, Send, Plus, User, Download, Trash2, Upload, Eye,
+  Clock, Lock, Send, Plus, User, Download, Trash2, Upload,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi } from '@/lib/api';
-import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
-import { StatusBadge, PriorityBadge, SubtaskStatusBadge } from '@/components/ui/Badge';
-import { SlaBadge, SlaProgressBar } from '@/components/ui/SlaBadge';
+import { ticketsApi, commentsApi, subtasksApi, attachmentsApi } from '@/lib/api';
+import type { SubtaskStatus, Attachment } from '@/types';
+import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,16 +19,6 @@ import { useAuth } from '@/hooks/useAuth';
 // Tier 2 – secondary content  → #aaaaaa
 // Tier 3 – muted / labels     → #666666
 // Surfaces: panel #141414, content area #111111, sidebar #0f0f0f, card #1e1e1e
-
-const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  NEW: ['TRIAGED', 'CLOSED'],
-  TRIAGED: ['IN_PROGRESS', 'CLOSED'],
-  IN_PROGRESS: ['WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR', 'RESOLVED'],
-  WAITING_ON_REQUESTER: ['IN_PROGRESS', 'RESOLVED', 'CLOSED'],
-  WAITING_ON_VENDOR: ['IN_PROGRESS', 'RESOLVED', 'CLOSED'],
-  RESOLVED: ['CLOSED', 'IN_PROGRESS'],
-  CLOSED: [],
-};
 
 interface Props {
   ticketId: string | null;
@@ -41,7 +30,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const qc = useQueryClient();
   const open = !!ticketId;
 
-  const [activeTab, setActiveTab] = useState<'comments' | 'subtasks' | 'attachments' | 'history'>('comments');
+  const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
   const [commentBody, setCommentBody] = useState('');
   const [isInternal, setIsInternal] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
@@ -50,7 +39,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setActiveTab('comments');
+    setActiveTab('subtasks');
     setCommentBody('');
     setIsInternal(false);
     setNewSubtask('');
@@ -76,27 +65,16 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     enabled: !!ticketId && activeTab === 'history',
   });
 
-  const { data: usersData } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => usersApi.list(),
-    enabled: user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER',
-  });
-  const agents = (usersData?.data ?? []);
-
   const { data: attachmentsRes } = useQuery({
     queryKey: ['ticket', ticketId, 'attachments'],
     queryFn: () => attachmentsApi.list(ticketId!),
-    enabled: !!ticketId && activeTab === 'attachments',
+    enabled: !!ticketId && activeTab === 'submission',
   });
   const attachments: Attachment[] = attachmentsRes?.data ?? [];
 
-  const transitionMut = useMutation({ mutationFn: (s: TicketStatus) => ticketsApi.transition(ticketId!, s), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
-  const assignMut     = useMutation({ mutationFn: (ownerId: string) => ticketsApi.assign(ticketId!, ownerId || null), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
   const commentMut    = useMutation({ mutationFn: () => commentsApi.create(ticketId!, { body: commentBody, isInternal }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticket', ticketId] }); setCommentBody(''); } });
   const subtaskMut    = useMutation({ mutationFn: () => subtasksApi.create(ticketId!, { title: newSubtask }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticket', ticketId] }); setNewSubtask(''); } });
   const subtaskStMut  = useMutation({ mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) => subtasksApi.update(ticketId!, subtaskId, { status }), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
-  const watchMut      = useMutation({ mutationFn: () => ticketsApi.watch(ticketId!), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
-  const unwatchMut    = useMutation({ mutationFn: () => ticketsApi.unwatch(ticketId!), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
   const delAttachMut  = useMutation({ mutationFn: (id: string) => attachmentsApi.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId, 'attachments'] }) });
 
   const handleFileUpload = async (file: File) => {
@@ -117,14 +95,13 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const fmt = (b: number) => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
-  const validTransitions = ticket ? VALID_TRANSITIONS[ticket.status] : [];
-  const isWatching = ticket?.watchers.some((w) => w.userId === user?.id) ?? false;
+  const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] })?.formResponses ?? [];
 
   const TABS = [
-    { key: 'comments' as const,    label: `Comments${ticket ? ` (${ticket.comments.length})` : ''}`,  icon: MessageSquare },
-    { key: 'subtasks' as const,    label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`,   icon: CheckSquare },
-    { key: 'attachments' as const, label: 'Attachments', icon: Paperclip },
-    { key: 'history' as const,     label: 'History',     icon: Clock },
+    { key: 'subtasks' as const,   label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`, icon: CheckSquare },
+    { key: 'comments' as const,  label: `Comments${ticket ? ` (${ticket.comments.length})` : ''}`,  icon: MessageSquare },
+    { key: 'submission' as const, label: 'Ticket Submission', icon: User },
+    { key: 'history' as const,    label: 'History',         icon: Clock },
   ];
 
   return (
@@ -141,31 +118,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       >
         {/* ── Header bar ─────────────────────────────────────────────────── */}
         <div
-          className="flex items-center justify-between px-6 h-14 shrink-0"
+          className="flex items-center justify-end px-6 h-12 shrink-0"
           style={{ background: '#111111', borderBottom: '1px solid #252525' }}
         >
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono tracking-wider px-2 py-0.5 rounded" style={{ background: '#1e1e1e', color: '#666666', border: '1px solid #2a2a2a' }}>
-              #{ticketId?.slice(0, 8)}
-            </span>
-            {ticket && (
-              <div className="flex items-center gap-2">
-                <StatusBadge status={ticket.status} />
-                <PriorityBadge priority={ticket.priority} muted={ticket.status === 'RESOLVED' || ticket.status === 'CLOSED'} />
-              </div>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg transition-colors"
-              style={{ color: '#555555' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg transition-colors"
+            style={{ color: '#555555' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* ── Loading ─────────────────────────────────────────────────────── */}
@@ -182,42 +146,31 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             {/* ── Left: main column ──────────────────────────────────────── */}
             <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#111111' }}>
 
-              {/* Ticket title block */}
+              {/* Header: title, created, requester, location, progress, ticket # */}
               <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                <h2
-                  className="text-xl font-bold leading-snug"
-                  style={{ color: '#f0f0f0', letterSpacing: '-0.01em' }}
-                >
+                <h2 className="text-xl font-bold leading-snug" style={{ color: '#f0f0f0', letterSpacing: '-0.01em' }}>
                   {ticket.title}
                 </h2>
-
-                {/* Meta row */}
-                <div className="flex items-center gap-2.5 mt-2.5 flex-wrap">
-                  {ticket.category && (
-                    <span
-                      className="text-xs px-2.5 py-0.5 rounded-full font-medium"
-                      style={{ background: '#252525', color: '#e0e0e0', border: '1px solid #333333' }}
-                    >
-                      {ticket.category.name}
-                    </span>
-                  )}
-                  <span className="text-xs" style={{ color: '#888888' }}>
-                    Opened by{' '}
-                    <strong style={{ color: '#d0d0d0', fontWeight: 600 }}>{ticket.requester.displayName}</strong>
-                    {' · '}
-                    {format(new Date(ticket.createdAt), 'MMM d, yyyy · h:mm a')}
-                  </span>
-                </div>
-
-                {/* Description */}
-                {ticket.description && (
-                  <p
-                    className="mt-3 text-sm leading-relaxed whitespace-pre-wrap"
-                    style={{ color: '#d0d0d0' }}
-                  >
-                    {ticket.description}
+                <p className="text-sm mt-1.5" style={{ color: '#aaaaaa' }}>
+                  Created {format(new Date(ticket.createdAt), 'MMM d')} · Requested by {ticket.requester?.displayName ?? '—'}
+                </p>
+                {(ticket.studio?.name ?? ticket.market?.name) && (
+                  <p className="text-sm mt-0.5" style={{ color: '#888888' }}>
+                    {[ticket.studio?.name, ticket.market?.name].filter(Boolean).join(' · ')}
                   </p>
                 )}
+                {(() => {
+                  const total = ticket.subtasks?.length ?? 0;
+                  const done = ticket.subtasks?.filter((s: { status: string }) => s.status === 'DONE' || s.status === 'SKIPPED').length ?? 0;
+                  return (
+                    <p className="text-sm mt-1" style={{ color: '#888888' }}>
+                      Progress {done} / {total}
+                    </p>
+                  );
+                })()}
+                <p className="text-xs mt-2" style={{ color: '#666666' }}>
+                  Ticket #{ticket.id?.slice(0, 8) ?? ticketId?.slice(0, 8)}
+                </p>
               </div>
 
               {/* Tab bar — pill-style active state */}
@@ -401,53 +354,74 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   </>
                 )}
 
-                {/* ── Attachments ── */}
-                {activeTab === 'attachments' && (
+                {/* ── Ticket Submission (form data + attachments) ── */}
+                {activeTab === 'submission' && (
                   <>
-                    <div
-                      className="rounded-xl p-6 text-center cursor-pointer transition-all"
-                      style={{ background: '#161616', border: '2px dashed #2a2a2a' }}
-                      onClick={() => !uploading && fileInputRef.current?.click()}
-                      onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
-                      onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#2a2a2a')}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
-                    >
-                      <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }} />
-                      {uploading ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-                          <p className="text-sm text-teal-400 font-medium">Uploading…</p>
+                    {/* Read-only form data */}
+                    <div className="rounded-xl overflow-hidden space-y-1" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
+                      <div className="px-4 py-3" style={{ borderBottom: '1px solid #252525' }}>
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#888888' }}>Submission data</span>
+                      </div>
+                      {formResponses.length === 0 && (
+                        <p className="px-4 py-6 text-sm" style={{ color: '#777777' }}>No form data.</p>
+                      )}
+                      {formResponses.map((r) => (
+                        <div key={r.fieldKey} className="flex gap-3 px-4 py-3" style={{ borderTop: '1px solid #222222' }}>
+                          <span className="text-sm shrink-0 w-36" style={{ color: '#888888' }}>{r.fieldKey}</span>
+                          <span className="text-sm min-w-0 break-words" style={{ color: '#e8e8e8' }}>{r.value ?? '—'}</span>
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-2">
-                          <Upload className="h-7 w-7" style={{ color: '#3a3a3a' }} />
-                          <p className="text-sm font-medium" style={{ color: '#777777' }}>Click or drag to upload</p>
-                          <p className="text-xs" style={{ color: '#555555' }}>Max 25 MB</p>
+                      ))}
+                    </div>
+                    {/* Attachments section */}
+                    <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
+                      <div className="px-4 py-3" style={{ borderBottom: '1px solid #252525' }}>
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#888888' }}>Attachments</span>
+                      </div>
+                      <div
+                        className="mx-4 mt-3 mb-2 rounded-lg p-4 text-center cursor-pointer transition-all"
+                        style={{ background: '#161616', border: '2px dashed #2a2a2a' }}
+                        onClick={() => !uploading && fileInputRef.current?.click()}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#2a2a2a')}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
+                      >
+                        <input ref={fileInputRef} type="file" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileUpload(f); }} />
+                        {uploading ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                            <p className="text-sm text-teal-400 font-medium">Uploading…</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-2">
+                            <Upload className="h-6 w-6" style={{ color: '#3a3a3a' }} />
+                            <p className="text-sm font-medium" style={{ color: '#777777' }}>Click or drag to upload</p>
+                            <p className="text-xs" style={{ color: '#555555' }}>Max 25 MB</p>
+                          </div>
+                        )}
+                      </div>
+                      {uploadError && (
+                        <div className="mx-4 mb-2 rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>{uploadError}</div>
+                      )}
+                      {attachments.length > 0 && (
+                        <div className="px-4 pb-4 space-y-1">
+                          {attachments.map((att, i) => (
+                            <div key={att.id} className="flex items-center gap-3 py-2" style={i > 0 ? { borderTop: '1px solid #222222' } : undefined}>
+                              <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{att.filename}</p>
+                                <p className="text-xs" style={{ color: '#888888' }}>{fmt(att.sizeBytes)} · {att.uploadedBy?.name ?? '—'}</p>
+                              </div>
+                              <button onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Download className="h-4 w-4" /></button>
+                              {canManage && <button onClick={() => delAttachMut.mutate(att.id)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Trash2 className="h-4 w-4" /></button>}
+                            </div>
+                          ))}
                         </div>
                       )}
+                      {attachments.length === 0 && !uploading && (
+                        <p className="px-4 pb-4 text-sm" style={{ color: '#777777' }}>No attachments yet.</p>
+                      )}
                     </div>
-                    {uploadError && (
-                      <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>{uploadError}</div>
-                    )}
-                    {attachments.length > 0 && (
-                      <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
-                        {attachments.map((att, i) => (
-                          <div key={att.id} className="flex items-center gap-3 px-4 py-3" style={i > 0 ? { borderTop: '1px solid #222222' } : undefined}>
-                            <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{att.filename}</p>
-                              <p className="text-xs" style={{ color: '#888888' }}>{fmt(att.sizeBytes)} · {att.uploadedBy.name}</p>
-                            </div>
-                            <button onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Download className="h-4 w-4" /></button>
-                            {canManage && <button onClick={() => delAttachMut.mutate(att.id)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Trash2 className="h-4 w-4" /></button>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {attachments.length === 0 && !uploading && (
-                      <p className="text-sm text-center py-4" style={{ color: '#777777' }}>No attachments yet.</p>
-                    )}
                   </>
                 )}
 
@@ -474,176 +448,8 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 )}
               </div>
             </div>
-
-            {/* ── Right sidebar ─────────────────────────────────────────── */}
-            <div
-              className="w-60 shrink-0 flex flex-col overflow-y-auto py-4 px-3 gap-3"
-              style={{ background: '#0f0f0f', borderLeft: '1px solid #1e1e1e' }}
-            >
-              {/* Status transitions */}
-              {canManage && validTransitions.length > 0 && (
-                <SideSection label="Move to">
-                  <div className="flex flex-col gap-1.5">
-                    {validTransitions.map((status) => (
-                      <Button
-                        key={status}
-                        variant="secondary"
-                        size="sm"
-                        loading={transitionMut.isPending}
-                        onClick={() => transitionMut.mutate(status)}
-                        className="justify-start text-xs"
-                      >
-                        <StatusBadge status={status} />
-                      </Button>
-                    ))}
-                  </div>
-                </SideSection>
-              )}
-
-              {/* Assignment */}
-              {canManage && (
-                <SideSection label="Assigned to">
-                  <AssigneeSelector
-                    currentOwner={ticket.owner ? { id: ticket.owner.id, displayName: ticket.owner.displayName ?? ticket.owner.name ?? ticket.owner.email } : undefined}
-                    agents={agents}
-                    onAssign={(ownerId) => assignMut.mutate(ownerId ?? '')}
-                  />
-                </SideSection>
-              )}
-
-              {/* SLA */}
-              {ticket.sla && (
-                <SideSection label="SLA">
-                  <div className="space-y-2.5">
-                    <SlaBadge sla={ticket.sla} showTime={ticket.sla.status !== 'RESOLVED'} />
-                    <SlaProgressBar sla={ticket.sla} />
-                    <div className="space-y-1 text-xs" style={{ color: '#888888' }}>
-                      <div className="flex justify-between"><span>Target</span><span style={{ color: '#e0e0e0' }}>{ticket.sla.targetHours}h</span></div>
-                      <div className="flex justify-between"><span>Elapsed</span><span style={{ color: '#e0e0e0' }}>{ticket.sla.elapsedHours.toFixed(1)}h</span></div>
-                      {ticket.sla.status !== 'RESOLVED' && ticket.sla.remainingHours > 0 && (
-                        <div className="flex justify-between"><span>Remaining</span><span style={{ color: '#e0e0e0' }}>{ticket.sla.remainingHours.toFixed(1)}h</span></div>
-                      )}
-                    </div>
-                  </div>
-                </SideSection>
-              )}
-
-              {/* Details */}
-              <SideSection label="Details">
-                <div className="space-y-2 text-xs">
-                  {[
-                    ticket.studio  && { label: 'Studio',   value: ticket.studio.name },
-                    ticket.market  && { label: 'Market',   value: ticket.market.name },
-                    { label: 'Created',  value: format(new Date(ticket.createdAt), 'MMM d, yyyy') },
-                    ticket.resolvedAt && { label: 'Resolved', value: format(new Date(ticket.resolvedAt), 'MMM d, yyyy') },
-                  ].filter(Boolean).map((row) => row && (
-                    <div key={row.label} className="flex justify-between gap-2">
-                      <span style={{ color: '#888888' }}>{row.label}</span>
-                      <span style={{ color: '#e0e0e0', textAlign: 'right' }}>{row.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </SideSection>
-
-              {/* Watchers */}
-              <SideSection label="Watchers">
-                {ticket.watchers.length > 0 ? (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {ticket.watchers.map((w) => (
-                      <span key={w.userId} className="text-xs px-2 py-0.5 rounded-full" style={{ background: '#222222', color: '#d0d0d0', border: '1px solid #2a2a2a' }}>
-                        {w.user.displayName}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs mb-2" style={{ color: '#888888' }}>No watchers</p>
-                )}
-                <Button variant="ghost" size="sm" onClick={() => isWatching ? unwatchMut.mutate() : watchMut.mutate()} className="w-full">
-                  <Eye className="h-3.5 w-3.5" />
-                  {isWatching ? 'Unwatch' : 'Watch'}
-                </Button>
-              </SideSection>
-            </div>
           </div>
         )}
       </div>
-  );
-}
-
-// ── Sidebar section wrapper ─────────────────────────────────────────────────
-function SideSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-xl p-3.5 space-y-2.5" style={{ background: '#1a1a1a', border: '1px solid #242424' }}>
-      <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#666666' }}>{label}</p>
-      {children}
-    </div>
-  );
-}
-
-interface AssigneeSelectorProps {
-  currentOwner: { id: string; displayName: string } | null | undefined;
-  agents: Array<{ id: string; displayName: string }>;
-  onAssign: (ownerId: string | null) => void;
-}
-
-function AssigneeSelector({ currentOwner, agents, onAssign }: AssigneeSelectorProps) {
-  const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
-
-  const displayLabel = currentOwner?.displayName ?? 'Unassigned';
-  const filtered = agents.filter((a) => {
-    const name = (a.displayName ?? '').toLowerCase();
-    return name.includes(query.toLowerCase());
-  });
-
-  return (
-    <div className="space-y-1">
-      <div
-        className="rounded-lg px-2 py-1 text-xs"
-        style={{ background: '#111111', border: '1px solid #2a2a2a', color: '#999999' }}
-      >
-        Current: <span style={{ color: '#e5e5e5' }}>{displayLabel}</span>
-      </div>
-      <div className="relative">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder="Type a name…"
-          className="w-full rounded-md px-3 py-1.5 text-sm bg-[#111111] text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
-          style={{ border: '1px solid #2a2a2a' }}
-        />
-        {open && (
-          <div
-            className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-md shadow-lg text-sm"
-            style={{ background: '#111111', border: '1px solid #2a2a2a' }}
-          >
-            <button
-              type="button"
-              onClick={() => { onAssign(null); setQuery(''); setOpen(false); }}
-              className="w-full text-left px-3 py-1.5 hover:bg-[#222222] text-gray-300"
-            >
-              Unassigned
-            </button>
-            {filtered.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => { onAssign(a.id); setQuery(''); setOpen(false); }}
-                className="w-full text-left px-3 py-1.5 hover:bg-[#222222] text-gray-300"
-              >
-                {a.displayName}
-              </button>
-            ))}
-            {filtered.length === 0 && (
-              <div className="px-3 py-1.5 text-gray-500">
-                No matches
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
   );
 }

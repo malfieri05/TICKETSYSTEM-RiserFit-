@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ticketsApi, adminApi, usersApi } from '@/lib/api';
-import type { TicketFilters, TicketStatus, TicketPriority } from '@/types';
+import { ticketsApi, usersApi } from '@/lib/api';
+import type { TicketFilters, TicketStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
-import { SlaBadge } from '@/components/ui/SlaBadge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
@@ -23,6 +21,7 @@ const COMPLETED_STATUSES: TicketStatus[] = ['RESOLVED', 'CLOSED'];
 
 export default function TicketsPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
   const [search, setSearch] = useState('');
@@ -65,13 +64,6 @@ export default function TicketsPage() {
   });
 
   const allTickets = data?.data.data ?? [];
-
-  // Categories for filter dropdown
-  const { data: categoriesRes } = useQuery({
-    queryKey: ['categories'],
-    queryFn: () => adminApi.listCategories(),
-  });
-  const categories = categoriesRes?.data ?? [];
 
   // Departments (teams) derived from users list
   const { data: usersRes } = useQuery({
@@ -172,44 +164,12 @@ export default function TicketsPage() {
             />
           </div>
 
-          <Select value={filters.status ?? ''} onChange={(e) => setFilter('status', e.target.value)} className="w-44">
-            <option value="">All Statuses</option>
-            <option value="NEW">New</option>
-            <option value="TRIAGED">Triaged</option>
-            <option value="IN_PROGRESS">In Progress</option>
-            <option value="WAITING_ON_REQUESTER">Waiting: Requester</option>
-            <option value="WAITING_ON_VENDOR">Waiting: Vendor</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="CLOSED">Closed</option>
-          </Select>
-
-          <Select value={filters.priority ?? ''} onChange={(e) => setFilter('priority', e.target.value)} className="w-36">
-            <option value="">All Priorities</option>
-            <option value="URGENT">Urgent</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </Select>
-
-          <Select
-            value={filters.categoryId ?? ''}
-            onChange={(e) => setFilter('categoryId', e.target.value)}
-            className="w-48"
-          >
-            <option value="">All Categories</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </Select>
-
           <Select
             value={filters.teamId ?? ''}
             onChange={(e) => setFilter('teamId', e.target.value)}
             className="w-48"
           >
-            <option value="">All Departments</option>
+            <option value="">All departments</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
@@ -217,7 +177,7 @@ export default function TicketsPage() {
             ))}
           </Select>
 
-          {(filters.status || filters.priority || filters.categoryId || filters.teamId || filters.search || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId) && (
+          {(filters.teamId || filters.search || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId) && (
             <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
               Clear filters
             </Button>
@@ -227,16 +187,28 @@ export default function TicketsPage() {
         {/* Table */}
         <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
           {isLoading ? (
-            <div className="flex items-center justify-center h-48">
+            <div className="flex flex-col items-center justify-center h-48 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+              <span className="text-sm text-gray-500">Loading…</span>
             </div>
           ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48" style={{ color: '#555555' }}>
-              <p className="text-sm">No tickets found</p>
-              {Object.keys(filters).some((k) => k !== 'page' && k !== 'limit' && filters[k as keyof TicketFilters]) && (
-                <Button variant="ghost" size="sm" className="mt-2" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
-                  Clear filters
-                </Button>
+            <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: '#555555' }}>
+              {Object.keys(filters).some((k) => k !== 'page' && k !== 'limit' && filters[k as keyof TicketFilters]) || debouncedSearch ? (
+                <>
+                  <p className="text-sm font-medium text-gray-300">No tickets found</p>
+                  <p className="text-xs text-center">Try adjusting your filters or search.</p>
+                  <Button variant="ghost" size="sm" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
+                    Clear filters
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium text-gray-300">No tickets yet</p>
+                  <p className="text-xs text-center max-w-sm">Create your first ticket to start tracking requests.</p>
+                  <Button size="sm" onClick={() => router.push('/tickets/new')}>
+                    New Ticket
+                  </Button>
+                </>
               )}
             </div>
           ) : (
@@ -244,18 +216,17 @@ export default function TicketsPage() {
               <thead>
                 <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Title</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Date Created</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Priority</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Due Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Created</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Progress</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Requester</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Owner</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Category</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Updated</th>
                 </tr>
               </thead>
               <tbody>
-                {tickets.map((ticket) => (
+                {tickets.map((ticket) => {
+                  const total = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+                  const completed = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+                  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                  return (
                   <tr
                     key={ticket.id}
                     onClick={() => setSelectedId(ticket.id)}
@@ -273,21 +244,22 @@ export default function TicketsPage() {
                     <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#aaaaaa' }}>
                       {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
                     </td>
-                    <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
-                    <td className="px-4 py-3"><PriorityBadge priority={ticket.priority} muted={COMPLETED_STATUSES.includes(ticket.status as TicketStatus)} /></td>
                     <td className="px-4 py-3">
-                      {ticket.sla && ticket.sla.status !== 'RESOLVED'
-                        ? <SlaBadge sla={ticket.sla} showTime />
-                        : <span style={{ color: '#444444' }}>—</span>}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium tabular-nums" style={{ color: '#aaaaaa' }}>{completed} / {total}</span>
+                        {total > 0 && (
+                          <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{ width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#14b8a6' }}
+                            />
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.requester.displayName}</td>
-                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.owner?.displayName ?? '—'}</td>
-                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.category?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#555555' }}>
-                      {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
-                    </td>
                   </tr>
-                ))}
+                );})}
               </tbody>
             </table>
           )}

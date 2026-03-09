@@ -41,14 +41,16 @@ export default function AdminWorkflowTemplatesListPage() {
       <div className="p-6 max-w-4xl">
         <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
-            <div className="flex justify-center py-12">
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+              <span className="text-sm text-gray-500">Loading…</span>
             </div>
           ) : templates.length === 0 ? (
-            <div className="text-center py-12" style={{ color: '#555555' }}>
-              <p className="text-sm">No workflow templates yet.</p>
-              <p className="text-xs mt-1">Create one to define subtask workflows for ticket contexts.</p>
-              <Button className="mt-4" size="sm" onClick={() => router.push('/admin/workflow-templates/new')}>
+            <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: '#555555' }}>
+              <p className="text-sm font-medium text-gray-300">No workflow templates yet</p>
+              <p className="text-xs text-center max-w-sm">Create a template to define subtask workflows for ticket types and categories.</p>
+              <Button size="sm" onClick={() => router.push('/admin/workflow-templates/new')}>
+                <Plus className="h-4 w-4" />
                 New workflow template
               </Button>
             </div>

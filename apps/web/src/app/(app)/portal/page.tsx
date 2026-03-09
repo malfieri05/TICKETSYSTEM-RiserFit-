@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
@@ -74,6 +75,10 @@ export default function PortalPage() {
   const openCount = res?.openCount ?? 0;
   const completedCount = res?.completedCount ?? 0;
   const recentTickets = res?.recentTickets ?? [];
+  const allowedStudios = res?.allowedStudios ?? [];
+  const [locationFilter, setLocationFilter] = useState<string>('');
+
+  const viewAllHref = locationFilter ? `/portal/tickets?studioId=${encodeURIComponent(locationFilter)}` : '/portal/tickets';
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#000000' }}>
@@ -105,6 +110,40 @@ export default function PortalPage() {
             )}
           </div>
 
+          {/* Stage 23: location filter when studio user has multiple allowed locations */}
+          {allowedStudios.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Location:</span>
+              <button
+                type="button"
+                onClick={() => setLocationFilter('')}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  background: !locationFilter ? '#14b8a6' : 'transparent',
+                  color: !locationFilter ? '#fff' : '#888888',
+                  border: `1px solid ${!locationFilter ? '#14b8a6' : '#333333'}`,
+                }}
+              >
+                All
+              </button>
+              {allowedStudios.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => setLocationFilter(s.id)}
+                  className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                  style={{
+                    background: locationFilter === s.id ? '#14b8a6' : 'transparent',
+                    color: locationFilter === s.id ? '#fff' : '#888888',
+                    border: `1px solid ${locationFilter === s.id ? '#14b8a6' : '#333333'}`,
+                  }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Recent activity */}
           <div className="rounded-xl p-5 space-y-4" style={panel}>
             <div className="flex items-center justify-between">
@@ -114,7 +153,7 @@ export default function PortalPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => router.push('/portal/tickets')}
+                onClick={() => router.push(viewAllHref)}
                 className="text-sm font-medium transition-colors"
                 style={{ color: '#14b8a6' }}
                 onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}

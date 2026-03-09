@@ -31,17 +31,11 @@ export interface User {
   isActive: boolean;
   teamId?: string;
   teamName?: string | null;
-  studioId?: string;
+  studioId?: string | null;
+  studio?: { id: string; name: string } | null;
   marketId?: string;
   departments?: Department[];
   scopeStudioIds?: string[];
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  description?: string;
-  isActive: boolean;
 }
 
 export interface Market {
@@ -95,7 +89,9 @@ export interface TicketListItem {
   requester: { id: string; displayName: string; email: string };
   /** API may return name or displayName */
   owner?: { id: string; displayName?: string; name?: string; email: string };
-  category?: { id: string; name: string };
+  ticketClass?: { id: string; code: string; name: string };
+  supportTopic?: { id: string; name: string };
+  maintenanceCategory?: { id: string; name: string; color?: string | null };
   studio?: { id: string; name: string };
   market?: { id: string; name: string };
   _count?: { comments: number; subtasks: number; attachments: number };
@@ -119,6 +115,13 @@ export interface ScopeSummaryResponse {
   openCount: number;
   completedCount: number;
   recentTickets: ScopeSummaryRecentTicket[];
+  /** Stage 23: for STUDIO_USER, list of studios the user can view (for location filter). */
+  allowedStudios?: { id: string; name: string }[];
+}
+
+export interface TicketFormResponseItem {
+  fieldKey: string;
+  value: string;
 }
 
 export interface TicketDetail extends TicketListItem {
@@ -130,6 +133,7 @@ export interface TicketDetail extends TicketListItem {
   subtasks: Subtask[];
   watchers: { userId: string; user: { displayName: string; email: string } }[];
   tags: { tag: { id: string; name: string } }[];
+  formResponses?: TicketFormResponseItem[];
 }
 
 export interface Comment {
@@ -194,9 +198,9 @@ export interface PaginatedResponse<T> {
 export interface TicketFilters {
   status?: TicketStatus;
   priority?: TicketPriority;
-  categoryId?: string;
   departmentId?: string;
   ticketClassId?: string;
+  supportTopicId?: string;
   studioId?: string;
   marketId?: string;
   maintenanceCategoryId?: string;
@@ -208,6 +212,24 @@ export interface TicketFilters {
   limit?: number;
   /** When true, list only tickets with READY subtasks for current user (dept/owner). */
   actionableForMe?: boolean;
+}
+
+/** Stage 23: studio scope item (additional location for a user). */
+export interface StudioScopeItem {
+  studioId: string;
+  studio: { id: string; name: string };
+  grantedAt?: string;
+}
+
+/** Stage 23: inbox folder (All or support topic) with active count. */
+export interface InboxFolder {
+  id: string;
+  label: string;
+  activeCount: number;
+}
+
+export interface InboxFoldersResponse {
+  folders: InboxFolder[];
 }
 
 // ─── Ticket taxonomy (Stage 2) & form schema (Stage 3) ─────────────────────
@@ -264,6 +286,8 @@ export interface FormFieldDto {
   label: string;
   required: boolean;
   sortOrder: number;
+  /** Optional section header (visual only). */
+  section?: string | null;
   conditionalFieldKey?: string | null;
   conditionalValue?: string | null;
   options?: FormFieldOptionDto[];
@@ -281,9 +305,9 @@ export interface TicketFormSchemaDto {
   fields: FormFieldDto[];
 }
 
-/** Full create payload when using taxonomy (no categoryId). */
+/** Full create payload when using taxonomy (no categoryId). Omit title for schema-backed tickets (backend will generate). */
 export interface CreateTicketPayload {
-  title: string;
+  title?: string;
   description?: string;
   priority: TicketPriority;
   ticketClassId: string;

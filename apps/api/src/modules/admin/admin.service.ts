@@ -1,8 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import {
-  CreateCategoryDto,
-  UpdateCategoryDto,
   CreateMarketDto,
   UpdateMarketDto,
   CreateStudioDto,
@@ -13,43 +11,6 @@ import { haversineMiles } from '../../utils/geoDistance';
 @Injectable()
 export class AdminService {
   constructor(private prisma: PrismaService) {}
-
-  // ─── Categories ──────────────────────────────────────────────────────────
-
-  async listCategories() {
-    return this.prisma.category.findMany({
-      orderBy: { name: 'asc' },
-    });
-  }
-
-  async createCategory(dto: CreateCategoryDto) {
-    const existing = await this.prisma.category.findFirst({
-      where: { name: { equals: dto.name, mode: 'insensitive' } },
-    });
-    if (existing) throw new ConflictException(`Category "${dto.name}" already exists`);
-
-    return this.prisma.category.create({
-      data: {
-        name: dto.name,
-        description: dto.description,
-        isActive: true,
-      },
-    });
-  }
-
-  async updateCategory(id: string, dto: UpdateCategoryDto) {
-    await this.findCategoryOrThrow(id);
-    return this.prisma.category.update({
-      where: { id },
-      data: dto,
-    });
-  }
-
-  private async findCategoryOrThrow(id: string) {
-    const cat = await this.prisma.category.findUnique({ where: { id } });
-    if (!cat) throw new NotFoundException(`Category ${id} not found`);
-    return cat;
-  }
 
   // ─── Ticket taxonomy (Stage 2, read-only config) ──────────────────────────
 

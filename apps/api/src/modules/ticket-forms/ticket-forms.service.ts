@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
+import { getSectionMapForSupportTopic, getSectionMapForMaintenance } from '../../../prisma/seed-data/section-maps';
 
 export interface FormFieldOptionDto {
   value: string;
@@ -14,6 +15,8 @@ export interface FormFieldDto {
   label: string;
   required: boolean;
   sortOrder: number;
+  /** Optional section header (visual only; from seed config, not DB). */
+  section?: string | null;
   conditionalFieldKey?: string | null;
   conditionalValue?: string | null;
   options?: FormFieldOptionDto[];
@@ -67,6 +70,8 @@ export class TicketFormsService {
           isActive: true,
         },
         include: {
+          supportTopic: { select: { name: true } },
+          department: { select: { code: true } },
           fields: {
             orderBy: { sortOrder: 'asc' },
             include: {
@@ -80,7 +85,10 @@ export class TicketFormsService {
           'No form schema found for this support topic. An admin may need to configure one.',
         );
       }
-      return this.toSchemaDto(schema);
+      const sectionMap = schema.supportTopic && schema.department
+        ? getSectionMapForSupportTopic(schema.department.code, schema.supportTopic.name)
+        : {};
+      return this.toSchemaDto(schema, sectionMap);
     }
 
     if (ticketClass.code === 'MAINTENANCE') {
@@ -107,13 +115,15 @@ export class TicketFormsService {
           'No form schema found for this maintenance category. An admin may need to configure one.',
         );
       }
-      return this.toSchemaDto(schema);
+      const sectionMap = getSectionMapForMaintenance();
+      return this.toSchemaDto(schema, sectionMap);
     }
 
     throw new BadRequestException('Unknown ticket class');
   }
 
-  private toSchemaDto(schema: {
+  private toSchemaDto(
+    schema: {
     id: string;
     ticketClassId: string;
     departmentId: string | null;
@@ -133,7 +143,9 @@ export class TicketFormsService {
       conditionalValue: string | null;
       options: Array<{ value: string; label: string; sortOrder: number }>;
     }>;
-  }): TicketFormSchemaDto {
+  },
+  sectionMap: Record<string, string> = {},
+  ): TicketFormSchemaDto {
     return {
       id: schema.id,
       ticketClassId: schema.ticketClassId,
@@ -150,6 +162,7 @@ export class TicketFormsService {
         label: f.label,
         required: f.required,
         sortOrder: f.sortOrder,
+        section: sectionMap[f.fieldKey] ?? undefined,
         conditionalFieldKey: f.conditionalFieldKey ?? undefined,
         conditionalValue: f.conditionalValue ?? undefined,
         options:
