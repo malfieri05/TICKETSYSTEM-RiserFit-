@@ -6,7 +6,13 @@ import { NotificationsService } from '../../modules/notifications/notifications.
 import { SlaService } from '../../modules/sla/sla.service';
 import { QUEUES } from '../../common/queue/queue.constants';
 
-const OPEN_STATUSES = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+const OPEN_STATUSES = [
+  'NEW',
+  'TRIAGED',
+  'IN_PROGRESS',
+  'WAITING_ON_REQUESTER',
+  'WAITING_ON_VENDOR',
+];
 
 /**
  * StaleTicketProcessor — runs on a repeatable schedule to check for SLA breaches.

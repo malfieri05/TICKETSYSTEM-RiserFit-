@@ -17,8 +17,10 @@ export class SchedulerService implements OnModuleInit {
   private readonly logger = new Logger(SchedulerService.name);
 
   // How often to check for breached SLAs (default: every hour)
-  private readonly checkIntervalMs =
-    parseInt(process.env.SLA_CHECK_INTERVAL_MS ?? '3600000', 10);
+  private readonly checkIntervalMs = parseInt(
+    process.env.SLA_CHECK_INTERVAL_MS ?? '3600000',
+    10,
+  );
 
   constructor(
     @InjectQueue(QUEUES.SCHEDULED)
@@ -33,7 +35,9 @@ export class SchedulerService implements OnModuleInit {
     try {
       // Check if the repeatable job is already registered in Redis
       const existingJobs = await this.scheduledQueue.getRepeatableJobs();
-      const alreadyRegistered = existingJobs.some((j) => j.name === 'stale-ticket-check');
+      const alreadyRegistered = existingJobs.some(
+        (j) => j.name === 'stale-ticket-check',
+      );
 
       if (alreadyRegistered) {
         this.logger.log('Stale-ticket cron job already registered — skipping');

@@ -55,7 +55,9 @@ describe('Stage 3 Forms (e2e)', () => {
       .post('/api/auth/login')
       .send({ email: SEEDED_EMAIL, password: SEEDED_PASSWORD });
     if (loginRes.status !== 200 || !loginRes.body?.access_token) {
-      throw new Error(`Login failed: ${loginRes.status} ${JSON.stringify(loginRes.body)}`);
+      throw new Error(
+        `Login failed: ${loginRes.status} ${JSON.stringify(loginRes.body)}`,
+      );
     }
     token = loginRes.body.access_token;
   });
@@ -133,7 +135,9 @@ describe('Stage 3 Forms (e2e)', () => {
         .expect(200);
       expect(detailRes.body).toHaveProperty('formResponses');
       expect(Array.isArray(detailRes.body.formResponses)).toBe(true);
-      const additionalDetails = detailRes.body.formResponses.find((r: { fieldKey: string }) => r.fieldKey === 'additional_details');
+      const additionalDetails = detailRes.body.formResponses.find(
+        (r: { fieldKey: string }) => r.fieldKey === 'additional_details',
+      );
       expect(additionalDetails).toBeDefined();
       expect(additionalDetails.value).toBe('E2E test value');
     });

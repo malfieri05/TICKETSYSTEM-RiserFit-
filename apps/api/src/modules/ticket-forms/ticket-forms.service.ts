@@ -1,6 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
-import { getSectionMapForSupportTopic, getSectionMapForMaintenance } from '../../../prisma/seed-data/section-maps';
+import {
+  getSectionMapForSupportTopic,
+  getSectionMapForMaintenance,
+} from '../../../prisma/seed-data/section-maps';
 
 export interface FormFieldOptionDto {
   value: string;
@@ -49,7 +56,12 @@ export class TicketFormsService {
     supportTopicId?: string;
     maintenanceCategoryId?: string;
   }): Promise<TicketFormSchemaDto> {
-    const { ticketClassId, departmentId, supportTopicId, maintenanceCategoryId } = params;
+    const {
+      ticketClassId,
+      departmentId,
+      supportTopicId,
+      maintenanceCategoryId,
+    } = params;
 
     const ticketClass = await this.prisma.ticketClass.findUnique({
       where: { id: ticketClassId, isActive: true },
@@ -61,7 +73,9 @@ export class TicketFormsService {
 
     if (ticketClass.code === 'SUPPORT') {
       if (!departmentId || !supportTopicId) {
-        throw new BadRequestException('SUPPORT forms require departmentId and supportTopicId');
+        throw new BadRequestException(
+          'SUPPORT forms require departmentId and supportTopicId',
+        );
       }
       const schema = await this.prisma.ticketFormSchema.findFirst({
         where: {
@@ -85,15 +99,21 @@ export class TicketFormsService {
           'No form schema found for this support topic. An admin may need to configure one.',
         );
       }
-      const sectionMap = schema.supportTopic && schema.department
-        ? getSectionMapForSupportTopic(schema.department.code, schema.supportTopic.name)
-        : {};
+      const sectionMap =
+        schema.supportTopic && schema.department
+          ? getSectionMapForSupportTopic(
+              schema.department.code,
+              schema.supportTopic.name,
+            )
+          : {};
       return this.toSchemaDto(schema, sectionMap);
     }
 
     if (ticketClass.code === 'MAINTENANCE') {
       if (!maintenanceCategoryId) {
-        throw new BadRequestException('MAINTENANCE forms require maintenanceCategoryId');
+        throw new BadRequestException(
+          'MAINTENANCE forms require maintenanceCategoryId',
+        );
       }
       const schema = await this.prisma.ticketFormSchema.findFirst({
         where: {
@@ -124,27 +144,27 @@ export class TicketFormsService {
 
   private toSchemaDto(
     schema: {
-    id: string;
-    ticketClassId: string;
-    departmentId: string | null;
-    supportTopicId: string | null;
-    maintenanceCategoryId: string | null;
-    version: number;
-    name: string | null;
-    sortOrder: number;
-    fields: Array<{
       id: string;
-      fieldKey: string;
-      type: string;
-      label: string;
-      required: boolean;
+      ticketClassId: string;
+      departmentId: string | null;
+      supportTopicId: string | null;
+      maintenanceCategoryId: string | null;
+      version: number;
+      name: string | null;
       sortOrder: number;
-      conditionalFieldKey: string | null;
-      conditionalValue: string | null;
-      options: Array<{ value: string; label: string; sortOrder: number }>;
-    }>;
-  },
-  sectionMap: Record<string, string> = {},
+      fields: Array<{
+        id: string;
+        fieldKey: string;
+        type: string;
+        label: string;
+        required: boolean;
+        sortOrder: number;
+        conditionalFieldKey: string | null;
+        conditionalValue: string | null;
+        options: Array<{ value: string; label: string; sortOrder: number }>;
+      }>;
+    },
+    sectionMap: Record<string, string> = {},
   ): TicketFormSchemaDto {
     return {
       id: schema.id,
@@ -167,7 +187,11 @@ export class TicketFormsService {
         conditionalValue: f.conditionalValue ?? undefined,
         options:
           f.options?.length > 0
-            ? f.options.map((o) => ({ value: o.value, label: o.label, sortOrder: o.sortOrder }))
+            ? f.options.map((o) => ({
+                value: o.value,
+                label: o.label,
+                sortOrder: o.sortOrder,
+              }))
             : undefined,
       })),
     };

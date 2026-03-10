@@ -30,7 +30,7 @@ function StatCard({
   }[color];
 
   return (
-    <div className="rounded-xl p-5 flex items-start gap-4" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+    <div className="rounded-xl p-5 flex items-start gap-4" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
       <div className="rounded-lg p-2.5" style={iconStyle}>
         <Icon className="h-5 w-5" />
       </div>
@@ -58,7 +58,7 @@ function HorizontalBar({
   return (
     <div className="flex items-center gap-3 text-sm">
       <span className="w-36 text-gray-400 truncate shrink-0">{label}</span>
-      <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: '#2a2a2a' }}>
+      <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
         <div
           className="h-2 rounded-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: color }}
@@ -198,7 +198,7 @@ export default function ReportingPage() {
 
   if (summaryLoading) {
     return (
-      <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+      <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
         <Header title="Reporting" />
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-600 border-t-transparent" />
@@ -209,7 +209,7 @@ export default function ReportingPage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header
         title="Reporting"
         action={
@@ -253,7 +253,7 @@ export default function ReportingPage() {
         </div>
 
         {/* ── Volume chart ───────────────────────────────────────────────────── */}
-        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+        <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <BarChart2 className="h-4 w-4 text-gray-400" />
@@ -280,8 +280,8 @@ export default function ReportingPage() {
                     onClick={() => setVolumeRange(opt.key as typeof volumeRange)}
                     className="px-2.5 py-0.5 rounded-full transition-colors"
                     style={{
-                      background: active ? '#14b8a6' : 'transparent',
-                      color: active ? '#0b0f0f' : '#9ca3af',
+                      background: active ? 'var(--color-accent)' : 'transparent',
+                      color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                     }}
                   >
                     {opt.label}
@@ -306,7 +306,7 @@ export default function ReportingPage() {
         {/* ── Two-column breakdowns ──────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* By Status */}
-          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             <h3 className="text-sm font-semibold text-gray-300 mb-4">By Status</h3>
             <div className="space-y-2.5">
               {byStatus.length === 0 ? (
@@ -326,7 +326,7 @@ export default function ReportingPage() {
           </div>
 
           {/* By Priority */}
-          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             <h3 className="text-sm font-semibold text-gray-300 mb-4">By Priority</h3>
             <div className="space-y-2.5">
               {byPriority.length === 0 ? (
@@ -346,7 +346,7 @@ export default function ReportingPage() {
           </div>
 
           {/* By Category */}
-          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             <h3 className="text-sm font-semibold text-gray-300 mb-4">By Category</h3>
             <div className="space-y-2.5">
               {byCategory.length === 0 ? (
@@ -365,7 +365,7 @@ export default function ReportingPage() {
           </div>
 
           {/* By Market */}
-          <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             <h3 className="text-sm font-semibold text-gray-300 mb-4">By Market</h3>
             <div className="space-y-2.5">
               {byMarket.length === 0 ? (
@@ -386,7 +386,7 @@ export default function ReportingPage() {
         </div>
 
         {/* ── Resolution time by category ────────────────────────────────────── */}
-        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+        <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <h3 className="text-sm font-semibold text-gray-300 mb-4">
             Avg Resolution Time by Category
           </h3>
@@ -399,7 +399,7 @@ export default function ReportingPage() {
               {resolutionTime.map((row) => (
                 <div key={row.categoryName} className="flex items-center gap-3 text-sm">
                   <span className="w-36 text-gray-400 truncate shrink-0">{row.categoryName}</span>
-                  <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: '#2a2a2a' }}>
+                  <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                     <div
                       className="h-2 rounded-full bg-emerald-500 transition-all"
                       style={{
@@ -420,7 +420,7 @@ export default function ReportingPage() {
         </div>
 
         {/* ── Completion time by owner ───────────────────────────────────────── */}
-        <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+        <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <h3 className="text-sm font-semibold text-gray-300 mb-4">
             Avg Completion Time by Owner
           </h3>

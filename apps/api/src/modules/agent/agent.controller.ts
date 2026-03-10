@@ -1,5 +1,12 @@
 import {
-  Controller, Post, Get, Param, Body, HttpCode, HttpStatus, Logger,
+  Controller,
+  Post,
+  Get,
+  Param,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { AgentService, AgentResponse } from './agent.service';
 import { AgentChatDto, AgentConfirmDto } from './dto/agent.dto';
@@ -22,8 +29,15 @@ export class AgentController {
     @Body() dto: AgentChatDto,
     @CurrentUser() user: RequestUser,
   ): Promise<AgentResponse> {
-    this.logger.log(`Agent chat from ${user.id}: "${dto.message.slice(0, 80)}..."`);
-    return this.agentService.chat(dto.message, user, dto.conversationId, dto.allowWebSearch);
+    this.logger.log(
+      `Agent chat from ${user.id}: "${dto.message.slice(0, 80)}..."`,
+    );
+    return this.agentService.chat(
+      dto.message,
+      user,
+      dto.conversationId,
+      dto.allowWebSearch,
+    );
   }
 
   /**
@@ -36,8 +50,14 @@ export class AgentController {
     @Body() dto: AgentConfirmDto,
     @CurrentUser() user: RequestUser,
   ): Promise<AgentResponse> {
-    this.logger.log(`Agent confirm from ${user.id}: convo=${dto.conversationId}, msg=${dto.messageId}`);
-    return this.agentService.confirmAction(dto.conversationId, dto.messageId, user);
+    this.logger.log(
+      `Agent confirm from ${user.id}: convo=${dto.conversationId}, msg=${dto.messageId}`,
+    );
+    return this.agentService.confirmAction(
+      dto.conversationId,
+      dto.messageId,
+      user,
+    );
   }
 
   /**
@@ -54,10 +74,7 @@ export class AgentController {
    * Get all messages in a conversation.
    */
   @Get('conversations/:id/messages')
-  getMessages(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  getMessages(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.agentService.getMessages(id, user.id);
   }
 }

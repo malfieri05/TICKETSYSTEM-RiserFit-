@@ -6,7 +6,9 @@ import { WorkflowAnalyticsService } from './workflow-analytics.service';
 @Controller('admin/workflow-analytics')
 @Roles(Role.ADMIN)
 export class WorkflowAnalyticsController {
-  constructor(private readonly workflowAnalyticsService: WorkflowAnalyticsService) {}
+  constructor(
+    private readonly workflowAnalyticsService: WorkflowAnalyticsService,
+  ) {}
 
   @Get('templates')
   getTemplates() {

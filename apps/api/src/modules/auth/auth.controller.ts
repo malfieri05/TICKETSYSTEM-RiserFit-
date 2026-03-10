@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -66,7 +74,9 @@ export class AuthController {
   @Public()
   @Post('sso/callback')
   @HttpCode(HttpStatus.OK)
-  async ssoCallback(@Body() body: { ssoId: string; email: string; name: string }) {
+  async ssoCallback(
+    @Body() body: { ssoId: string; email: string; name: string },
+  ) {
     return this.authService.loginWithSso(body.ssoId, body.email, body.name);
   }
 }

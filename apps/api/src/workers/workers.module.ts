@@ -19,8 +19,8 @@ import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.pr
       { name: QUEUES.KNOWLEDGE_INGESTION },
     ),
     NotificationsModule, // provides NotificationsService + channel adapters
-    SlaModule,           // provides SlaService for breach computation
-    AiModule,            // provides IngestionService for knowledge-ingestion processor
+    SlaModule, // provides SlaService for breach computation
+    AiModule, // provides IngestionService for knowledge-ingestion processor
   ],
   providers: [
     NotificationFanoutProcessor,

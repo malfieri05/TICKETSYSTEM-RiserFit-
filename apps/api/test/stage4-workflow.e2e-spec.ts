@@ -50,9 +50,18 @@ describe('Stage 4 Workflow (e2e)', () => {
 
     prisma = app.get(PrismaService);
     const [cat1, cat2, cat3] = await Promise.all([
-      prisma.maintenanceCategory.findFirst({ where: { name: 'Plumbing' }, select: { id: true } }),
-      prisma.maintenanceCategory.findFirst({ where: { name: 'Safety' }, select: { id: true } }),
-      prisma.maintenanceCategory.findFirst({ where: { name: 'Electrical / Lighting' }, select: { id: true } }),
+      prisma.maintenanceCategory.findFirst({
+        where: { name: 'Plumbing' },
+        select: { id: true },
+      }),
+      prisma.maintenanceCategory.findFirst({
+        where: { name: 'Safety' },
+        select: { id: true },
+      }),
+      prisma.maintenanceCategory.findFirst({
+        where: { name: 'Electrical / Lighting' },
+        select: { id: true },
+      }),
     ]);
     maintCat1Id = cat1!.id;
     maintCat2Id = cat2!.id;
@@ -73,7 +82,12 @@ describe('Stage 4 Workflow (e2e)', () => {
       throw new Error(`Dept user login failed: ${deptLogin.status}`);
     }
     deptUserToken = deptLogin.body.access_token;
-    deptUserId = deptLogin.body.user?.id ?? (await prisma.user.findUnique({ where: { email: DEPT_USER_EMAIL }, select: { id: true } }))!.id;
+    deptUserId =
+      deptLogin.body.user?.id ??
+      (await prisma.user.findUnique({
+        where: { email: DEPT_USER_EMAIL },
+        select: { id: true },
+      }))!.id;
 
     await prisma.subtaskWorkflowTemplate.deleteMany({
       where: {
@@ -109,27 +123,39 @@ describe('Stage 4 Workflow (e2e)', () => {
       workflowId = createWf.body.id;
 
       const [a, b, c] = await Promise.all([
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: workflowId,
-          title: 'Step A',
-          departmentId: deptId,
-          isRequired: true,
-          sortOrder: 0,
-        }).then((r) => r.body.id),
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: workflowId,
-          title: 'Step B',
-          departmentId: deptId,
-          isRequired: true,
-          sortOrder: 1,
-        }).then((r) => r.body.id),
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: workflowId,
-          title: 'Step C',
-          departmentId: deptId,
-          isRequired: true,
-          sortOrder: 2,
-        }).then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: workflowId,
+            title: 'Step A',
+            departmentId: deptId,
+            isRequired: true,
+            sortOrder: 0,
+          })
+          .then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: workflowId,
+            title: 'Step B',
+            departmentId: deptId,
+            isRequired: true,
+            sortOrder: 1,
+          })
+          .then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: workflowId,
+            title: 'Step C',
+            departmentId: deptId,
+            isRequired: true,
+            sortOrder: 2,
+          })
+          .then((r) => r.body.id),
       ]);
       templateAId = a;
       templateBId = b;
@@ -138,12 +164,20 @@ describe('Stage 4 Workflow (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: workflowId, subtaskTemplateId: templateBId, dependsOnSubtaskTemplateId: templateAId })
+        .send({
+          workflowTemplateId: workflowId,
+          subtaskTemplateId: templateBId,
+          dependsOnSubtaskTemplateId: templateAId,
+        })
         .expect(201);
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: workflowId, subtaskTemplateId: templateCId, dependsOnSubtaskTemplateId: templateBId })
+        .send({
+          workflowTemplateId: workflowId,
+          subtaskTemplateId: templateCId,
+          dependsOnSubtaskTemplateId: templateBId,
+        })
         .expect(201);
 
       const createTicket = await request(app.getHttpServer())
@@ -174,30 +208,52 @@ describe('Stage 4 Workflow (e2e)', () => {
     });
 
     it('Completing A makes B READY', async () => {
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const subA = (list.body as Array<{ id: string; title: string }>).find((s) => s.title === 'Step A')!;
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const subA = (list.body as Array<{ id: string; title: string }>).find(
+        (s) => s.title === 'Step A',
+      )!;
       await request(app.getHttpServer())
         .patch(`/api/tickets/${ticketId}/subtasks/${subA.id}`)
         .set(auth(adminToken))
         .send({ status: 'DONE' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const b = (res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Step B');
-      const c = (res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Step C');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const b = (res.body as Array<{ title: string; status: string }>).find(
+        (s) => s.title === 'Step B',
+      );
+      const c = (res.body as Array<{ title: string; status: string }>).find(
+        (s) => s.title === 'Step C',
+      );
       expect(b?.status).toBe('READY');
       expect(c?.status).toBe('LOCKED');
     });
 
     it('Completing B makes C READY', async () => {
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const subB = (list.body as Array<{ id: string; title: string }>).find((s) => s.title === 'Step B')!;
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const subB = (list.body as Array<{ id: string; title: string }>).find(
+        (s) => s.title === 'Step B',
+      )!;
       await request(app.getHttpServer())
         .patch(`/api/tickets/${ticketId}/subtasks/${subB.id}`)
         .set(auth(adminToken))
         .send({ status: 'DONE' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const c = (res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Step C');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const c = (res.body as Array<{ title: string; status: string }>).find(
+        (s) => s.title === 'Step C',
+      );
       expect(c?.status).toBe('READY');
     });
   });
@@ -221,35 +277,55 @@ describe('Stage 4 Workflow (e2e)', () => {
       const wfId = createWf.body.id;
 
       const [a, b, c] = await Promise.all([
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: wfId,
-          title: 'Parallel A',
-          departmentId: deptId,
-          sortOrder: 0,
-        }).then((r) => r.body.id),
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: wfId,
-          title: 'Parallel B',
-          departmentId: deptId,
-          sortOrder: 1,
-        }).then((r) => r.body.id),
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: wfId,
-          title: 'Parallel C',
-          departmentId: deptId,
-          sortOrder: 2,
-        }).then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: wfId,
+            title: 'Parallel A',
+            departmentId: deptId,
+            sortOrder: 0,
+          })
+          .then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: wfId,
+            title: 'Parallel B',
+            departmentId: deptId,
+            sortOrder: 1,
+          })
+          .then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: wfId,
+            title: 'Parallel C',
+            departmentId: deptId,
+            sortOrder: 2,
+          })
+          .then((r) => r.body.id),
       ]);
 
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: wfId, subtaskTemplateId: c, dependsOnSubtaskTemplateId: a })
+        .send({
+          workflowTemplateId: wfId,
+          subtaskTemplateId: c,
+          dependsOnSubtaskTemplateId: a,
+        })
         .expect(201);
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: wfId, subtaskTemplateId: c, dependsOnSubtaskTemplateId: b })
+        .send({
+          workflowTemplateId: wfId,
+          subtaskTemplateId: c,
+          dependsOnSubtaskTemplateId: b,
+        })
         .expect(201);
 
       const createTicket = await request(app.getHttpServer())
@@ -263,7 +339,10 @@ describe('Stage 4 Workflow (e2e)', () => {
         })
         .expect(201);
       ticketId = createTicket.body.id;
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
       const subs = list.body as Array<{ id: string; title: string }>;
       subAId = subs.find((s) => s.title === 'Parallel A')!.id;
       subBId = subs.find((s) => s.title === 'Parallel B')!.id;
@@ -271,7 +350,10 @@ describe('Stage 4 Workflow (e2e)', () => {
     });
 
     it('A and B start READY, C starts LOCKED', async () => {
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
       const subs = res.body as Array<{ title: string; status: string }>;
       expect(subs.find((s) => s.title === 'Parallel A')?.status).toBe('READY');
       expect(subs.find((s) => s.title === 'Parallel B')?.status).toBe('READY');
@@ -284,8 +366,15 @@ describe('Stage 4 Workflow (e2e)', () => {
         .set(auth(adminToken))
         .send({ status: 'DONE' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      expect((res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Parallel C')?.status).toBe('LOCKED');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      expect(
+        (res.body as Array<{ title: string; status: string }>).find(
+          (s) => s.title === 'Parallel C',
+        )?.status,
+      ).toBe('LOCKED');
     });
 
     it('Completing B after A makes C READY', async () => {
@@ -294,8 +383,15 @@ describe('Stage 4 Workflow (e2e)', () => {
         .set(auth(adminToken))
         .send({ status: 'DONE' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      expect((res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Parallel C')?.status).toBe('READY');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      expect(
+        (res.body as Array<{ title: string; status: string }>).find(
+          (s) => s.title === 'Parallel C',
+        )?.status,
+      ).toBe('READY');
     });
   });
 
@@ -315,23 +411,35 @@ describe('Stage 4 Workflow (e2e)', () => {
         .expect(201);
       const wfId = createWf.body.id;
       const [a, b] = await Promise.all([
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: wfId,
-          title: 'Skip-Upstream',
-          departmentId: deptId,
-          sortOrder: 0,
-        }).then((r) => r.body.id),
-        request(app.getHttpServer()).post('/api/subtask-workflow/subtask-templates').set(auth(adminToken)).send({
-          workflowTemplateId: wfId,
-          title: 'Skip-Downstream',
-          departmentId: deptId,
-          sortOrder: 1,
-        }).then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: wfId,
+            title: 'Skip-Upstream',
+            departmentId: deptId,
+            sortOrder: 0,
+          })
+          .then((r) => r.body.id),
+        request(app.getHttpServer())
+          .post('/api/subtask-workflow/subtask-templates')
+          .set(auth(adminToken))
+          .send({
+            workflowTemplateId: wfId,
+            title: 'Skip-Downstream',
+            departmentId: deptId,
+            sortOrder: 1,
+          })
+          .then((r) => r.body.id),
       ]);
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: wfId, subtaskTemplateId: b, dependsOnSubtaskTemplateId: a })
+        .send({
+          workflowTemplateId: wfId,
+          subtaskTemplateId: b,
+          dependsOnSubtaskTemplateId: a,
+        })
         .expect(201);
 
       const createTicket = await request(app.getHttpServer())
@@ -345,20 +453,37 @@ describe('Stage 4 Workflow (e2e)', () => {
         })
         .expect(201);
       ticketId = createTicket.body.id;
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      subBId = (list.body as Array<{ id: string; title: string }>).find((s) => s.title === 'Skip-Downstream')!.id;
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      subBId = (list.body as Array<{ id: string; title: string }>).find(
+        (s) => s.title === 'Skip-Downstream',
+      )!.id;
     });
 
     it('Setting upstream to SKIPPED unlocks downstream to READY', async () => {
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const subA = (list.body as Array<{ id: string; title: string }>).find((s) => s.title === 'Skip-Upstream')!;
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const subA = (list.body as Array<{ id: string; title: string }>).find(
+        (s) => s.title === 'Skip-Upstream',
+      )!;
       await request(app.getHttpServer())
         .patch(`/api/tickets/${ticketId}/subtasks/${subA.id}`)
         .set(auth(adminToken))
         .send({ status: 'SKIPPED' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      expect((res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Skip-Downstream')?.status).toBe('READY');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      expect(
+        (res.body as Array<{ title: string; status: string }>).find(
+          (s) => s.title === 'Skip-Downstream',
+        )?.status,
+      ).toBe('READY');
     });
   });
 
@@ -375,9 +500,13 @@ describe('Stage 4 Workflow (e2e)', () => {
           .get(`/api/tickets/${t.id}/subtasks`)
           .set(auth(deptUserToken))
           .expect(200);
-        const hasReady = (subs.body as Array<{ status: string; departmentId?: string; ownerId?: string }>).some(
-          (s) => s.status === 'READY',
-        );
+        const hasReady = (
+          subs.body as Array<{
+            status: string;
+            departmentId?: string;
+            ownerId?: string;
+          }>
+        ).some((s) => s.status === 'READY');
         expect(hasReady).toBe(true);
       }
     });
@@ -394,8 +523,12 @@ describe('Stage 4 Workflow (e2e)', () => {
         })
         .expect(201);
       const tid = ticketNoWorkflow.body.id;
-      const subs = await prisma.subtask.findMany({ where: { ticketId: tid }, select: { id: true, status: true } });
-      const allLocked = subs.length > 0 && subs.every((s) => s.status === 'LOCKED');
+      const subs = await prisma.subtask.findMany({
+        where: { ticketId: tid },
+        select: { id: true, status: true },
+      });
+      const allLocked =
+        subs.length > 0 && subs.every((s) => s.status === 'LOCKED');
       if (subs.length === 0 || allLocked) {
         const list = await request(app.getHttpServer())
           .get('/api/tickets')
@@ -436,8 +569,13 @@ describe('Stage 4 Workflow (e2e)', () => {
     });
 
     it('Cannot RESOLVE until all required subtasks are DONE or SKIPPED', async () => {
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const requiredNotDone = (list.body as Array<{ isRequired: boolean; status: string }>).filter(
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const requiredNotDone = (
+        list.body as Array<{ isRequired: boolean; status: string }>
+      ).filter(
         (s) => s.isRequired && s.status !== 'DONE' && s.status !== 'SKIPPED',
       );
       if (requiredNotDone.length > 0) {
@@ -450,8 +588,15 @@ describe('Stage 4 Workflow (e2e)', () => {
     });
 
     it('Optional subtask does not block resolution', async () => {
-      const listRes = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const subs = listRes.body as Array<{ id: string; title: string; isRequired: boolean }>;
+      const listRes = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const subs = listRes.body as Array<{
+        id: string;
+        title: string;
+        isRequired: boolean;
+      }>;
       const requiredOrder = ['Step A', 'Step B', 'Step C'];
       for (const title of requiredOrder) {
         const s = subs.find((x) => x.title === title && x.isRequired);
@@ -499,7 +644,11 @@ describe('Stage 4 Workflow (e2e)', () => {
       const create = await request(app.getHttpServer())
         .post(`/api/tickets/${ticketId}/subtasks`)
         .set(auth(deptUserToken))
-        .send({ title: 'Ad hoc task', description: 'Manual', isRequired: false })
+        .send({
+          title: 'Ad hoc task',
+          description: 'Manual',
+          isRequired: false,
+        })
         .expect(201);
       expect(create.body.subtaskTemplateId).toBeNull();
     });
@@ -509,21 +658,37 @@ describe('Stage 4 Workflow (e2e)', () => {
         where: { maintenanceCategoryId: maintCat1Id },
         include: { subtaskTemplates: true },
       });
-      expect(JSON.stringify(wfAfter?.subtaskTemplates ?? [])).toBe(workflowBefore);
+      expect(JSON.stringify(wfAfter?.subtaskTemplates ?? [])).toBe(
+        workflowBefore,
+      );
     });
 
     it('Ad hoc subtask can transition status normally', async () => {
-      const list = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      const adhoc = (list.body as Array<{ id: string; title: string; subtaskTemplateId: string | null }>).find(
-        (s) => s.title === 'Ad hoc task' && s.subtaskTemplateId == null,
-      )!;
+      const list = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      const adhoc = (
+        list.body as Array<{
+          id: string;
+          title: string;
+          subtaskTemplateId: string | null;
+        }>
+      ).find((s) => s.title === 'Ad hoc task' && s.subtaskTemplateId == null)!;
       await request(app.getHttpServer())
         .patch(`/api/tickets/${ticketId}/subtasks/${adhoc.id}`)
         .set(auth(deptUserToken))
         .send({ status: 'DONE' })
         .expect(200);
-      const res = await request(app.getHttpServer()).get(`/api/tickets/${ticketId}/subtasks`).set(auth(adminToken)).expect(200);
-      expect((res.body as Array<{ title: string; status: string }>).find((s) => s.title === 'Ad hoc task')?.status).toBe('DONE');
+      const res = await request(app.getHttpServer())
+        .get(`/api/tickets/${ticketId}/subtasks`)
+        .set(auth(adminToken))
+        .expect(200);
+      expect(
+        (res.body as Array<{ title: string; status: string }>).find(
+          (s) => s.title === 'Ad hoc task',
+        )?.status,
+      ).toBe('DONE');
     });
   });
 });

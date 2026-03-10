@@ -16,8 +16,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
         secret: config.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           // Cast needed: @nestjs/jwt v11 expects StringValue from 'ms' package
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          expiresIn: config.get('JWT_EXPIRES_IN', '7d') as any,
+
+          expiresIn: config.get('JWT_EXPIRES_IN', '7d'),
         },
       }),
     }),

@@ -38,22 +38,36 @@ describe('CommentsService', () => {
   let service: CommentsService;
   let prisma: jest.Mocked<PrismaService>;
   let visibility: { assertCanView: jest.Mock };
+  let policy: { evaluate: jest.Mock };
 
   beforeEach(() => {
     prisma = {
       ticket: { findUnique: jest.fn() },
-      ticketComment: { findMany: jest.fn(), findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
-      $transaction: jest.fn((fn) => (typeof fn === 'function' ? fn(prisma) : Promise.resolve())),
+      ticketComment: {
+        findMany: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        create: jest.fn(),
+      },
+      $transaction: jest.fn((fn) =>
+        typeof fn === 'function' ? fn(prisma) : Promise.resolve(),
+      ),
     } as unknown as jest.Mocked<PrismaService>;
 
     visibility = { assertCanView: jest.fn() };
+    policy = {
+      evaluate: jest.fn().mockReturnValue({ allowed: true }),
+    };
 
     service = new CommentsService(
       prisma,
       { log: jest.fn() } as unknown as AuditLogService,
       { emit: jest.fn() } as unknown as DomainEventsService,
-      { extractMentions: jest.fn().mockResolvedValue([]) } as unknown as MentionParserService,
+      {
+        extractMentions: jest.fn().mockResolvedValue([]),
+      } as unknown as MentionParserService,
       visibility as unknown as TicketVisibilityService,
+      policy as never,
     );
   });
 
@@ -63,15 +77,16 @@ describe('CommentsService', () => {
       (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(
         makeTicketForVisibility({ id: ticketId }),
       );
-      visibility.assertCanView.mockImplementation(() => {
-        throw new ForbiddenException('You do not have access to this ticket');
+      policy.evaluate.mockReturnValueOnce({
+        allowed: false,
+        reason: 'ticket_not_visible',
       });
 
       await expect(
         service.create(ticketId, { body: 'Hello' }, makeActor()),
       ).rejects.toThrow(ForbiddenException);
 
-      expect(visibility.assertCanView).toHaveBeenCalledTimes(1);
+      expect(policy.evaluate).toHaveBeenCalledTimes(1);
       expect(prisma.ticketComment.create).not.toHaveBeenCalled();
     });
   });
@@ -82,15 +97,16 @@ describe('CommentsService', () => {
       (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(
         makeTicketForVisibility({ id: ticketId }),
       );
-      visibility.assertCanView.mockImplementation(() => {
-        throw new ForbiddenException('You do not have access to this ticket');
+      policy.evaluate.mockReturnValueOnce({
+        allowed: false,
+        reason: 'ticket_not_visible',
       });
 
-      await expect(
-        service.findByTicket(ticketId, makeActor()),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.findByTicket(ticketId, makeActor())).rejects.toThrow(
+        ForbiddenException,
+      );
 
-      expect(visibility.assertCanView).toHaveBeenCalledTimes(1);
+      expect(policy.evaluate).toHaveBeenCalledTimes(1);
       expect(prisma.ticketComment.findMany).not.toHaveBeenCalled();
     });
 
@@ -101,7 +117,7 @@ describe('CommentsService', () => {
         service.findByTicket('missing-ticket', makeActor()),
       ).rejects.toThrow(NotFoundException);
 
-      expect(visibility.assertCanView).not.toHaveBeenCalled();
+      expect(policy.evaluate).not.toHaveBeenCalled();
     });
   });
 });

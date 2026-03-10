@@ -11,7 +11,8 @@ import { MentionParserService } from './mention-parser.service';
 import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { Role } from '@prisma/client';
+import { PolicyService } from '../../policy/policy.service';
+import { COMMENT_ADD_PUBLIC } from '../../policy/capabilities/capability-keys';
 
 const TICKET_FOR_VISIBILITY_SELECT = {
   id: true,
@@ -31,6 +32,7 @@ export class CommentsService {
     private domainEvents: DomainEventsService,
     private mentionParser: MentionParserService,
     private visibility: TicketVisibilityService,
+    private policy: PolicyService,
   ) {}
 
   async create(ticketId: string, dto: CreateCommentDto, actor: RequestUser) {
@@ -44,12 +46,18 @@ export class CommentsService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    this.visibility.assertCanView(ticket, actor);
+    // Internal notes feature removed; all comments are public.
+    const isInternal = false;
 
-    // Requesters cannot post internal notes
-    const isInternal = dto.isInternal ?? false;
-    if (isInternal && actor.role === Role.STUDIO_USER) {
-      throw new ForbiddenException('Studio users cannot post internal notes');
+    const decision = this.policy.evaluate(COMMENT_ADD_PUBLIC, actor, {
+      requesterId: ticket.requesterId,
+      ownerId: ticket.ownerId,
+      studioId: ticket.studioId,
+    });
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to comment on this ticket',
+      );
     }
 
     // Extract @mentions from the comment body
@@ -68,7 +76,9 @@ export class CommentsService {
           },
         },
         include: {
-          author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+          author: {
+            select: { id: true, name: true, email: true, avatarUrl: true },
+          },
           mentions: {
             include: { user: { select: { id: true, name: true } } },
           },
@@ -142,18 +152,29 @@ export class CommentsService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    this.visibility.assertCanView(ticket, actor);
-
-    const where = {
-      ticketId,
-      // Requesters cannot see internal notes
-      ...(actor.role === Role.STUDIO_USER ? { isInternal: false } : {}),
+    const ticketResource = {
+      requesterId: ticket.requesterId,
+      ownerId: ticket.ownerId,
+      studioId: ticket.studioId,
     };
 
+    // Ensure the ticket itself is visible.
+    const canSeePublic = this.policy.evaluate(
+      COMMENT_ADD_PUBLIC,
+      actor,
+      ticketResource,
+    );
+    if (!canSeePublic.allowed) {
+      throw new ForbiddenException('You do not have access to this ticket');
+    }
+
+    // Internal notes feature removed; all comments visible to anyone who can see the ticket.
     return this.prisma.ticketComment.findMany({
-      where,
+      where: { ticketId },
       include: {
-        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        author: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
         mentions: {
           include: { user: { select: { id: true, name: true } } },
         },
@@ -183,7 +204,9 @@ export class CommentsService {
       where: { id: commentId },
       data: { body, editedAt: new Date() },
       include: {
-        author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+        author: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
         mentions: {
           include: { user: { select: { id: true, name: true } } },
         },

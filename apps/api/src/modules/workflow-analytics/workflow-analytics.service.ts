@@ -61,7 +61,10 @@ export class WorkflowAnalyticsService {
             const ticketsWithDates = await this.prisma.ticket.findMany({
               where: {
                 id: { in: ticketIds },
-                OR: [{ resolvedAt: { not: null } }, { closedAt: { not: null } }],
+                OR: [
+                  { resolvedAt: { not: null } },
+                  { closedAt: { not: null } },
+                ],
               },
               select: { createdAt: true, resolvedAt: true, closedAt: true },
             });
@@ -121,11 +124,16 @@ export class WorkflowAnalyticsService {
         });
 
         const ticketsWithSubtask = await this.prisma.subtask.findMany({
-          where: { ticket: { departmentId: dept.id }, subtaskTemplateId: { not: null } },
+          where: {
+            ticket: { departmentId: dept.id },
+            subtaskTemplateId: { not: null },
+          },
           select: { ticketId: true },
           distinct: ['ticketId'],
         });
-        const workflowTicketIds = [...new Set(ticketsWithSubtask.map((r) => r.ticketId))];
+        const workflowTicketIds = [
+          ...new Set(ticketsWithSubtask.map((r) => r.ticketId)),
+        ];
         const workflowsStarted = workflowTicketIds.length;
 
         let workflowsCompleted = 0;
@@ -141,7 +149,9 @@ export class WorkflowAnalyticsService {
             select: { ticketId: true },
             distinct: ['ticketId'],
           });
-          const activeTicketIds = new Set(requiredNotDone.map((r) => r.ticketId));
+          const activeTicketIds = new Set(
+            requiredNotDone.map((r) => r.ticketId),
+          );
           workflowsCompleted = workflowTicketIds.length - activeTicketIds.size;
 
           const completedTickets = await this.prisma.ticket.findMany({
@@ -177,8 +187,16 @@ export class WorkflowAnalyticsService {
   }
 
   async getBottlenecks(): Promise<{
-    longestSubtasks: { subtaskTemplateId: string; title: string; avgDurationHours: number }[];
-    mostBlockedSubtasks: { subtaskTemplateId: string; title: string; blockedCount: number }[];
+    longestSubtasks: {
+      subtaskTemplateId: string;
+      title: string;
+      avgDurationHours: number;
+    }[];
+    mostBlockedSubtasks: {
+      subtaskTemplateId: string;
+      title: string;
+      blockedCount: number;
+    }[];
   }> {
     const TOP = 10;
 
@@ -197,10 +215,8 @@ export class WorkflowAnalyticsService {
       },
     });
 
-    const byTemplate: Record<
-      string,
-      { title: string; durations: number[] }
-    > = {};
+    const byTemplate: Record<string, { title: string; durations: number[] }> =
+      {};
     for (const s of completedWithDuration) {
       if (!s.subtaskTemplateId || !s.completedAt) continue;
       const start = s.readyAt ?? s.createdAt;
@@ -235,7 +251,9 @@ export class WorkflowAnalyticsService {
     });
 
     const templateIds = [
-      ...new Set(blockedByTemplate.map((r) => r.subtaskTemplateId).filter(Boolean)),
+      ...new Set(
+        blockedByTemplate.map((r) => r.subtaskTemplateId).filter(Boolean),
+      ),
     ] as string[];
     const templateTitles =
       templateIds.length > 0

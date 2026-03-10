@@ -1,4 +1,12 @@
-import { IsString, IsOptional, MinLength, IsNumber, Min, Max, ValidateIf } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  MinLength,
+  IsNumber,
+  Min,
+  Max,
+  ValidateIf,
+} from 'class-validator';
 
 // ─── Markets ───────────────────────────────────────────────────────────────
 

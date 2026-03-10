@@ -62,7 +62,10 @@ export class NotificationsController {
    * GET /api/notifications/stream
    */
   @Sse('stream')
-  stream(@CurrentUser() user: RequestUser, @Req() req: any): Observable<MessageEvent> {
+  stream(
+    @CurrentUser() user: RequestUser,
+    @Req() req: any,
+  ): Observable<MessageEvent> {
     const subject = this.sseChannel.subscribe(user.id);
 
     // Clean up when client disconnects
@@ -71,9 +74,13 @@ export class NotificationsController {
     });
 
     return subject.asObservable().pipe(
-      map((payload) => ({
-        data: payload,
-      } as MessageEvent)),
+      map(
+        (msg) =>
+          ({
+            type: msg.type,
+            data: msg.data,
+          }) as MessageEvent,
+      ),
     );
   }
 
@@ -82,10 +89,7 @@ export class NotificationsController {
    * Returns paginated notifications + unread count for notification bell UI.
    */
   @Get()
-  findAll(
-    @Query() dto: GetNotificationsDto,
-    @CurrentUser() user: RequestUser,
-  ) {
+  findAll(@Query() dto: GetNotificationsDto, @CurrentUser() user: RequestUser) {
     return this.notificationsService.findForUser(user.id, dto.page, dto.limit);
   }
 
@@ -95,10 +99,7 @@ export class NotificationsController {
    */
   @Patch(':id/read')
   @HttpCode(HttpStatus.OK)
-  markRead(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  markRead(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.notificationsService.markRead(id, user.id);
   }
 

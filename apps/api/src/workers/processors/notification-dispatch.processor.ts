@@ -42,13 +42,17 @@ export class NotificationDispatchProcessor extends WorkerHost {
     });
 
     if (!delivery) {
-      this.logger.warn(`Delivery ${notificationDeliveryId} not found — skipping`);
+      this.logger.warn(
+        `Delivery ${notificationDeliveryId} not found — skipping`,
+      );
       return;
     }
 
     // Idempotency check — already sent (e.g. retried job but first attempt succeeded)
     if (delivery.status === 'SENT') {
-      this.logger.debug(`Delivery ${notificationDeliveryId} already SENT — skipping`);
+      this.logger.debug(
+        `Delivery ${notificationDeliveryId} already SENT — skipping`,
+      );
       return;
     }
 
@@ -69,7 +73,11 @@ export class NotificationDispatchProcessor extends WorkerHost {
         await this.emailChannel.send({
           to: user.email,
           subject: notification.title,
-          htmlBody: this.buildEmailHtml(notification.title, notification.body, notification.ticketId),
+          htmlBody: this.buildEmailHtml(
+            notification.title,
+            notification.body,
+            notification.ticketId,
+          ),
           textBody: `${notification.title}\n\n${notification.body}`,
           notificationDeliveryId,
         });
@@ -94,7 +102,11 @@ export class NotificationDispatchProcessor extends WorkerHost {
     }
   }
 
-  private buildEmailHtml(title: string, body: string, ticketId?: string | null): string {
+  private buildEmailHtml(
+    title: string,
+    body: string,
+    ticketId?: string | null,
+  ): string {
     const appUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
     const ticketLink = ticketId
       ? `<p><a href="${appUrl}/tickets/${ticketId}" style="color:#2563EB;">View Ticket</a></p>`

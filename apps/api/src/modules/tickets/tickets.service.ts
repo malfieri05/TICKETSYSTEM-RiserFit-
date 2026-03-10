@@ -20,6 +20,15 @@ import { Role, TicketStatus, Prisma } from '@prisma/client';
 import { SlaService } from '../sla/sla.service';
 import { TicketFormsService } from '../ticket-forms/ticket-forms.service';
 import { SubtaskWorkflowService } from '../subtask-workflow/subtask-workflow.service';
+import { PolicyService } from '../../policy/policy.service';
+import {
+  TICKET_ASSIGN_OWNER,
+  TICKET_CREATE,
+  TICKET_LIST_INBOX,
+  TICKET_TRANSITION_STATUS,
+  TICKET_UPDATE_CORE_FIELDS,
+  TICKET_VIEW,
+} from '../../policy/capabilities/capability-keys';
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -46,7 +55,15 @@ const TICKET_LIST_SELECT = {
   studio: { select: { id: true, name: true } },
   market: { select: { id: true, name: true } },
   requester: { select: { id: true, name: true, email: true, avatarUrl: true } },
-  owner: { select: { id: true, name: true, email: true, avatarUrl: true, teamId: true } },
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+      teamId: true,
+    },
+  },
   _count: {
     select: {
       comments: true,
@@ -73,7 +90,15 @@ const TICKET_LIST_SELECT_LIGHT = {
   studio: { select: { id: true, name: true } },
   market: { select: { id: true, name: true } },
   requester: { select: { id: true, name: true, email: true, avatarUrl: true } },
-  owner: { select: { id: true, name: true, email: true, avatarUrl: true, teamId: true } },
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      avatarUrl: true,
+      teamId: true,
+    },
+  },
 } satisfies Prisma.TicketSelect;
 
 const TICKET_DETAIL_SELECT = {
@@ -92,7 +117,9 @@ const TICKET_DETAIL_SELECT = {
   comments: {
     orderBy: { createdAt: 'asc' as const },
     include: {
-      author: { select: { id: true, name: true, email: true, avatarUrl: true } },
+      author: {
+        select: { id: true, name: true, email: true, avatarUrl: true },
+      },
       mentions: {
         include: { user: { select: { id: true, name: true } } },
       },
@@ -112,7 +139,9 @@ const TICKET_DETAIL_SELECT = {
     },
   },
   watchers: {
-    include: { user: { select: { id: true, name: true, email: true, avatarUrl: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true, avatarUrl: true } },
+    },
   },
   tags: {
     include: { tag: { select: { id: true, name: true, color: true } } },
@@ -136,6 +165,7 @@ export class TicketsService {
     private visibility: TicketVisibilityService,
     private ticketForms: TicketFormsService,
     private subtaskWorkflow: SubtaskWorkflowService,
+    private policy: PolicyService,
   ) {}
 
   /**
@@ -152,7 +182,10 @@ export class TicketsService {
       where: { id: payload.ticketClassId, isActive: true },
       select: { code: true },
     });
-    if (!tc) throw new NotFoundException(`Ticket class ${payload.ticketClassId} not found`);
+    if (!tc)
+      throw new NotFoundException(
+        `Ticket class ${payload.ticketClassId} not found`,
+      );
     const code = tc.code as 'SUPPORT' | 'MAINTENANCE';
 
     if (code === 'SUPPORT') {
@@ -162,7 +195,11 @@ export class TicketsService {
         );
       }
       const topic = await this.prisma.supportTopic.findUnique({
-        where: { id: payload.supportTopicId, departmentId: payload.departmentId, isActive: true },
+        where: {
+          id: payload.supportTopicId,
+          departmentId: payload.departmentId,
+          isActive: true,
+        },
         select: { id: true },
       });
       if (!topic) {
@@ -207,7 +244,8 @@ export class TicketsService {
         where: { code: 'MAINTENANCE', isActive: true },
         select: { id: true },
       });
-      if (!maintenanceClass) throw new NotFoundException('Ticket class MAINTENANCE not found');
+      if (!maintenanceClass)
+        throw new NotFoundException('Ticket class MAINTENANCE not found');
       ticketClassId = maintenanceClass.id;
     }
 
@@ -227,7 +265,7 @@ export class TicketsService {
     }
 
     return {
-      ticketClassId: ticketClassId as string,
+      ticketClassId: ticketClassId,
       departmentId,
       supportTopicId,
       maintenanceCategoryId,
@@ -235,6 +273,13 @@ export class TicketsService {
   }
 
   async create(dto: CreateTicketDto, actor: RequestUser) {
+    const createDecision = this.policy.evaluate(TICKET_CREATE, actor, null);
+    if (!createDecision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to create tickets',
+      );
+    }
+
     const resolved = await this.resolveCreateTaxonomy(dto);
 
     await this.validateTicketClassification({
@@ -245,7 +290,9 @@ export class TicketsService {
     });
 
     // Stage 3: validate formResponses against schema when provided
-    let schemaForResponses: Awaited<ReturnType<TicketFormsService['getSchema']>> | null = null;
+    let schemaForResponses: Awaited<
+      ReturnType<TicketFormsService['getSchema']>
+    > | null = null;
     if (dto.formResponses && Object.keys(dto.formResponses).length > 0) {
       try {
         schemaForResponses = await this.ticketForms.getSchema({
@@ -255,16 +302,21 @@ export class TicketsService {
           maintenanceCategoryId: resolved.maintenanceCategoryId ?? undefined,
         });
       } catch (e) {
-        if (e instanceof NotFoundException || e instanceof BadRequestException) throw e;
+        if (e instanceof NotFoundException || e instanceof BadRequestException)
+          throw e;
         throw new BadRequestException(
           'Form schema could not be loaded for this ticket context. Omit formResponses or set ticket class and topic.',
         );
       }
-      const requiredKeys = schemaForResponses.fields.filter((f) => f.required).map((f) => f.fieldKey);
+      const requiredKeys = schemaForResponses.fields
+        .filter((f) => f.required)
+        .map((f) => f.fieldKey);
       for (const key of requiredKeys) {
-        const val = dto.formResponses![key];
+        const val = dto.formResponses[key];
         if (val === undefined || val === null || String(val).trim() === '') {
-          throw new BadRequestException(`Required form field "${key}" is missing or empty`);
+          throw new BadRequestException(
+            `Required form field "${key}" is missing or empty`,
+          );
         }
       }
     }
@@ -273,13 +325,15 @@ export class TicketsService {
       const owner = await this.prisma.user.findUnique({
         where: { id: dto.ownerId, isActive: true },
       });
-      if (!owner) throw new NotFoundException(`Owner user ${dto.ownerId} not found`);
+      if (!owner)
+        throw new NotFoundException(`Owner user ${dto.ownerId} not found`);
     }
 
     // Stage 21: resolve title — backend is single source of truth for generated titles
     const incomingTitle = (dto.title ?? '').trim();
     const isSchemaBacked =
-      (resolved.supportTopicId != null || resolved.maintenanceCategoryId != null) &&
+      (resolved.supportTopicId != null ||
+        resolved.maintenanceCategoryId != null) &&
       dto.formResponses != null &&
       Object.keys(dto.formResponses).length > 0;
 
@@ -290,33 +344,33 @@ export class TicketsService {
           'Title is required when not using a schema-backed ticket (topic/category + form responses).',
         );
       }
-      const [ticketClass, supportTopic, maintenanceCategory, studio] = await Promise.all([
-        this.prisma.ticketClass.findUnique({
-          where: { id: resolved.ticketClassId },
-          select: { code: true },
-        }),
-        resolved.supportTopicId
-          ? this.prisma.supportTopic.findUnique({
-              where: { id: resolved.supportTopicId },
-              select: { name: true },
-            })
-          : null,
-        resolved.maintenanceCategoryId
-          ? this.prisma.maintenanceCategory.findUnique({
-              where: { id: resolved.maintenanceCategoryId },
-              select: { name: true },
-            })
-          : null,
-        dto.studioId
-          ? this.prisma.studio.findUnique({
-              where: { id: dto.studioId },
-              select: { name: true },
-            })
-          : null,
-      ]);
-      const ticketClassCode = (ticketClass?.code === 'MAINTENANCE' ? 'MAINTENANCE' : 'SUPPORT') as
-        | 'SUPPORT'
-        | 'MAINTENANCE';
+      const [ticketClass, supportTopic, maintenanceCategory, studio] =
+        await Promise.all([
+          this.prisma.ticketClass.findUnique({
+            where: { id: resolved.ticketClassId },
+            select: { code: true },
+          }),
+          resolved.supportTopicId
+            ? this.prisma.supportTopic.findUnique({
+                where: { id: resolved.supportTopicId },
+                select: { name: true },
+              })
+            : null,
+          resolved.maintenanceCategoryId
+            ? this.prisma.maintenanceCategory.findUnique({
+                where: { id: resolved.maintenanceCategoryId },
+                select: { name: true },
+              })
+            : null,
+          dto.studioId
+            ? this.prisma.studio.findUnique({
+                where: { id: dto.studioId },
+                select: { name: true },
+              })
+            : null,
+        ]);
+      const ticketClassCode =
+        ticketClass?.code === 'MAINTENANCE' ? 'MAINTENANCE' : 'SUPPORT';
       titleToStore = generateTicketTitle({
         ticketClassCode,
         supportTopicName: supportTopic?.name ?? null,
@@ -326,12 +380,17 @@ export class TicketsService {
       });
     } else {
       if (incomingTitle.length < 3) {
-        throw new BadRequestException('Title must be at least 3 characters when provided.');
+        throw new BadRequestException(
+          'Title must be at least 3 characters when provided.',
+        );
       }
       titleToStore = incomingTitle;
     }
     if (titleToStore.length === 0) {
-      titleToStore = resolved.maintenanceCategoryId != null ? 'Maintenance Request' : 'Support Request';
+      titleToStore =
+        resolved.maintenanceCategoryId != null
+          ? 'Maintenance Request'
+          : 'Support Request';
     }
 
     const ticket = await this.prisma.$transaction(async (tx) => {
@@ -366,12 +425,22 @@ export class TicketsService {
       }
 
       // Stage 3: persist form responses when provided and validated
-      if (schemaForResponses && dto.formResponses && Object.keys(dto.formResponses).length > 0) {
-        const validKeys = new Set(schemaForResponses.fields.map((f) => f.fieldKey));
+      if (
+        schemaForResponses &&
+        dto.formResponses &&
+        Object.keys(dto.formResponses).length > 0
+      ) {
+        const validKeys = new Set(
+          schemaForResponses.fields.map((f) => f.fieldKey),
+        );
         for (const [fieldKey, value] of Object.entries(dto.formResponses)) {
           if (!validKeys.has(fieldKey)) continue;
           await tx.ticketFormResponse.create({
-            data: { ticketId: created.id, fieldKey, value: String(value ?? '') },
+            data: {
+              ticketId: created.id,
+              fieldKey,
+              value: String(value ?? ''),
+            },
           });
         }
       }
@@ -388,7 +457,8 @@ export class TicketsService {
     });
 
     this.mySummaryCache.invalidate(actor.id);
-    if (ticket.ownerId && ticket.ownerId !== actor.id) this.mySummaryCache.invalidate(ticket.ownerId);
+    if (ticket.ownerId && ticket.ownerId !== actor.id)
+      this.mySummaryCache.invalidate(ticket.ownerId);
 
     // Audit log
     await this.auditLog.log({
@@ -397,7 +467,11 @@ export class TicketsService {
       entityType: 'ticket',
       entityId: ticket.id,
       ticketId: ticket.id,
-      newValues: { title: ticket.title, status: ticket.status, priority: ticket.priority },
+      newValues: {
+        title: ticket.title,
+        status: ticket.status,
+        priority: ticket.priority,
+      },
     });
 
     // Domain event — triggers notification fan-out
@@ -416,7 +490,13 @@ export class TicketsService {
     // Stage 5: emit SUBTASK_BECAME_READY for each initially READY subtask (workflow instantiation)
     const initialReadySubtasks = await this.prisma.subtask.findMany({
       where: { ticketId: ticket.id, status: 'READY' },
-      select: { id: true, title: true, ticketId: true, departmentId: true, ownerId: true },
+      select: {
+        id: true,
+        title: true,
+        ticketId: true,
+        departmentId: true,
+        ownerId: true,
+      },
     });
     const occurredAt = new Date();
     for (const s of initialReadySubtasks) {
@@ -441,6 +521,12 @@ export class TicketsService {
   // ─── LIST ───────────────────────────────────────────────────────────────────
 
   async findAll(filters: TicketFiltersDto, actor: RequestUser) {
+    const listDecision = this.policy.evaluate(TICKET_LIST_INBOX, actor, null);
+    if (!listDecision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to list tickets',
+      );
+    }
     const {
       status,
       ticketClassId,
@@ -454,6 +540,8 @@ export class TicketsService {
       requesterId,
       search,
       searchInTitleOnly,
+      // Stage 30: includeCounts=false for SSE-driven list refresh, high-frequency refresh, or when
+      // comment/subtask/attachment counts are not needed; avoids Prisma _count subqueries per row.
       includeCounts = true,
       actionableForMe = false,
       createdAfter,
@@ -462,13 +550,21 @@ export class TicketsService {
       limit = 25,
     } = filters;
 
+    // Stage 30: server-side page size clamp (max 100); applies even if DTO validation is bypassed.
+    const limitClamped = Math.min(limit, 100);
+
     const scopeWhere = this.visibility.buildWhereClause(actor);
 
     // Stage 23: STUDIO_USER may only filter by a studio they are allowed to view; otherwise 403
     if (actor.role === Role.STUDIO_USER && studioId) {
-      const allowedStudioIds = [actor.studioId, ...(actor.scopeStudioIds ?? [])].filter(Boolean);
+      const allowedStudioIds = [
+        actor.studioId,
+        ...(actor.scopeStudioIds ?? []),
+      ].filter(Boolean);
       if (!allowedStudioIds.includes(studioId)) {
-        throw new ForbiddenException('You may only filter by a location you are allowed to view');
+        throw new ForbiddenException(
+          'You may only filter by a location you are allowed to view',
+        );
       }
     }
 
@@ -491,7 +587,8 @@ export class TicketsService {
             },
           }
         : {}),
-      ...(search && {
+      // Stage 30: searchInTitleOnly reduces query cost by searching only title; false = title + description.
+    ...(search && {
         OR:
           searchInTitleOnly === true
             ? [{ title: { contains: search, mode: 'insensitive' } }]
@@ -503,7 +600,10 @@ export class TicketsService {
     };
 
     // Stage 4: department actionable queue — tickets with at least one READY subtask for my department or assigned to me
-    if (actionableForMe && (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN')) {
+    if (
+      actionableForMe &&
+      (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN')
+    ) {
       const departmentCodes = actor.departments?.length
         ? actor.departments.map((d) => String(d))
         : [];
@@ -529,8 +629,9 @@ export class TicketsService {
         ? filterWhere
         : { AND: [scopeWhere, filterWhere] };
 
-    const skip = (page - 1) * limit;
-    const select = includeCounts !== false ? TICKET_LIST_SELECT : TICKET_LIST_SELECT_LIGHT;
+    const skip = (page - 1) * limitClamped;
+    const select =
+      includeCounts !== false ? TICKET_LIST_SELECT : TICKET_LIST_SELECT_LIGHT;
 
     const [tickets, total] = await Promise.all([
       this.prisma.ticket.findMany({
@@ -538,13 +639,18 @@ export class TicketsService {
         select,
         orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
         skip,
-        take: limit,
+        take: limitClamped,
       }),
       this.prisma.ticket.count({ where }),
     ]);
 
     // Annotate with SLA status (computed from priority + createdAt, no extra DB query)
-    let annotated: (typeof tickets[0] & { sla: ReturnType<SlaService['compute']>; readySubtasksSummary?: { id: string; title: string }[]; completedSubtasks?: number; totalSubtasks?: number })[] = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
+    let annotated: ((typeof tickets)[0] & {
+      sla: ReturnType<SlaService['compute']>;
+      readySubtasksSummary?: { id: string; title: string }[];
+      completedSubtasks?: number;
+      totalSubtasks?: number;
+    })[] = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
 
     // Stage 22: subtask progress for feed (completed / total) — two groupBy calls, no _count dependency
     if (annotated.length > 0) {
@@ -553,7 +659,10 @@ export class TicketsService {
         this.prisma.subtask.groupBy({
           by: ['ticketId'],
           _count: { id: true },
-          where: { ticketId: { in: ticketIds }, status: { in: ['DONE', 'SKIPPED'] } },
+          where: {
+            ticketId: { in: ticketIds },
+            status: { in: ['DONE', 'SKIPPED'] },
+          },
         }),
         this.prisma.subtask.groupBy({
           by: ['ticketId'],
@@ -561,8 +670,12 @@ export class TicketsService {
           where: { ticketId: { in: ticketIds } },
         }),
       ]);
-      const completedMap = new Map(completedByTicket.map((r) => [r.ticketId, r._count.id]));
-      const totalMap = new Map(totalByTicket.map((r) => [r.ticketId, r._count.id]));
+      const completedMap = new Map(
+        completedByTicket.map((r) => [r.ticketId, r._count.id]),
+      );
+      const totalMap = new Map(
+        totalByTicket.map((r) => [r.ticketId, r._count.id]),
+      );
       annotated = annotated.map((t) => ({
         ...t,
         totalSubtasks: totalMap.get(t.id) ?? 0,
@@ -571,14 +684,22 @@ export class TicketsService {
     }
 
     // Stage 6: when actionableForMe=true, attach READY subtask summary per ticket (same dept/owner filter) to avoid N+1
-    if (actionableForMe && (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN') && annotated.length > 0) {
-      const departmentCodes = actor.departments?.length ? actor.departments.map((d) => String(d)) : [];
+    if (
+      actionableForMe &&
+      (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN') &&
+      annotated.length > 0
+    ) {
+      const departmentCodes = actor.departments?.length
+        ? actor.departments.map((d) => String(d))
+        : [];
       const readySubtasks = await this.prisma.subtask.findMany({
         where: {
           ticketId: { in: annotated.map((t) => t.id) },
           status: 'READY',
           OR: [
-            ...(departmentCodes.length > 0 ? [{ department: { code: { in: departmentCodes } } }] : []),
+            ...(departmentCodes.length > 0
+              ? [{ department: { code: { in: departmentCodes } } }]
+              : []),
             { ownerId: actor.id },
           ].filter((x) => Object.keys(x).length > 0),
         },
@@ -599,8 +720,8 @@ export class TicketsService {
       data: annotated,
       total,
       page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      limit: limitClamped,
+      totalPages: Math.ceil(total / limitClamped),
     };
   }
 
@@ -614,7 +735,10 @@ export class TicketsService {
 
     if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
 
-    this.visibility.assertCanView(ticket, actor);
+    const decision = this.policy.evaluate(TICKET_VIEW, actor, ticket);
+    if (!decision.allowed) {
+      throw new ForbiddenException('You do not have access to this ticket');
+    }
 
     return { ...ticket, sla: this.sla.compute(ticket) };
   }
@@ -624,13 +748,34 @@ export class TicketsService {
   async update(id: string, dto: UpdateTicketDto, actor: RequestUser) {
     const ticket = await this.findTicketOrThrow(id);
 
-    this.visibility.assertCanModify(ticket, actor);
+    const decision = this.policy.evaluate(
+      TICKET_UPDATE_CORE_FIELDS,
+      actor,
+      ticket,
+    );
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to update this ticket',
+      );
+    }
 
-    if (dto.ticketClassId != null || dto.departmentId !== undefined || dto.supportTopicId !== undefined || dto.maintenanceCategoryId !== undefined) {
+    if (
+      dto.ticketClassId != null ||
+      dto.departmentId !== undefined ||
+      dto.supportTopicId !== undefined ||
+      dto.maintenanceCategoryId !== undefined
+    ) {
       const ticketClassId = dto.ticketClassId ?? ticket.ticketClassId;
-      const departmentId = dto.departmentId !== undefined ? dto.departmentId : ticket.departmentId;
-      const supportTopicId = dto.supportTopicId !== undefined ? dto.supportTopicId : ticket.supportTopicId;
-      const maintenanceCategoryId = dto.maintenanceCategoryId !== undefined ? dto.maintenanceCategoryId : ticket.maintenanceCategoryId;
+      const departmentId =
+        dto.departmentId !== undefined ? dto.departmentId : ticket.departmentId;
+      const supportTopicId =
+        dto.supportTopicId !== undefined
+          ? dto.supportTopicId
+          : ticket.supportTopicId;
+      const maintenanceCategoryId =
+        dto.maintenanceCategoryId !== undefined
+          ? dto.maintenanceCategoryId
+          : ticket.maintenanceCategoryId;
       await this.validateTicketClassification({
         ticketClassId,
         departmentId: departmentId ?? null,
@@ -650,9 +795,15 @@ export class TicketsService {
         ...(dto.title && { title: dto.title }),
         ...(dto.description && { description: dto.description }),
         ...(dto.ticketClassId && { ticketClassId: dto.ticketClassId }),
-        ...(dto.departmentId !== undefined && { departmentId: dto.departmentId }),
-        ...(dto.supportTopicId !== undefined && { supportTopicId: dto.supportTopicId }),
-        ...(dto.maintenanceCategoryId !== undefined && { maintenanceCategoryId: dto.maintenanceCategoryId }),
+        ...(dto.departmentId !== undefined && {
+          departmentId: dto.departmentId,
+        }),
+        ...(dto.supportTopicId !== undefined && {
+          supportTopicId: dto.supportTopicId,
+        }),
+        ...(dto.maintenanceCategoryId !== undefined && {
+          maintenanceCategoryId: dto.maintenanceCategoryId,
+        }),
         ...(dto.studioId !== undefined && { studioId: dto.studioId }),
         ...(dto.marketId !== undefined && { marketId: dto.marketId }),
         ...(dto.priority && { priority: dto.priority }),
@@ -677,10 +828,11 @@ export class TicketsService {
 
   async assign(ticketId: string, ownerId: string, actor: RequestUser) {
     const ticket = await this.findTicketOrThrow(ticketId);
-
-    // Only DEPARTMENT_USER and ADMIN can assign tickets
-    if (actor.role === Role.STUDIO_USER) {
-      throw new ForbiddenException('Studio users cannot assign tickets');
+    const decision = this.policy.evaluate(TICKET_ASSIGN_OWNER, actor, ticket);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to assign tickets',
+      );
     }
 
     const newOwner = await this.prisma.user.findUnique({
@@ -740,8 +892,23 @@ export class TicketsService {
 
   // ─── TRANSITION STATUS ───────────────────────────────────────────────────────
 
-  async transitionStatus(ticketId: string, newStatus: TicketStatus, actor: RequestUser) {
+  async transitionStatus(
+    ticketId: string,
+    newStatus: TicketStatus,
+    actor: RequestUser,
+  ) {
     const ticket = await this.findTicketOrThrow(ticketId);
+
+    const decision = this.policy.evaluate(
+      TICKET_TRANSITION_STATUS,
+      actor,
+      ticket,
+    );
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to transition ticket status',
+      );
+    }
 
     // Validate the transition is legal
     assertValidTransition(ticket.status, newStatus);
@@ -789,8 +956,10 @@ export class TicketsService {
     });
 
     // Choose the most specific event type
-    let eventType: 'TICKET_STATUS_CHANGED' | 'TICKET_RESOLVED' | 'TICKET_CLOSED' =
-      'TICKET_STATUS_CHANGED';
+    let eventType:
+      | 'TICKET_STATUS_CHANGED'
+      | 'TICKET_RESOLVED'
+      | 'TICKET_CLOSED' = 'TICKET_STATUS_CHANGED';
     if (newStatus === 'RESOLVED') eventType = 'TICKET_RESOLVED';
     if (newStatus === 'CLOSED') eventType = 'TICKET_CLOSED';
 
@@ -866,11 +1035,10 @@ export class TicketsService {
 
   // ─── MY SUMMARY ─────────────────────────────────────────────────────────────
 
-  async getMySummary(
-    actor: RequestUser,
-    page: number = 1,
-    limit: number = 50,
-  ) {
+  async getMySummary(actor: RequestUser, page: number = 1, limit: number = 50) {
+    // Stage 30: server-side page size clamp (max 100); applies even if validation is bypassed.
+    const limitClamped = Math.min(limit, 100);
+
     const userId = actor.id;
     const cacheKey = userId;
     const useCache = page === 1 && limit === 50;
@@ -880,7 +1048,12 @@ export class TicketsService {
         open: number;
         resolved: number;
         closed: number;
-        byCategory: { categoryId: string | null; categoryName: string; categoryColor: string | null; count: number }[];
+        byCategory: {
+          categoryId: string | null;
+          categoryName: string;
+          categoryColor: string | null;
+          count: number;
+        }[];
         tickets: unknown[];
         page: number;
         limit: number;
@@ -907,20 +1080,42 @@ export class TicketsService {
     };
 
     // Count query — use Prisma (avoids raw SQL scope duplication)
-    type CountRow = { total: number; open: number; resolved: number; closed: number };
-    const [totalCount, openCount, resolvedCount, closedCount] = await Promise.all([
-      this.prisma.ticket.count({ where: myTicketWhere }),
-      this.prisma.ticket.count({ where: { ...myTicketWhere, status: { notIn: ['RESOLVED', 'CLOSED'] } } }),
-      this.prisma.ticket.count({ where: { ...myTicketWhere, status: 'RESOLVED' } }),
-      this.prisma.ticket.count({ where: { ...myTicketWhere, status: 'CLOSED' } }),
-    ]);
-    const countResult: CountRow[] = [{
-      total: totalCount,
-      open: openCount,
-      resolved: resolvedCount,
-      closed: closedCount,
-    }];
-    const { total, open, resolved, closed } = countResult[0] ?? { total: 0, open: 0, resolved: 0, closed: 0 };
+    type CountRow = {
+      total: number;
+      open: number;
+      resolved: number;
+      closed: number;
+    };
+    const [totalCount, openCount, resolvedCount, closedCount] =
+      await Promise.all([
+        this.prisma.ticket.count({ where: myTicketWhere }),
+        this.prisma.ticket.count({
+          where: {
+            ...myTicketWhere,
+            status: { notIn: ['RESOLVED', 'CLOSED'] },
+          },
+        }),
+        this.prisma.ticket.count({
+          where: { ...myTicketWhere, status: 'RESOLVED' },
+        }),
+        this.prisma.ticket.count({
+          where: { ...myTicketWhere, status: 'CLOSED' },
+        }),
+      ]);
+    const countResult: CountRow[] = [
+      {
+        total: totalCount,
+        open: openCount,
+        resolved: resolvedCount,
+        closed: closedCount,
+      },
+    ];
+    const { total, open, resolved, closed } = countResult[0] ?? {
+      total: 0,
+      open: 0,
+      resolved: 0,
+      closed: 0,
+    };
 
     const [byMaintenance, bySupport, myTickets] = await Promise.all([
       this.prisma.ticket.groupBy({
@@ -936,8 +1131,8 @@ export class TicketsService {
       this.prisma.ticket.findMany({
         where: myTicketWhere,
         orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
-        skip: (page - 1) * limit,
-        take: Math.min(limit, 100),
+        skip: (page - 1) * limitClamped,
+        take: limitClamped,
         select: {
           id: true,
           title: true,
@@ -947,15 +1142,21 @@ export class TicketsService {
           createdAt: true,
           resolvedAt: true,
           supportTopic: { select: { id: true, name: true } },
-          maintenanceCategory: { select: { id: true, name: true, color: true } },
+          maintenanceCategory: {
+            select: { id: true, name: true, color: true },
+          },
           requester: { select: { id: true, name: true } },
           owner: { select: { id: true, name: true } },
         },
       }),
     ]);
 
-    const maintIds = byMaintenance.map((r) => r.maintenanceCategoryId).filter((id): id is string => id != null);
-    const topicIds = bySupport.map((r) => r.supportTopicId).filter((id): id is string => id != null);
+    const maintIds = byMaintenance
+      .map((r) => r.maintenanceCategoryId)
+      .filter((id): id is string => id != null);
+    const topicIds = bySupport
+      .map((r) => r.supportTopicId)
+      .filter((id): id is string => id != null);
 
     const [maintenanceCategories, supportTopics] = await Promise.all([
       maintIds.length > 0
@@ -972,25 +1173,33 @@ export class TicketsService {
         : [],
     ]);
 
-    const maintMap = Object.fromEntries(maintenanceCategories.map((c) => [c.id, c]));
+    const maintMap = Object.fromEntries(
+      maintenanceCategories.map((c) => [c.id, c]),
+    );
     const topicMap = Object.fromEntries(supportTopics.map((t) => [t.id, t]));
 
     const byCategoryEnriched = [
       ...byMaintenance.map((r) => ({
         categoryId: r.maintenanceCategoryId,
-        categoryName: r.maintenanceCategoryId ? (maintMap[r.maintenanceCategoryId]?.name ?? 'Unknown') : 'No Category',
-        categoryColor: r.maintenanceCategoryId ? (maintMap[r.maintenanceCategoryId]?.color ?? null) : null,
+        categoryName: r.maintenanceCategoryId
+          ? (maintMap[r.maintenanceCategoryId]?.name ?? 'Unknown')
+          : 'No Category',
+        categoryColor: r.maintenanceCategoryId
+          ? (maintMap[r.maintenanceCategoryId]?.color ?? null)
+          : null,
         count: r._count.id,
       })),
       ...bySupport.map((r) => ({
         categoryId: r.supportTopicId,
-        categoryName: r.supportTopicId ? (topicMap[r.supportTopicId]?.name ?? 'Unknown') : 'No Category',
+        categoryName: r.supportTopicId
+          ? (topicMap[r.supportTopicId]?.name ?? 'Unknown')
+          : 'No Category',
         categoryColor: null as string | null,
         count: r._count.id,
       })),
     ].sort((a, b) => b.count - a.count);
 
-    const totalPages = Math.ceil(total / limit);
+    const totalPages = Math.ceil(total / limitClamped);
     const result = {
       total,
       open,
@@ -999,7 +1208,7 @@ export class TicketsService {
       byCategory: byCategoryEnriched,
       tickets: myTickets,
       page,
-      limit,
+      limit: limitClamped,
       totalPages,
     };
 
@@ -1016,7 +1225,13 @@ export class TicketsService {
    */
   async getScopeSummary(actor: RequestUser) {
     const scopeWhere = this.visibility.buildWhereClause(actor);
-    const openStatuses: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+    const openStatuses: TicketStatus[] = [
+      'NEW',
+      'TRIAGED',
+      'IN_PROGRESS',
+      'WAITING_ON_REQUESTER',
+      'WAITING_ON_VENDOR',
+    ];
     const completedStatuses: TicketStatus[] = ['RESOLVED', 'CLOSED'];
     const whereOpen =
       Object.keys(scopeWhere).length === 0
@@ -1046,7 +1261,12 @@ export class TicketsService {
       }),
     ]);
 
-    const out: { openCount: number; completedCount: number; recentTickets: typeof recentTickets; allowedStudios?: { id: string; name: string }[] } = {
+    const out: {
+      openCount: number;
+      completedCount: number;
+      recentTickets: typeof recentTickets;
+      allowedStudios?: { id: string; name: string }[];
+    } = {
       openCount,
       completedCount,
       recentTickets,
@@ -1054,7 +1274,10 @@ export class TicketsService {
 
     // Stage 23: for STUDIO_USER, include allowed studios so portal can show location filter
     if (actor.role === Role.STUDIO_USER) {
-      const studioIds = [actor.studioId, ...(actor.scopeStudioIds ?? [])].filter((id): id is string => !!id);
+      const studioIds = [
+        actor.studioId,
+        ...(actor.scopeStudioIds ?? []),
+      ].filter((id): id is string => !!id);
       if (studioIds.length > 0) {
         const studios = await this.prisma.studio.findMany({
           where: { id: { in: studioIds } },
@@ -1075,15 +1298,25 @@ export class TicketsService {
    * Only DEPARTMENT_USER and ADMIN; controller enforces roles.
    * Uses grouped count by supportTopicId + one total count for "All".
    */
-  async getInboxFolders(actor: RequestUser): Promise<{ folders: { id: string; label: string; activeCount: number }[] }> {
+  async getInboxFolders(actor: RequestUser): Promise<{
+    folders: { id: string; label: string; activeCount: number }[];
+  }> {
     if (actor.role !== Role.DEPARTMENT_USER && actor.role !== Role.ADMIN) {
       return { folders: [] };
     }
 
-    const departmentCodes = (actor.departments ?? []).map((d) => String(d)).filter(Boolean);
+    const departmentCodes = (actor.departments ?? [])
+      .map((d) => String(d))
+      .filter(Boolean);
     if (departmentCodes.length === 0) {
       const scopeWhere = this.visibility.buildWhereClause(actor);
-      const activeStatuses: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+      const activeStatuses: TicketStatus[] = [
+        'NEW',
+        'TRIAGED',
+        'IN_PROGRESS',
+        'WAITING_ON_REQUESTER',
+        'WAITING_ON_VENDOR',
+      ];
       const baseWhere: Prisma.TicketWhereInput =
         Object.keys(scopeWhere).length === 0
           ? { status: { in: activeStatuses } }
@@ -1109,7 +1342,13 @@ export class TicketsService {
     });
 
     const scopeWhere = this.visibility.buildWhereClause(actor);
-    const activeStatuses: TicketStatus[] = ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR'];
+    const activeStatuses: TicketStatus[] = [
+      'NEW',
+      'TRIAGED',
+      'IN_PROGRESS',
+      'WAITING_ON_REQUESTER',
+      'WAITING_ON_VENDOR',
+    ];
     const baseWhere: Prisma.TicketWhereInput =
       Object.keys(scopeWhere).length === 0
         ? { status: { in: activeStatuses } }
@@ -1145,4 +1384,3 @@ export class TicketsService {
     return { folders };
   }
 }
-

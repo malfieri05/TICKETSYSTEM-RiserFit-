@@ -9,7 +9,7 @@ import type { WorkflowTemplateListItemDto } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 function contextLabel(t: WorkflowTemplateListItemDto): string {
   const parts: string[] = [t.ticketClass?.name ?? 'Ticket'];
@@ -28,7 +28,7 @@ export default function AdminWorkflowTemplatesListPage() {
   const templates = data?.data ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header
         title="Workflow Templates"
         action={
@@ -46,7 +46,7 @@ export default function AdminWorkflowTemplatesListPage() {
               <span className="text-sm text-gray-500">Loading…</span>
             </div>
           ) : templates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: '#555555' }}>
+            <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: 'var(--color-text-muted)' }}>
               <p className="text-sm font-medium text-gray-300">No workflow templates yet</p>
               <p className="text-xs text-center max-w-sm">Create a template to define subtask workflows for ticket types and categories.</p>
               <Button size="sm" onClick={() => router.push('/admin/workflow-templates/new')}>
@@ -57,7 +57,7 @@ export default function AdminWorkflowTemplatesListPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
                   <th className="text-left py-3 px-4 font-semibold text-gray-300">Context</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-300">Subtasks</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-300">Status</th>
@@ -68,7 +68,8 @@ export default function AdminWorkflowTemplatesListPage() {
                 {templates.map((t) => (
                   <tr
                     key={t.id}
-                    className="border-b border-[#2a2a2a] hover:bg-[#222]"
+                    className="hover:bg-[var(--color-bg-surface)]"
+                    style={{ borderBottom: '1px solid var(--color-border-default)' }}
                   >
                     <td className="py-3 px-4 text-gray-200">{contextLabel(t)}</td>
                     <td className="py-3 px-4 text-gray-400">{t._count?.subtaskTemplates ?? 0}</td>

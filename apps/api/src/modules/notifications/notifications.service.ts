@@ -81,7 +81,9 @@ export class NotificationsService {
         eventType: params.eventType as any,
         title: params.title,
         body: params.body,
-        metadata: params.metadata as unknown as Prisma.InputJsonValue | undefined,
+        metadata: params.metadata as unknown as
+          | Prisma.InputJsonValue
+          | undefined,
       },
     });
 

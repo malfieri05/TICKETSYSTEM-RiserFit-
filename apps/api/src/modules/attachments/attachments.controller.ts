@@ -45,7 +45,12 @@ export class AttachmentsController {
     @CurrentUser() user: RequestUser,
   ) {
     const { s3Key, ...uploadDto } = dto;
-    return this.attachmentsService.confirmUpload(ticketId, s3Key, uploadDto, user.id);
+    return this.attachmentsService.confirmUpload(
+      ticketId,
+      s3Key,
+      uploadDto,
+      user.id,
+    );
   }
 
   // List all attachments for a ticket
@@ -63,10 +68,7 @@ export class AttachmentsController {
   // Delete an attachment (removes from S3 + DB)
   @Delete('attachments/:id')
   @HttpCode(HttpStatus.OK)
-  deleteAttachment(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  deleteAttachment(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.attachmentsService.deleteAttachment(id, user.id);
   }
 }

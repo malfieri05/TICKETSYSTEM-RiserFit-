@@ -28,11 +28,11 @@ export class TicketVisibilityService {
     }
 
     if (actor.role === Role.DEPARTMENT_USER) {
-      const teamNames = actor.departments.map((d) => DEPARTMENT_TO_TEAM_NAME[d]).filter(Boolean);
+      const teamNames = actor.departments
+        .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+        .filter(Boolean);
 
-      const conditions: Prisma.TicketWhereInput[] = [
-        { ownerId: actor.id },
-      ];
+      const conditions: Prisma.TicketWhereInput[] = [{ ownerId: actor.id }];
 
       if (teamNames.length > 0) {
         conditions.push({
@@ -52,9 +52,7 @@ export class TicketVisibilityService {
     if (actor.studioId) studioIds.push(actor.studioId);
     studioIds.push(...actor.scopeStudioIds);
 
-    const conditions: Prisma.TicketWhereInput[] = [
-      { requesterId: actor.id },
-    ];
+    const conditions: Prisma.TicketWhereInput[] = [{ requesterId: actor.id }];
 
     if (studioIds.length > 0) {
       conditions.push({ studioId: { in: studioIds } });
@@ -82,8 +80,14 @@ export class TicketVisibilityService {
     if (actor.role === Role.DEPARTMENT_USER) {
       if (ticket.ownerId === actor.id) return;
 
-      const teamNames = actor.departments.map((d) => DEPARTMENT_TO_TEAM_NAME[d]).filter(Boolean);
-      if (teamNames.length > 0 && ticket.owner?.team?.name && teamNames.includes(ticket.owner.team.name)) {
+      const teamNames = actor.departments
+        .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+        .filter(Boolean);
+      if (
+        teamNames.length > 0 &&
+        ticket.owner?.team?.name &&
+        teamNames.includes(ticket.owner.team.name)
+      ) {
         return;
       }
 
@@ -128,7 +132,9 @@ export class TicketVisibilityService {
     actor: RequestUser,
   ): void {
     if (!this.canModify(ticket, actor)) {
-      throw new ForbiddenException('You do not have permission to modify this ticket');
+      throw new ForbiddenException(
+        'You do not have permission to modify this ticket',
+      );
     }
   }
 }

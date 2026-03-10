@@ -3,7 +3,27 @@
 import { useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, GripVertical, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
+
+/** Wrapper for collapsible section body: animates height via grid for smooth expand/collapse */
+function CollapsibleBody({
+  collapsed,
+  children,
+  className = '',
+}: {
+  collapsed: boolean;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`grid transition-[grid-template-rows] duration-200 ease-out ${className}`}
+      style={{ gridTemplateRows: collapsed ? '0fr' : '1fr' }}
+    >
+      <div className="min-h-0 overflow-hidden">{children}</div>
+    </div>
+  );
+}
 import {
   workflowTemplatesApi,
   adminApi,
@@ -17,8 +37,9 @@ import type {
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { UserSearchSelect } from '@/components/ui/UserSearchSelect';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 /** Client-side cycle check: would adding edge (fromId -> toId) create a path from toId back to fromId? */
 function wouldCreateCycle(
@@ -71,6 +92,9 @@ export default function WorkflowTemplateDetailPage() {
   const [confirmDeleteSubtaskId, setConfirmDeleteSubtaskId] = useState<string | null>(null);
   const [confirmRemoveDep, setConfirmRemoveDep] = useState<WorkflowTemplateDependencyDto | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [previewCollapsed, setPreviewCollapsed] = useState(false);
+  const [graphCollapsed, setGraphCollapsed] = useState(false);
+  const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
 
   const { data: templateRes, isLoading } = useQuery({
     queryKey: ['workflow-template', id],
@@ -290,7 +314,7 @@ export default function WorkflowTemplateDetailPage() {
 
   if (isLoading || !template) {
     return (
-      <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+      <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
         <Header title="Workflow template" />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
@@ -300,7 +324,7 @@ export default function WorkflowTemplateDetailPage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={template.name || contextLabel || 'Workflow template'} />
       <div className="flex-1 p-6 max-w-4xl space-y-6">
         <Button variant="ghost" size="sm" onClick={() => router.push('/admin/workflow-templates')}>
@@ -368,67 +392,114 @@ export default function WorkflowTemplateDetailPage() {
 
         {/* Workflow preview — execution order + dependencies */}
         <div className="rounded-xl p-4" style={panel}>
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Workflow preview</h3>
-          <p className="text-xs text-gray-500 mb-2">Execution order and dependency relationships (current state).</p>
-          {sortedSubtasks.length === 0 ? (
-            <p className="text-sm text-gray-500">No subtasks yet. Add subtasks below.</p>
-          ) : (
-            <ul className="space-y-2">
-              {sortedSubtasks.map((s, idx) => {
-                const dependsOn = depsForSubtask(s.id).map((d) => idToTitle.get(d.dependsOnSubtaskTemplateId) ?? d.dependsOnSubtaskTemplateId);
-                return (
-                  <li key={s.id} className="flex items-start gap-2 text-sm">
-                    <span className="text-gray-500 w-8 font-medium">{idx + 1}.</span>
-                    <span className="text-gray-200 font-medium">{s.title}</span>
-                    {dependsOn.length > 0 && (
-                      <span className="text-gray-500 text-xs">(depends on: {dependsOn.join(', ')})</span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-200">Workflow preview</h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-gray-400 hover:text-gray-200 inline-flex items-center"
+              onClick={() => setPreviewCollapsed((c) => !c)}
+            >
+              {previewCollapsed ? (
+                <>Expand <ChevronRight className="h-4 w-4 ml-1 shrink-0" /></>
+              ) : (
+                <>Collapse <ChevronDown className="h-4 w-4 ml-1 shrink-0" /></>
+              )}
+            </Button>
+          </div>
+          <CollapsibleBody collapsed={previewCollapsed}>
+            <p className="text-xs text-gray-500 mb-2">Execution order and dependency relationships (current state).</p>
+            {sortedSubtasks.length === 0 ? (
+              <p className="text-sm text-gray-500">No subtasks yet. Add subtasks below.</p>
+            ) : (
+              <ul className="space-y-2">
+                {sortedSubtasks.map((s, idx) => {
+                  const dependsOn = depsForSubtask(s.id).map((d) => idToTitle.get(d.dependsOnSubtaskTemplateId) ?? d.dependsOnSubtaskTemplateId);
+                  return (
+                    <li key={s.id} className="flex items-start gap-2 text-sm">
+                      <span className="text-gray-500 w-8 font-medium">{idx + 1}.</span>
+                      <span className="text-gray-200 font-medium">{s.title}</span>
+                      {dependsOn.length > 0 && (
+                        <span className="text-gray-500 text-xs">(depends on: {dependsOn.join(', ')})</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CollapsibleBody>
         </div>
 
         {/* DAG visualization */}
         {sortedSubtasks.length > 0 && (
           <div className="rounded-xl p-4" style={panel}>
-            <h3 className="text-sm font-semibold text-gray-200 mb-3">Dependency graph</h3>
-            <p className="text-xs text-gray-500 mb-3">Nodes = subtask templates. Arrows = “depends on”.</p>
-            <div className="relative min-h-[120px]">
-              <div className="flex flex-col gap-2">
-                {sortedSubtasks.map((s, i) => (
-                  <div
-                    key={s.id}
-                    className="rounded-lg border border-[#2a2a2a] px-3 py-2 text-sm bg-[#141414] flex items-center gap-2"
-                    style={{ marginLeft: 0 }}
-                  >
-                    <span className="text-gray-500 w-6">{i + 1}</span>
-                    <span className="text-gray-200 font-medium">{s.title}</span>
-                  </div>
-                ))}
-              </div>
-              {deps.length > 0 && (
-                <div className="mt-3 pt-3 border-t border-[#2a2a2a]">
-                  <p className="text-xs text-gray-500 mb-1">Edges (A depends on B):</p>
-                  <ul className="space-y-0.5 text-xs text-gray-400">
-                    {deps.map((d) => (
-                      <li key={`${d.subtaskTemplateId}-${d.dependsOnSubtaskTemplateId}`}>
-                        <span className="text-teal-400">{idToTitle.get(d.dependsOnSubtaskTemplateId)}</span>
-                        <span className="mx-1">→</span>
-                        <span className="text-gray-300">{idToTitle.get(d.subtaskTemplateId)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <h3 className="text-sm font-semibold text-gray-200">Dependency graph</h3>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="shrink-0 text-gray-400 hover:text-gray-200 inline-flex items-center"
+                onClick={() => setGraphCollapsed((c) => !c)}
+              >
+                {graphCollapsed ? (
+                  <>Expand <ChevronRight className="h-4 w-4 ml-1 shrink-0" /></>
+                ) : (
+                  <>Collapse <ChevronDown className="h-4 w-4 ml-1 shrink-0" /></>
+                )}
+              </Button>
             </div>
+            <CollapsibleBody collapsed={graphCollapsed}>
+              <p className="text-xs text-gray-500 mb-3">Nodes = subtask templates. Arrows = “depends on”.</p>
+              <div className="relative min-h-[120px]">
+                <div className="flex flex-col gap-2">
+                  {sortedSubtasks.map((s, i) => (
+                    <div
+                      key={s.id}
+                      className="rounded-lg border px-3 py-2 text-sm flex items-center gap-2"
+                      style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface-raised)', marginLeft: 0 }}
+                    >
+                      <span className="text-gray-500 w-6">{i + 1}</span>
+                      <span className="text-gray-200 font-medium">{s.title}</span>
+                    </div>
+                  ))}
+                </div>
+                {deps.length > 0 && (
+                  <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-border-default)' }}>
+                    <p className="text-xs text-gray-500 mb-1">Edges (A depends on B):</p>
+                    <ul className="space-y-0.5 text-xs text-gray-400">
+                      {deps.map((d) => (
+                        <li key={`${d.subtaskTemplateId}-${d.dependsOnSubtaskTemplateId}`}>
+                          <span className="text-teal-400">{idToTitle.get(d.dependsOnSubtaskTemplateId)}</span>
+                          <span className="mx-1">→</span>
+                          <span className="text-gray-300">{idToTitle.get(d.subtaskTemplateId)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </CollapsibleBody>
           </div>
         )}
 
         {/* Subtask templates — draggable + move up/down */}
         <div className="rounded-xl p-4" style={panel}>
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Subtask templates</h3>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-gray-200">Subtask templates</h3>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="shrink-0 text-gray-400 hover:text-gray-200 inline-flex items-center"
+              onClick={() => setSubtasksCollapsed((c) => !c)}
+            >
+              {subtasksCollapsed ? (
+                <>Expand <ChevronRight className="h-4 w-4 ml-1 shrink-0" /></>
+              ) : (
+                <>Collapse <ChevronDown className="h-4 w-4 ml-1 shrink-0" /></>
+              )}
+            </Button>
+          </div>
+          <CollapsibleBody collapsed={subtasksCollapsed}>
           <p className="text-xs text-gray-500 mb-3">Drag to reorder or use Move up / Move down. Changes save immediately.</p>
           {sortedSubtasks.map((s, index) => (
             <div
@@ -438,7 +509,8 @@ export default function WorkflowTemplateDetailPage() {
               onDragOver={handleDragOver}
               onDrop={(e) => handleDrop(e, index)}
               onDragEnd={handleDragEnd}
-              className={`border-b border-[#2a2a2a] py-3 last:border-0 flex items-start gap-2 ${draggedId === s.id ? 'opacity-50' : ''}`}
+              className={`border-b py-3 last:border-0 flex items-start gap-2 ${draggedId === s.id ? 'opacity-50' : ''}`}
+              style={{ borderBottomColor: 'var(--color-border-default)' }}
             >
               <div className="flex flex-col gap-0.5 shrink-0 pt-0.5">
                 <GripVertical className="h-4 w-4 text-gray-500 cursor-grab active:cursor-grabbing" />
@@ -470,12 +542,13 @@ export default function WorkflowTemplateDetailPage() {
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </Select>
-                  <Select label="Assigned user (optional)" value={editAssignedUserId} onChange={(e) => setEditAssignedUserId(e.target.value)}>
-                    <option value="">— None —</option>
-                    {departmentUsers.map((u) => (
-                      <option key={u.id} value={u.id}>{u.displayName ?? u.email}</option>
-                    ))}
-                  </Select>
+                  <UserSearchSelect
+                    label="Assigned user (optional)"
+                    users={departmentUsers}
+                    value={editAssignedUserId}
+                    onChange={setEditAssignedUserId}
+                    placeholder="Search by name or email…"
+                  />
                   <label className="flex items-center gap-2 text-sm text-gray-400">
                     <input type="checkbox" checked={editRequired} onChange={(e) => setEditRequired(e.target.checked)} />
                     Required
@@ -505,7 +578,7 @@ export default function WorkflowTemplateDetailPage() {
             </div>
           ))}
 
-          <div className="mt-4 pt-4 border-t border-[#2a2a2a]">
+          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border-default)' }}>
             <p className="text-xs font-medium text-gray-400 mb-2">Add subtask</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <Input placeholder="Title" value={addSubtaskTitle} onChange={(e) => setAddSubtaskTitle(e.target.value)} />
@@ -517,12 +590,14 @@ export default function WorkflowTemplateDetailPage() {
               </Select>
             </div>
             <Textarea placeholder="Description (optional)" value={addSubtaskDescription} onChange={(e) => setAddSubtaskDescription(e.target.value)} rows={2} className="mt-2" />
-            <Select value={addSubtaskAssignedUserId} onChange={(e) => setAddSubtaskAssignedUserId(e.target.value)} className="mt-2 max-w-xs">
-              <option value="">Assigned user (optional)</option>
-              {departmentUsers.map((u) => (
-                <option key={u.id} value={u.id}>{u.displayName ?? u.email}</option>
-              ))}
-            </Select>
+            <UserSearchSelect
+              label="Assigned user (optional)"
+              users={departmentUsers}
+              value={addSubtaskAssignedUserId}
+              onChange={setAddSubtaskAssignedUserId}
+              placeholder="Search by name or email…"
+              className="mt-2 max-w-xs"
+            />
             <label className="flex items-center gap-2 text-sm text-gray-400 mt-2">
               <input type="checkbox" checked={addSubtaskRequired} onChange={(e) => setAddSubtaskRequired(e.target.checked)} />
               Required
@@ -531,6 +606,7 @@ export default function WorkflowTemplateDetailPage() {
               Add subtask
             </Button>
           </div>
+          </CollapsibleBody>
         </div>
 
         {/* Dependencies — cycle-safe add */}
@@ -594,7 +670,7 @@ export default function WorkflowTemplateDetailPage() {
         )}
 
         {/* Delete template */}
-        <div className="rounded-xl p-4 border border-red-900/30" style={{ background: '#1a0a0a' }}>
+        <div className="rounded-xl p-4 border border-red-900/30" style={{ background: 'rgba(127,29,29,0.2)' }}>
           <p className="text-sm text-gray-400">Deleting this template does not affect existing tickets. New tickets for this context will have no auto-subtasks.</p>
           <Button size="sm" variant="secondary" className="mt-2 text-red-400 border-red-800" onClick={() => deleteTemplateMut.mutate()} loading={deleteTemplateMut.isPending}>
             Delete workflow template
@@ -605,7 +681,7 @@ export default function WorkflowTemplateDetailPage() {
       {/* Confirm delete subtask modal */}
       {confirmDeleteSubtaskId != null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setConfirmDeleteSubtaskId(null)}>
-          <div className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl border border-[#2a2a2a]" style={{ background: '#1a1a1a' }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl border" style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-default)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-200 mb-2">Remove subtask template?</h3>
             <p className="text-sm text-gray-400 mb-4">
               Removing this subtask will also remove {depsForSubtask(confirmDeleteSubtaskId).length} dependency link(s).
@@ -624,7 +700,7 @@ export default function WorkflowTemplateDetailPage() {
       {/* Confirm remove dependency modal */}
       {confirmRemoveDep != null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setConfirmRemoveDep(null)}>
-          <div className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl border border-[#2a2a2a]" style={{ background: '#1a1a1a' }} onClick={(e) => e.stopPropagation()}>
+          <div className="rounded-xl p-5 max-w-md w-full mx-4 shadow-xl border" style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-default)' }} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-gray-200 mb-2">Remove dependency?</h3>
             <p className="text-sm text-gray-400 mb-4">
               <span className="text-gray-300">{idToTitle.get(confirmRemoveDep.subtaskTemplateId)}</span> will no longer wait for{' '}

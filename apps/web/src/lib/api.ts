@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { QueryClient } from '@tanstack/react-query';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -86,6 +87,22 @@ export const ticketsApi = {
   watch: (id: string) => api.post(`/tickets/${id}/watch`),
   unwatch: (id: string) => api.delete(`/tickets/${id}/watch`),
   history: (id: string) => api.get<import('@/types').AuditEntry[]>(`/tickets/${id}/history`),
+};
+
+// Shared helper: invalidate all major ticket list surfaces after mutations
+export const invalidateTicketLists = (queryClient: QueryClient) => {
+  // Global tickets list (/tickets)
+  queryClient.invalidateQueries({ queryKey: ['tickets', 'list'] });
+
+  // Actionable inbox (/inbox)
+  queryClient.invalidateQueries({ queryKey: ['tickets', 'actionable'] });
+
+  // Studio portal: "My tickets" and "By studio(s)"
+  queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-my'] });
+  queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-studio'] });
+
+  // Fallback: anything else keyed under ['tickets', ...]
+  queryClient.invalidateQueries({ queryKey: ['tickets'] });
 };
 
 // ─── Comments ──────────────────────────────────────────────────────────────

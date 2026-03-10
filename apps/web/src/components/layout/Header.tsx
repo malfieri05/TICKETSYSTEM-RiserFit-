@@ -16,15 +16,15 @@ export function Header({ title, action }: HeaderProps) {
   return (
     <header
       className="sticky top-0 z-30 flex h-14 items-center justify-between px-6"
-      style={{ background: '#1a1a1a', borderBottom: '1px solid #2a2a2a' }}
+      style={{ background: 'var(--color-bg-surface-raised)', borderBottom: '1px solid var(--color-border-default)' }}
     >
-      <h1 className="text-base font-semibold text-gray-100">{title}</h1>
+      <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</h1>
       <div className="flex items-center gap-2">
         {action}
         <Link
           href="/notifications"
-          className="relative p-2 text-gray-500 hover:text-gray-200 rounded-lg transition-colors"
-          style={{ ['&:hover' as string]: { background: '#2a2a2a' } }}
+          className="header-nav-link relative p-2 rounded-lg transition-colors"
+          style={{ color: 'var(--color-text-muted)' }}
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (

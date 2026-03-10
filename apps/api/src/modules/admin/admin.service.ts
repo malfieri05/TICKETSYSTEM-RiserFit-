@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import {
   CreateMarketDto,
@@ -15,34 +20,41 @@ export class AdminService {
   // ─── Ticket taxonomy (Stage 2, read-only config) ──────────────────────────
 
   async getTicketTaxonomy() {
-    const [ticketClasses, departments, supportTopics, maintenanceCategories] = await Promise.all([
-      this.prisma.ticketClass.findMany({
-        where: { isActive: true },
-        orderBy: { sortOrder: 'asc' },
-        select: { id: true, code: true, name: true, sortOrder: true },
-      }),
-      this.prisma.taxonomyDepartment.findMany({
-        where: { isActive: true },
-        orderBy: { sortOrder: 'asc' },
-        select: { id: true, code: true, name: true, sortOrder: true },
-      }),
-      this.prisma.supportTopic.findMany({
-        where: { isActive: true },
-        orderBy: [{ departmentId: 'asc' }, { sortOrder: 'asc' }],
-        select: {
-          id: true,
-          name: true,
-          sortOrder: true,
-          departmentId: true,
-          department: { select: { id: true, code: true, name: true } },
-        },
-      }),
-      this.prisma.maintenanceCategory.findMany({
-        where: { isActive: true },
-        orderBy: { sortOrder: 'asc' },
-        select: { id: true, name: true, description: true, color: true, sortOrder: true },
-      }),
-    ]);
+    const [ticketClasses, departments, supportTopics, maintenanceCategories] =
+      await Promise.all([
+        this.prisma.ticketClass.findMany({
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, code: true, name: true, sortOrder: true },
+        }),
+        this.prisma.taxonomyDepartment.findMany({
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, code: true, name: true, sortOrder: true },
+        }),
+        this.prisma.supportTopic.findMany({
+          where: { isActive: true },
+          orderBy: [{ departmentId: 'asc' }, { sortOrder: 'asc' }],
+          select: {
+            id: true,
+            name: true,
+            sortOrder: true,
+            departmentId: true,
+            department: { select: { id: true, code: true, name: true } },
+          },
+        }),
+        this.prisma.maintenanceCategory.findMany({
+          where: { isActive: true },
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            color: true,
+            sortOrder: true,
+          },
+        }),
+      ]);
 
     const supportTopicsByDepartment = departments.map((dept) => ({
       ...dept,
@@ -53,7 +65,12 @@ export class AdminService {
 
     return {
       ticketClasses,
-      departments: departments.map((d) => ({ id: d.id, code: d.code, name: d.name, sortOrder: d.sortOrder })),
+      departments: departments.map((d) => ({
+        id: d.id,
+        code: d.code,
+        name: d.name,
+        sortOrder: d.sortOrder,
+      })),
       supportTopicsByDepartment,
       maintenanceCategories,
     };
@@ -74,7 +91,8 @@ export class AdminService {
     const existing = await this.prisma.market.findFirst({
       where: { name: { equals: dto.name, mode: 'insensitive' } },
     });
-    if (existing) throw new ConflictException(`Market "${dto.name}" already exists`);
+    if (existing)
+      throw new ConflictException(`Market "${dto.name}" already exists`);
 
     return this.prisma.market.create({
       data: { name: dto.name },
@@ -112,8 +130,12 @@ export class AdminService {
 
     const name = dto.name.trim();
     const formattedAddress = dto.formattedAddress.trim();
-    if (!name) throw new BadRequestException('name must be non-empty after trim');
-    if (!formattedAddress) throw new BadRequestException('formattedAddress must be non-empty after trim');
+    if (!name)
+      throw new BadRequestException('name must be non-empty after trim');
+    if (!formattedAddress)
+      throw new BadRequestException(
+        'formattedAddress must be non-empty after trim',
+      );
 
     const existing = await this.prisma.studio.findFirst({
       where: {
@@ -121,7 +143,10 @@ export class AdminService {
         name: { equals: name, mode: 'insensitive' },
       },
     });
-    if (existing) throw new ConflictException(`Studio "${name}" already exists in this market`);
+    if (existing)
+      throw new ConflictException(
+        `Studio "${name}" already exists in this market`,
+      );
 
     return this.prisma.studio.create({
       data: {
@@ -140,21 +165,34 @@ export class AdminService {
     if (!studio) throw new NotFoundException(`Studio ${id} not found`);
 
     if (studio.latitude != null && dto.latitude === null) {
-      throw new BadRequestException('Latitude cannot be removed once set; update with a new value or omit to keep existing.');
+      throw new BadRequestException(
+        'Latitude cannot be removed once set; update with a new value or omit to keep existing.',
+      );
     }
     if (studio.longitude != null && dto.longitude === null) {
-      throw new BadRequestException('Longitude cannot be removed once set; update with a new value or omit to keep existing.');
+      throw new BadRequestException(
+        'Longitude cannot be removed once set; update with a new value or omit to keep existing.',
+      );
     }
 
-    const data: { name?: string; formattedAddress?: string; latitude?: number; longitude?: number } = {};
+    const data: {
+      name?: string;
+      formattedAddress?: string;
+      latitude?: number;
+      longitude?: number;
+    } = {};
     if (dto.name != null) {
       const trimmed = dto.name.trim();
-      if (!trimmed) throw new BadRequestException('name must be non-empty after trim');
+      if (!trimmed)
+        throw new BadRequestException('name must be non-empty after trim');
       data.name = trimmed;
     }
     if (dto.formattedAddress != null) {
       const trimmed = dto.formattedAddress.trim();
-      if (!trimmed) throw new BadRequestException('formattedAddress must be non-empty after trim');
+      if (!trimmed)
+        throw new BadRequestException(
+          'formattedAddress must be non-empty after trim',
+        );
       data.formattedAddress = trimmed;
     }
     if (typeof dto.latitude === 'number') data.latitude = dto.latitude;
@@ -171,14 +209,24 @@ export class AdminService {
   async getNearbyStudios(
     studioId: string,
     radiusMiles: number,
-  ): Promise<{ id: string; name: string; formattedAddress: string | null; marketName: string; distanceMiles: number }[]> {
+  ): Promise<
+    {
+      id: string;
+      name: string;
+      formattedAddress: string | null;
+      marketName: string;
+      distanceMiles: number;
+    }[]
+  > {
     const target = await this.prisma.studio.findUnique({
       where: { id: studioId },
       select: { id: true, latitude: true, longitude: true },
     });
     if (!target) throw new NotFoundException(`Studio ${studioId} not found`);
     if (target.latitude == null || target.longitude == null) {
-      throw new NotFoundException('This studio has no coordinates; nearby search is not available.');
+      throw new NotFoundException(
+        'This studio has no coordinates; nearby search is not available.',
+      );
     }
 
     const others = await this.prisma.studio.findMany({
@@ -197,11 +245,17 @@ export class AdminService {
       },
     });
 
-    const results: { id: string; name: string; formattedAddress: string | null; marketName: string; distanceMiles: number }[] = [];
+    const results: {
+      id: string;
+      name: string;
+      formattedAddress: string | null;
+      marketName: string;
+      distanceMiles: number;
+    }[] = [];
     for (const s of others) {
       const lat = s.latitude!;
       const lon = s.longitude!;
-      const dist = haversineMiles(target.latitude!, target.longitude!, lat, lon);
+      const dist = haversineMiles(target.latitude, target.longitude, lat, lon);
       if (dist <= radiusMiles) {
         results.push({
           id: s.id,

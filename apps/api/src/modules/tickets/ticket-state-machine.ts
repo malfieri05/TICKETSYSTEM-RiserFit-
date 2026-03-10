@@ -37,7 +37,10 @@ export function assertValidTransition(
 
   const allowed = VALID_TRANSITIONS[currentStatus];
   if (!allowed.includes(newStatus)) {
-    const allowedList = allowed.length > 0 ? allowed.join(', ') : 'none — this is a terminal status';
+    const allowedList =
+      allowed.length > 0
+        ? allowed.join(', ')
+        : 'none — this is a terminal status';
     throw new BadRequestException(
       `Cannot transition from ${currentStatus} → ${newStatus}. Allowed: [${allowedList}]`,
     );

@@ -26,7 +26,8 @@ export class EmailChannel {
 
   constructor(private prisma: PrismaService) {
     const apiToken = process.env.POSTMARK_API_TOKEN;
-    this.fromEmail = process.env.POSTMARK_FROM_EMAIL ?? 'tickets@yourcompany.com';
+    this.fromEmail =
+      process.env.POSTMARK_FROM_EMAIL ?? 'tickets@yourcompany.com';
 
     if (apiToken) {
       this.client = new postmark.ServerClient(apiToken);
@@ -58,7 +59,10 @@ export class EmailChannel {
         MessageStream: 'outbound',
       });
 
-      await this.markDelivered(payload.notificationDeliveryId, result.MessageID);
+      await this.markDelivered(
+        payload.notificationDeliveryId,
+        result.MessageID,
+      );
       this.logger.debug(`Email sent to ${payload.to}: ${result.MessageID}`);
     } catch (error) {
       await this.markFailed(payload.notificationDeliveryId, String(error));

@@ -31,10 +31,7 @@ export class TicketsController {
 
   // POST /api/tickets
   @Post()
-  create(
-    @Body() dto: CreateTicketDto,
-    @CurrentUser() user: RequestUser,
-  ) {
+  create(@Body() dto: CreateTicketDto, @CurrentUser() user: RequestUser) {
     return this.ticketsService.create(dto, user);
   }
 
@@ -46,7 +43,9 @@ export class TicketsController {
     @Query('limit') limit?: string,
   ) {
     const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : 1;
-    const limitNum = limit ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50)) : 50;
+    const limitNum = limit
+      ? Math.min(100, Math.max(1, parseInt(limit, 10) || 50))
+      : 50;
     return this.ticketsService.getMySummary(user, pageNum, limitNum);
   }
 
@@ -74,10 +73,7 @@ export class TicketsController {
 
   // GET /api/tickets/:id
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.ticketsService.findById(id, user);
   }
 
@@ -116,29 +112,20 @@ export class TicketsController {
   // POST /api/tickets/:id/watch
   @Post(':id/watch')
   @HttpCode(HttpStatus.OK)
-  addWatcher(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  addWatcher(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.ticketsService.addWatcher(id, user.id);
   }
 
   // DELETE /api/tickets/:id/watch
   @Delete(':id/watch')
   @HttpCode(HttpStatus.OK)
-  removeWatcher(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  removeWatcher(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.ticketsService.removeWatcher(id, user.id);
   }
 
   // GET /api/tickets/:id/history
   @Get(':id/history')
-  getHistory(
-    @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
-  ) {
+  getHistory(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.ticketsService.getHistory(id, user);
   }
 }

@@ -3,6 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../common/database/prisma.service';
 import { NotificationsService } from '../../modules/notifications/notifications.service';
+import { SseChannel } from '../../modules/notifications/channels/sse.channel';
 import {
   QUEUES,
   FanOutJobData,
@@ -43,24 +44,41 @@ function buildNotificationContent(
   payload: Record<string, unknown>,
 ): { title: string; body: string } {
   const ticketTitle = (payload.title as string) ?? 'a ticket';
-  const actorName = (payload.authorName ?? payload.ownerName ?? 'Someone') as string;
+  const actorName = (payload.authorName ??
+    payload.ownerName ??
+    'Someone') as string;
 
   switch (eventType) {
     case 'TICKET_CREATED':
-      return { title: 'New ticket created', body: `"${ticketTitle}" has been submitted.` };
+      return {
+        title: 'New ticket created',
+        body: `"${ticketTitle}" has been submitted.`,
+      };
     case 'TICKET_ASSIGNED':
-      return { title: 'Ticket assigned to you', body: `"${ticketTitle}" has been assigned to you.` };
+      return {
+        title: 'Ticket assigned to you',
+        body: `"${ticketTitle}" has been assigned to you.`,
+      };
     case 'TICKET_REASSIGNED':
-      return { title: 'Ticket reassigned to you', body: `"${ticketTitle}" has been reassigned to you.` };
+      return {
+        title: 'Ticket reassigned to you',
+        body: `"${ticketTitle}" has been reassigned to you.`,
+      };
     case 'TICKET_STATUS_CHANGED':
       return {
         title: 'Ticket status updated',
         body: `"${ticketTitle}" moved to ${payload.newStatus}.`,
       };
     case 'TICKET_RESOLVED':
-      return { title: 'Ticket resolved', body: `"${ticketTitle}" has been resolved.` };
+      return {
+        title: 'Ticket resolved',
+        body: `"${ticketTitle}" has been resolved.`,
+      };
     case 'TICKET_CLOSED':
-      return { title: 'Ticket closed', body: `"${ticketTitle}" has been closed.` };
+      return {
+        title: 'Ticket closed',
+        body: `"${ticketTitle}" has been closed.`,
+      };
     case 'COMMENT_ADDED':
       return {
         title: `${actorName} commented`,
@@ -92,7 +110,10 @@ function buildNotificationContent(
         body: `"${payload.subtaskTitle}" on ticket "${ticketTitle}" is ready for you.`,
       };
     default:
-      return { title: 'New notification', body: 'You have a new notification.' };
+      return {
+        title: 'New notification',
+        body: 'You have a new notification.',
+      };
   }
 }
 
@@ -103,6 +124,7 @@ export class NotificationFanoutProcessor extends WorkerHost {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private sseChannel: SseChannel,
     @InjectQueue(QUEUES.NOTIFICATION_DISPATCH)
     private dispatchQueue: Queue,
   ) {
@@ -113,10 +135,10 @@ export class NotificationFanoutProcessor extends WorkerHost {
     const { eventType, ticketId, actorId, payload } = job.data;
     this.logger.debug(`Fan-out: ${eventType} for ticket ${ticketId}`);
 
-    // Stage 11: COMMENT_ADDED recipients depend on isInternal (studio-visible vs internal-only)
+    // COMMENT_ADDED: internal notes feature removed; always notify requester, owner, watchers.
     let rules = FANOUT_RULES[eventType] ?? [];
     if (eventType === 'COMMENT_ADDED') {
-      rules = payload.isInternal === true ? ['owner', 'watchers'] : ['requester', 'owner', 'watchers'];
+      rules = ['requester', 'owner', 'watchers'];
     }
     if (rules.length === 0) return;
 
@@ -164,7 +186,10 @@ export class NotificationFanoutProcessor extends WorkerHost {
               where: { id: payload.departmentId as string },
               select: { code: true },
             });
-            if (dept?.code && Object.values(Department).includes(dept.code as Department)) {
+            if (
+              dept?.code &&
+              Object.values(Department).includes(dept.code as Department)
+            ) {
               const userIdsInDept = await this.prisma.userDepartment.findMany({
                 where: { department: dept.code as Department },
                 select: { userId: true },
@@ -209,6 +234,13 @@ export class NotificationFanoutProcessor extends WorkerHost {
       title: ticket.title,
     });
 
+    // Ticket-update payload for real-time list/detail invalidation (same recipients)
+    const ticketUpdatePayload = {
+      ticketId,
+      eventType,
+      occurredAt: job.data.occurredAt,
+    };
+
     // Create notification + delivery records for each recipient
     for (const user of users) {
       const pref = prefMap.get(user.id);
@@ -216,7 +248,7 @@ export class NotificationFanoutProcessor extends WorkerHost {
       const wantsInApp = pref ? pref.channelInApp : true;
       const wantsEmail = pref ? pref.channelEmail : true;
 
-      // Create the in-app notification record + push SSE
+      // Create the in-app notification record + push notification SSE
       if (wantsInApp) {
         await this.notificationsService.createAndDeliver({
           userId: user.id,
@@ -227,6 +259,9 @@ export class NotificationFanoutProcessor extends WorkerHost {
           metadata: payload,
         });
       }
+
+      // Push ticket_update SSE so client can invalidate ticket/list queries (same recipients)
+      this.sseChannel.pushTicketUpdate(user.id, ticketUpdatePayload);
 
       // Create email delivery record and enqueue dispatch job
       if (wantsEmail) {
@@ -241,7 +276,11 @@ export class NotificationFanoutProcessor extends WorkerHost {
 
         // Find the notification we just created (for the in-app record linkage)
         const notification = await this.prisma.notification.findFirst({
-          where: { userId: user.id, ticketId, eventType: eventType as NotificationEventType },
+          where: {
+            userId: user.id,
+            ticketId,
+            eventType: eventType as NotificationEventType,
+          },
           orderBy: { createdAt: 'desc' },
         });
 

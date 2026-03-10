@@ -8,7 +8,7 @@ import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
   Send, Plus, User, Paperclip, Download, Trash2, Upload,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi } from '@/lib/api';
+import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { SubtaskStatusBadge } from '@/components/ui/Badge';
@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -27,9 +28,9 @@ const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   CLOSED: [],
 };
 
-// Reusable dark panel style
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
-const panelSection = { borderTop: '1px solid #2a2a2a' };
+// Reusable panel style (theme tokens)
+const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
+const panelSection = { borderTop: `1px solid ${POLISH_THEME.listBorder}` };
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,7 +40,6 @@ export default function TicketDetailPage() {
   const qc = useQueryClient();
 
   const [commentBody, setCommentBody] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
   const [uploading, setUploading] = useState(false);
@@ -93,19 +93,51 @@ export default function TicketDetailPage() {
 
   const transitionMut = useMutation({
     mutationFn: (status: TicketStatus) => ticketsApi.transition(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', id] });
+      invalidateTicketLists(qc);
+    },
   });
 
   const assignMut = useMutation({
     mutationFn: (ownerId: string) => ticketsApi.assign(id, ownerId || null),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', id] });
+      invalidateTicketLists(qc);
+    },
   });
 
   const commentMut = useMutation({
-    mutationFn: () => commentsApi.create(id, { body: commentBody, isInternal }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', id] });
+    mutationFn: () => commentsApi.create(id, { body: commentBody }),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ['ticket', id] });
+      const prev = qc.getQueryData<{ data: { comments: unknown[] } }>(['ticket', id]);
+      const body = commentBody;
       setCommentBody('');
+      const optimisticComment = {
+        id: `opt-${Date.now()}`,
+        body,
+        author: { id: user?.id ?? '', displayName: user?.displayName ?? '', name: user?.email ?? '' },
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData(['ticket', id], (old: typeof prev) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            comments: [...(old.data.comments ?? []), optimisticComment],
+          },
+        };
+      });
+      return { prev };
+    },
+    onError: (_err, _v, context) => {
+      if (context?.prev) qc.setQueryData(['ticket', id], context.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', id] });
+      invalidateTicketLists(qc);
     },
   });
 
@@ -114,6 +146,7 @@ export default function TicketDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       qc.invalidateQueries({ queryKey: ['ticket', id, 'subtasks'] });
+      invalidateTicketLists(qc);
       setNewSubtask('');
     },
   });
@@ -121,9 +154,37 @@ export default function TicketDetailPage() {
   const subtaskStatusMut = useMutation({
     mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) =>
       subtasksApi.update(id, subtaskId, { status }),
-    onSuccess: () => {
+    onMutate: async ({ subtaskId, status: newStatus }) => {
+      await qc.cancelQueries({ queryKey: ['ticket', id] });
+      const prev = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', id]);
+      qc.setQueryData(['ticket', id], (old: typeof prev) => {
+        if (!old?.data?.subtasks) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            subtasks: old.data.subtasks.map((s) =>
+              s.id === subtaskId ? { ...s, status: newStatus } : s,
+            ),
+          },
+        };
+      });
+      qc.setQueryData(['ticket', id, 'subtasks'], (old: { data: { id: string; status: string }[] } | undefined) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: old.data.map((s) => (s.id === subtaskId ? { ...s, status: newStatus } : s)),
+        };
+      });
+      return { prev };
+    },
+    onError: (_err, _v, context) => {
+      if (context?.prev) qc.setQueryData(['ticket', id], context.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       qc.invalidateQueries({ queryKey: ['ticket', id, 'subtasks'] });
+      invalidateTicketLists(qc);
     },
   });
 
@@ -192,31 +253,28 @@ export default function TicketDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full" style={{ background: '#000000' }}>
+      <div className="flex items-center justify-center h-full" style={{ background: 'var(--color-bg-page)' }}>
         <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
       </div>
     );
   }
 
   if (!ticket) {
-    return <div className="p-6" style={{ color: '#666666' }}>Ticket not found.</div>;
+    return <div className="p-6" style={{ color: 'var(--color-text-muted)' }}>Ticket not found.</div>;
   }
 
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const isStudioUser = user?.role === 'STUDIO_USER';
   const validTransitions = VALID_TRANSITIONS[ticket.status];
   const isWatching = ticket.watchers.some((w) => w.userId === user?.id);
-  // Studio users see only non-internal comments (backend also filters on list endpoint; detail includes all, so filter here)
-  const visibleComments = isStudioUser
-    ? (ticket.comments ?? []).filter((c) => !(c as { isInternal?: boolean }).isInternal)
-    : (ticket.comments ?? []);
+  const visibleComments = ticket.comments ?? [];
 
   const subtaskDone = (ticket.subtasks ?? []).filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length;
   const subtaskTotal = (ticket.subtasks ?? []).length;
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] }).formResponses ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Ticket" />
 
       <div className="flex-1 overflow-y-auto">
@@ -229,24 +287,24 @@ export default function TicketDetailPage() {
           {/* Stage 22: header — title, created, requester, location, progress; ticket ID demoted */}
           <div className="rounded-xl p-5 space-y-2" style={panel}>
             <h1 className="text-xl font-semibold text-gray-100">{ticket.title}</h1>
-            <p className="text-sm" style={{ color: '#888888' }}>
+            <p className="text-sm" style={{ color: POLISH_THEME.metaDim }}>
               Created {format(new Date(ticket.createdAt), 'MMM d')} • Requested by {ticket.requester.displayName}
             </p>
             <div className="flex flex-wrap items-center gap-3 text-sm">
               {(ticket as { studio?: { name: string } }).studio?.name && (
-                <span style={{ color: '#666666' }}>{(ticket as { studio: { name: string } }).studio.name}</span>
+                <span style={{ color: POLISH_THEME.metaMuted }}>{(ticket as { studio: { name: string } }).studio.name}</span>
               )}
-              <span className="text-xs font-medium tabular-nums" style={{ color: '#14b8a6' }}>
+              <span className="text-xs font-medium tabular-nums" style={{ color: POLISH_THEME.accent }}>
                 Progress {subtaskDone} / {subtaskTotal}
               </span>
             </div>
-            <p className="text-xs" style={{ color: '#555555' }}>
+            <p className="text-xs" style={{ color: POLISH_THEME.theadText }}>
               Ticket #{ticket.id.slice(0, 8)}
             </p>
           </div>
 
-          {/* Tabs: Subtasks, Comments, Ticket Submission, History */}
-          <div style={{ borderBottom: '1px solid #2a2a2a' }}>
+          {/* Tabs: Subtasks, Comments, Ticket Submission, History — sticky on scroll */}
+          <div className="sticky top-0 z-10" style={{ background: 'var(--color-bg-page)', borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}>
             <nav className="flex gap-6">
               {(['subtasks', 'comments', 'submission', 'history'] as const).map((tab) => {
                 const icons = {
@@ -267,8 +325,8 @@ export default function TicketDetailPage() {
                     onClick={() => setActiveTab(tab)}
                     className="pb-3 text-sm font-medium border-b-2 transition-colors"
                     style={{
-                      borderBottomColor: activeTab === tab ? '#14b8a6' : 'transparent',
-                      color: activeTab === tab ? '#14b8a6' : '#666666',
+                      borderBottomColor: activeTab === tab ? POLISH_THEME.accent : 'transparent',
+                      color: activeTab === tab ? POLISH_THEME.accent : POLISH_THEME.metaMuted,
                     }}
                   >
                     <span className="flex items-center gap-1.5">
@@ -283,9 +341,9 @@ export default function TicketDetailPage() {
 
             {/* ── Conversation (Updates & Replies) ─── */}
             {activeTab === 'comments' && (
-              <div className="space-y-4">
+              <div className={POLISH_CLASS.sectionGap}>
                 {visibleComments.length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: '#555555' }}>
+                  <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>
                     {isStudioUser ? 'No updates yet.' : 'No replies yet.'}
                   </p>
                 )}
@@ -293,9 +351,7 @@ export default function TicketDetailPage() {
                   <div
                     key={comment.id}
                     className="rounded-xl p-4 space-y-2"
-                    style={(comment as { isInternal?: boolean }).isInternal
-                      ? { background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)' }
-                      : panel}
+                    style={panel}
                   >
                     <div className="flex items-center gap-2">
                       <div className="h-7 w-7 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-semibold">
@@ -304,39 +360,23 @@ export default function TicketDetailPage() {
                       <span className="text-sm font-medium text-gray-200">
                         {(comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '—'}
                       </span>
-                      {!isStudioUser && (comment as { isInternal?: boolean }).isInternal && (
-                        <span className="text-xs font-medium px-1.5 py-0.5 rounded" style={{ color: '#d97706', background: 'rgba(234,179,8,0.15)' }}>
-                          [Internal]
-                        </span>
-                      )}
-                      <span className="ml-auto text-xs" style={{ color: '#555555' }}>
+                      <span className="ml-auto text-xs" style={{ color: POLISH_THEME.theadText }}>
                         {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
                       </span>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap" style={{ color: '#cccccc' }}>{comment.body}</p>
+                    <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text-primary)' }}>{comment.body}</p>
                   </div>
                 ))}
 
-                {/* Add reply: studio = studio-visible only; dept/admin = studio-visible reply or internal note */}
                 <div className="rounded-xl p-4 space-y-3" style={panel}>
                   <Textarea
-                    placeholder={isStudioUser ? 'Add an update...' : 'Reply (visible to studio) or check Internal note below...'}
+                    placeholder={isStudioUser ? 'Add an update...' : 'Reply...'}
                     value={commentBody}
                     onChange={(e) => setCommentBody(e.target.value)}
                     rows={3}
                   />
                   <div className="flex items-center justify-between">
-                    {canManage && (
-                      <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: '#888888' }}>
-                        <input
-                          type="checkbox"
-                          checked={isInternal}
-                          onChange={(e) => setIsInternal(e.target.checked)}
-                          className="rounded"
-                        />
-                        Internal note (not visible to studio)
-                      </label>
-                    )}
+                    <div />
                     <Button
                       size="sm"
                       onClick={() => commentMut.mutate()}
@@ -345,7 +385,7 @@ export default function TicketDetailPage() {
                       className="ml-auto"
                     >
                       <Send className="h-3.5 w-3.5" />
-                      {canManage ? (isInternal ? 'Add internal note' : 'Reply') : 'Add update'}
+                      {canManage ? 'Reply' : 'Add update'}
                     </Button>
                   </div>
                 </div>
@@ -354,9 +394,9 @@ export default function TicketDetailPage() {
 
             {/* ── Subtasks (Workflow Progress) ─── */}
             {activeTab === 'subtasks' && (
-              <div className="space-y-3">
+              <div className={POLISH_CLASS.sectionGap}>
                 {/* Progress header */}
-                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: '#111111', border: '1px solid #262626' }}>
+                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--color-bg-surface)', border: `1px solid ${POLISH_THEME.innerBorder}` }}>
                   {(() => {
                     const list = subtasksList ?? ticket.subtasks;
                     const total = list.length;
@@ -365,15 +405,15 @@ export default function TicketDetailPage() {
                     return (
                       <>
                         <div className="flex flex-col gap-1">
-                          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#777777' }}>
+                          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
                             Workflow Progress
                           </span>
-                          <span className="text-sm font-medium" style={{ color: '#e5e5e5' }}>
+                          <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
                             {done} of {total} complete
                           </span>
                         </div>
                         <div className="flex items-center gap-3 w-64">
-                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: '#1f2933' }}>
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                             <div
                               className="h-full rounded-full transition-all"
                               style={{
@@ -385,7 +425,7 @@ export default function TicketDetailPage() {
                               }}
                             />
                           </div>
-                          <span className="text-xs font-semibold tabular-nums" style={{ color: '#9ca3af' }}>
+                          <span className="text-xs font-semibold tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
                             {percent}%
                           </span>
                         </div>
@@ -395,16 +435,16 @@ export default function TicketDetailPage() {
                 </div>
 
                 {(subtasksList ?? ticket.subtasks).length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No subtasks yet.</p>
+                  <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>No subtasks yet.</p>
                 )}
                 {(subtasksList ?? ticket.subtasks).map((subtask) => (
                   <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-gray-200')}
-                        style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: '#555555', textDecoration: 'line-through' } : undefined}>
+                        style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: 'var(--color-text-muted)', textDecoration: 'line-through' } : undefined}>
                         {subtask.title}
                       </p>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs" style={{ color: '#555555' }}>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                         {'department' in subtask && subtask.department && (
                           <span>{subtask.department.name}</span>
                         )}
@@ -465,30 +505,30 @@ export default function TicketDetailPage() {
               <div className="space-y-4">
                 {formResponses.length > 0 ? (
                   <div className="rounded-xl p-4 space-y-2" style={panel}>
-                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Submitted form data</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.theadText }}>Submitted form data</p>
                     <dl className="space-y-1.5 text-sm">
                       {formResponses.map((r) => (
-                        <div key={r.fieldKey} className="flex gap-2">
-                          <dt className="shrink-0" style={{ color: '#888888' }}>
+                        <div key={r.fieldKey} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 items-baseline">
+                          <dt className="break-words" style={{ color: 'var(--color-text-muted)' }}>
                             {r.fieldKey.split('_').join(' ').split(' ').map((s) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '')).join(' ')}:
                           </dt>
-                          <dd className="min-w-0 text-gray-200 break-words">{r.value || '—'}</dd>
+                          <dd className="min-w-0 break-words" style={{ color: 'var(--color-text-primary)' }}>{r.value || '—'}</dd>
                         </div>
                       ))}
                     </dl>
                   </div>
                 ) : (
-                  <p className="text-sm py-4" style={{ color: '#555555' }}>No submitted form data.</p>
+                  <p className="text-sm py-4" style={{ color: POLISH_THEME.theadText }}>No submitted form data.</p>
                 )}
 
                 <div className="rounded-xl p-4 space-y-3" style={panel}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Attachments</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.theadText }}>Attachments</p>
                   <div
                     className="rounded-lg p-6 text-center cursor-pointer transition-colors"
-                    style={{ background: '#111111', border: '2px dashed #333333' }}
+                    style={{ background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
                     onClick={() => !uploading && fileInputRef.current?.click()}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#333333')}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
                     onDragOver={(e) => e.preventDefault()}
                     onDrop={(e) => {
                       e.preventDefault();
@@ -512,9 +552,9 @@ export default function TicketDetailPage() {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8" style={{ color: '#444444' }} />
-                        <p className="text-sm font-medium" style={{ color: '#888888' }}>Click to upload or drag &amp; drop</p>
-                        <p className="text-xs" style={{ color: '#555555' }}>Any file type · Max 25 MB</p>
+                        <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
+                        <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Click to upload or drag &amp; drop</p>
+                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Any file type · Max 25 MB</p>
                       </div>
                     )}
                   </div>
@@ -524,21 +564,21 @@ export default function TicketDetailPage() {
                     </div>
                   )}
                   {attachments.length === 0 && !uploading ? (
-                    <p className="text-sm text-center py-2" style={{ color: '#555555' }}>No attachments yet.</p>
+                    <p className="text-sm text-center py-2" style={{ color: POLISH_THEME.theadText }}>No attachments yet.</p>
                   ) : (
-                    <div className="rounded-lg overflow-hidden" style={{ background: '#111111', border: '1px solid #2a2a2a' }}>
+                    <div className="rounded-lg overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
                       {attachments.map((att, i) => (
                         <div key={att.id} className="flex items-center gap-3 px-4 py-3" style={i > 0 ? panelSection : undefined}>
-                          <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
+                          <Paperclip className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-200 truncate">{att.filename}</p>
-                            <p className="text-xs" style={{ color: '#555555' }}>{formatBytes(att.sizeBytes)} · {att.uploadedBy.name}</p>
+                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(att.sizeBytes)} · {att.uploadedBy.name}</p>
                           </div>
-                          <button type="button" onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')} title="Download">
+                          <button type="button" onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-accent)')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')} title="Download">
                             <Download className="h-4 w-4" />
                           </button>
                           {canManage && (
-                            <button type="button" onClick={() => deleteAttachmentMut.mutate(att.id)} disabled={deleteAttachmentMut.isPending} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')} title="Delete">
+                            <button type="button" onClick={() => deleteAttachmentMut.mutate(att.id)} disabled={deleteAttachmentMut.isPending} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')} title="Delete">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           )}
@@ -554,16 +594,16 @@ export default function TicketDetailPage() {
             {activeTab === 'history' && (
               <div className="space-y-2">
                 {(historyRes?.data ?? []).length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: '#555555' }}>No history yet.</p>
+                  <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>No history yet.</p>
                 )}
                 {(historyRes?.data ?? []).map((entry) => (
                   <div key={entry.id} className="flex gap-3 text-sm">
-                    <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: '#333333' }} />
+                    <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: 'var(--color-border-default)' }} />
                     <div>
                       <span className="font-medium text-gray-300">{entry.actor?.displayName ?? 'System'}</span>
                       {' '}
-                      <span style={{ color: '#666666' }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
-                      <span className="block text-xs" style={{ color: '#555555' }}>
+                      <span style={{ color: POLISH_THEME.metaMuted }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
+                      <span className="block text-xs" style={{ color: POLISH_THEME.theadText }}>
                         {format(new Date(entry.createdAt), 'MMM d, yyyy h:mm a')}
                       </span>
                     </div>

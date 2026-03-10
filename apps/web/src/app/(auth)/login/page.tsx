@@ -40,7 +40,15 @@ export default function LoginPage() {
         : await authApi.register({ email, name: name.trim(), password });
 
       login(res.data.access_token, res.data.user);
-      router.push('/tickets');
+
+      const role = res.data.user.role;
+      if (role === 'DEPARTMENT_USER') {
+        router.push('/inbox');
+      } else if (role === 'STUDIO_USER') {
+        router.push('/portal');
+      } else {
+        router.push('/tickets');
+      }
     } catch (err: unknown) {
       const ax = err as { response?: { data?: { message?: string }; status?: number }; message?: string; code?: string };
       const msg = ax?.response?.data?.message;
@@ -69,7 +77,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: '#000000' }}>
+    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: 'var(--color-bg-page)' }}>
       <div className="w-full max-w-sm space-y-6">
 
         {/* Logo */}
@@ -84,7 +92,7 @@ export default function LoginPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-xl p-8 space-y-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+        <div className="rounded-xl p-8 space-y-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <div>
             <h2 className="text-lg font-semibold text-gray-100">
               {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
@@ -169,10 +177,10 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full" style={{ borderTop: '1px solid #2a2a2a' }} />
+              <div className="w-full" style={{ borderTop: '1px solid var(--color-border-default)' }} />
             </div>
             <div className="relative flex justify-center text-xs">
-              <span className="px-3 text-gray-600" style={{ background: '#1a1a1a' }}>or</span>
+              <span className="px-3" style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}>or</span>
             </div>
           </div>
 
@@ -181,9 +189,9 @@ export default function LoginPage() {
             type="button"
             onClick={() => setSsoMessage(true)}
             className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors"
-            style={{ background: '#141414', border: '1px solid #2a2a2a' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#141414')}
+            style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface-raised)')}
           >
             {/* Microsoft logo SVG */}
             <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">

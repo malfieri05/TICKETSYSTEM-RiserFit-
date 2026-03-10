@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "dev": "npm run start:dev",
     "seed:locations": "ts-node prisma/seed-locations.ts",
     "cleanup:studios": "ts-node prisma/cleanup-legacy-studios.ts",
     "reset:tickets": "ts-node --transpile-only prisma/reset-ticket-runtime-data.ts",

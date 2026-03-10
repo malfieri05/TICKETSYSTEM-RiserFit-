@@ -13,8 +13,8 @@ import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
 
-// ── Palette ────────────────────────────────────────────────────────────────
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+// ── Palette (theme tokens) ──────────────────────────────────────────────────
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 // ── Local-storage key for hidden ticket IDs ─────────────────────────────────
 const LS_KEY = 'dashboard_hidden_tickets';
@@ -62,9 +62,9 @@ function StatCard({
         <Icon className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>{label}</p>
-        <p className="text-2xl font-bold text-gray-100 mt-0.5">{value}</p>
-        {sub && <p className="text-xs mt-0.5" style={{ color: '#555555' }}>{sub}</p>}
+        <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{label}</p>
+        <p className="text-2xl font-bold mt-0.5" style={{ color: 'var(--color-text-primary)' }}>{value}</p>
+        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{sub}</p>}
       </div>
     </div>
   );
@@ -75,11 +75,11 @@ function CategoryBar({ label, count, max, color }: { label: string; count: numbe
   const pct = max > 0 ? Math.max(3, Math.round((count / max) * 100)) : 0;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-32 truncate shrink-0" style={{ color: '#888888' }}>{label}</span>
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
-        <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color ?? '#14b8a6' }} />
+      <span className="w-32 truncate shrink-0" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+        <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color ?? 'var(--color-accent)' }} />
       </div>
-      <span className="w-6 text-right text-xs font-medium" style={{ color: '#666666' }}>{count}</span>
+      <span className="w-6 text-right text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{count}</span>
     </div>
   );
 }
@@ -148,7 +148,7 @@ export default function DashboardPage() {
   const totalHidden = hiddenOpen.length + hiddenDone.length;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={`Dashboard${user?.displayName ? ` — ${user.displayName}` : ''}`} />
 
       <div className="flex-1 overflow-hidden flex">
@@ -156,13 +156,13 @@ export default function DashboardPage() {
         {/* ── LEFT: My Tickets checklist ─────────────────────────────────── */}
         <div
           className="w-80 shrink-0 flex flex-col overflow-hidden"
-          style={{ background: '#111111', borderRight: '1px solid #2a2a2a' }}
+          style={{ background: 'var(--color-bg-surface)', borderRight: '1px solid var(--color-border-default)' }}
         >
           {/* Panel header */}
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #2a2a2a' }}>
+          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
             <div>
-              <p className="text-sm font-semibold text-gray-100">My Tickets</p>
-              <p className="text-xs mt-0.5" style={{ color: '#555555' }}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>My Tickets</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                 {allTickets.length} total · {openTickets.length} open
               </p>
             </div>
@@ -172,9 +172,9 @@ export default function DashboardPage() {
                 onClick={() => setHideCompleted((v) => !v)}
                 title={hideCompleted ? 'Show completed' : 'Hide completed'}
                 className="p-1.5 rounded transition-colors"
-                style={{ color: hideCompleted ? '#14b8a6' : '#555555' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#cccccc')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = hideCompleted ? '#14b8a6' : '#555555')}
+                style={{ color: hideCompleted ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = hideCompleted ? 'var(--color-accent)' : 'var(--color-text-muted)')}
               >
                 <CheckCheck className="h-4 w-4" />
               </button>
@@ -184,9 +184,9 @@ export default function DashboardPage() {
                   onClick={() => setShowHidden((v) => !v)}
                   title={showHidden ? 'Hide dismissed' : `Show ${totalHidden} dismissed`}
                   className="p-1.5 rounded transition-colors"
-                  style={{ color: '#555555' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#cccccc')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                  style={{ color: 'var(--color-text-muted)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                 >
                   {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                 </button>
@@ -201,16 +201,16 @@ export default function DashboardPage() {
                 <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
               </div>
             ) : allTickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center pt-16 gap-2" style={{ color: '#444444' }}>
+              <div className="flex flex-col items-center justify-center pt-16 gap-2" style={{ color: 'var(--color-text-muted)' }}>
                 <Ticket className="h-8 w-8" />
-                <p className="text-sm">No tickets yet</p>
+                <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>No tickets yet</p>
               </div>
             ) : (
               <>
                 {/* ── Open tickets ── */}
                 {visibleOpen.length > 0 && (
                   <div>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#444444' }}>
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
                       Open
                     </p>
                     {visibleOpen.map((t) => (
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                 {/* ── Completed tickets ── */}
                 {!hideCompleted && visibleDone.length > 0 && (
                   <div className="mt-2">
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#444444' }}>
+                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
                       Completed
                     </p>
                     {visibleDone.map((t) => (
@@ -249,15 +249,15 @@ export default function DashboardPage() {
                 {showHidden && totalHidden > 0 && (
                   <div className="mt-2">
                     <div className="px-4 py-1.5 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#333333' }}>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
                         Hidden ({totalHidden})
                       </p>
                       <button
                         onClick={clearAll}
                         className="text-[10px] underline transition-colors"
-                        style={{ color: '#555555' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#cccccc')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                        style={{ color: 'var(--color-text-muted)' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                       >
                         Show all
                       </button>
@@ -317,8 +317,8 @@ export default function DashboardPage() {
           {(summary?.byCategory.length ?? 0) > 0 && (
             <div className="rounded-xl p-5" style={panel}>
               <div className="flex items-center gap-2 mb-4">
-                <BarChart2 className="h-4 w-4" style={{ color: '#555555' }} />
-                <h3 className="text-sm font-semibold text-gray-100">My Tickets by Category</h3>
+                <BarChart2 className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>My Tickets by Category</h3>
               </div>
               <div className="space-y-3">
                 {(summary?.byCategory ?? [])
@@ -339,7 +339,7 @@ export default function DashboardPage() {
           {/* Status breakdown */}
           {allTickets.length > 0 && (
             <div className="rounded-xl p-5" style={panel}>
-              <h3 className="text-sm font-semibold text-gray-100 mb-4">Breakdown by Status</h3>
+              <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Breakdown by Status</h3>
               <div className="space-y-2">
                 {Object.entries(
                   allTickets.reduce<Record<string, number>>((acc, t) => {
@@ -352,12 +352,12 @@ export default function DashboardPage() {
                     <div key={status} className="flex items-center gap-3">
                       <span
                         className="h-2 w-2 rounded-full shrink-0"
-                        style={{ background: STATUS_DOT[status] ?? '#555555' }}
+                        style={{ background: STATUS_DOT[status] ?? 'var(--color-text-muted)' }}
                       />
-                      <span className="flex-1 text-sm" style={{ color: '#888888' }}>
+                      <span className="flex-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
                         {status.replace(/_/g, ' ')}
                       </span>
-                      <span className="text-sm font-medium text-gray-300">{count}</span>
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{count}</span>
                     </div>
                   ))}
               </div>
@@ -366,10 +366,10 @@ export default function DashboardPage() {
 
           {/* Empty state */}
           {!isLoading && allTickets.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 gap-3" style={{ color: '#444444' }}>
+            <div className="flex flex-col items-center justify-center py-24 gap-3" style={{ color: 'var(--color-text-muted)' }}>
               <Ticket className="h-12 w-12" />
-              <p className="text-base font-medium" style={{ color: '#666666' }}>No tickets yet</p>
-              <p className="text-sm" style={{ color: '#444444' }}>
+              <p className="text-base font-medium" style={{ color: 'var(--color-text-secondary)' }}>No tickets yet</p>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 Tickets you create or are assigned to will appear here.
               </p>
             </div>
@@ -399,7 +399,7 @@ function TicketRow({
   return (
     <div
       className="group flex items-start gap-2.5 px-4 py-2.5 cursor-pointer transition-colors"
-      style={{ background: hovered ? '#1a1a1a' : 'transparent', opacity: isHidden ? 0.4 : 1 }}
+      style={{ background: hovered ? 'var(--color-bg-surface)' : 'transparent', opacity: isHidden ? 0.4 : 1 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={onClick}
@@ -407,11 +407,11 @@ function TicketRow({
       {/* Status dot / checkmark */}
       <div className="mt-0.5 shrink-0 flex items-center justify-center h-4 w-4">
         {isDone ? (
-          <CheckCircle2 className="h-4 w-4" style={{ color: '#14b8a6' }} />
+          <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
         ) : (
           <span
             className="h-2 w-2 rounded-full"
-            style={{ background: STATUS_DOT[ticket.status] ?? '#555555' }}
+            style={{ background: STATUS_DOT[ticket.status] ?? 'var(--color-text-muted)' }}
           />
         )}
       </div>
@@ -421,13 +421,13 @@ function TicketRow({
         <p
           className="text-sm leading-snug truncate"
           style={{
-            color: isDone ? '#555555' : '#cccccc',
+            color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
             textDecoration: isDone ? 'line-through' : 'none',
           }}
         >
           {ticket.title}
         </p>
-        <p className="text-xs mt-0.5" style={{ color: '#444444' }}>
+        <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
           {ticket.category?.name ?? 'No category'} ·{' '}
           {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
         </p>
@@ -439,13 +439,13 @@ function TicketRow({
           onClick={(e) => { e.stopPropagation(); onHide(); }}
           title={isHidden ? 'Show' : 'Hide'}
           className="p-0.5 rounded transition-colors"
-          style={{ color: '#444444' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#cccccc')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#444444')}
+          style={{ color: 'var(--color-text-muted)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
         >
           {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
         </button>
-        <ChevronRight className="h-3.5 w-3.5" style={{ color: '#444444' }} />
+        <ChevronRight className="h-3.5 w-3.5" style={{ color: 'var(--color-text-muted)' }} />
       </div>
     </div>
   );

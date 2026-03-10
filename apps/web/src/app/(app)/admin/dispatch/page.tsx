@@ -15,7 +15,6 @@ type DispatchFilters = {
   maintenanceCategoryId?: string;
   createdAfter?: string;
   createdBefore?: string;
-  priority?: string;
 };
 
 const emptyFilters: DispatchFilters = {};
@@ -27,7 +26,6 @@ function toParams(f: DispatchFilters): Record<string, string> {
   if (f.maintenanceCategoryId) out.maintenanceCategoryId = f.maintenanceCategoryId;
   if (f.createdAfter) out.createdAfter = f.createdAfter;
   if (f.createdBefore) out.createdBefore = f.createdBefore;
-  if (f.priority) out.priority = f.priority;
   return out;
 }
 
@@ -39,7 +37,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl p-5" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+    <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
       <div className="flex items-center gap-2 mb-4">
         <BarChart2 className="h-4 w-4 text-gray-400" />
         <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
@@ -141,56 +139,49 @@ export default function DispatchPage() {
   const maintenanceCategories = taxonomy?.maintenanceCategories ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Vendor Dispatch" />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl">
-        {/* Filters */}
-        <div className="rounded-xl p-4 flex flex-wrap gap-3 items-end" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-          <Select value={filters.studioId ?? ''} onChange={(e) => setFilter('studioId', e.target.value)} className="w-48">
+        {/* Filters — single row with horizontal scroll on narrow viewports */}
+        <div className="rounded-xl p-4 flex flex-nowrap gap-3 items-end overflow-x-auto" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          <Select value={filters.studioId ?? ''} onChange={(e) => setFilter('studioId', e.target.value)} className="w-44 shrink-0">
             <option value="">All Studios</option>
             {studios.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </Select>
-          <Select value={filters.marketId ?? ''} onChange={(e) => setFilter('marketId', e.target.value)} className="w-48">
+          <Select value={filters.marketId ?? ''} onChange={(e) => setFilter('marketId', e.target.value)} className="w-44 shrink-0">
             <option value="">All Markets</option>
             {markets.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}
           </Select>
-          <Select value={filters.maintenanceCategoryId ?? ''} onChange={(e) => setFilter('maintenanceCategoryId', e.target.value)} className="w-52">
+          <Select value={filters.maintenanceCategoryId ?? ''} onChange={(e) => setFilter('maintenanceCategoryId', e.target.value)} className="w-48 shrink-0">
             <option value="">All Maintenance Categories</option>
             {maintenanceCategories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </Select>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">From</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-gray-500 whitespace-nowrap">From</span>
             <Input
               type="date"
               value={filters.createdAfter ?? ''}
               onChange={(e) => setFilter('createdAfter', e.target.value)}
-              className="w-40"
+              className="w-[7.25rem] min-w-0 shrink-0"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">To</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-gray-500 whitespace-nowrap">To</span>
             <Input
               type="date"
               value={filters.createdBefore ?? ''}
               onChange={(e) => setFilter('createdBefore', e.target.value)}
-              className="w-40"
+              className="w-[7.25rem] min-w-0 shrink-0"
             />
           </div>
-          <Select value={filters.priority ?? ''} onChange={(e) => setFilter('priority', e.target.value)} className="w-36">
-            <option value="">All Priorities</option>
-            <option value="URGENT">Urgent</option>
-            <option value="HIGH">High</option>
-            <option value="MEDIUM">Medium</option>
-            <option value="LOW">Low</option>
-          </Select>
-          {(filters.studioId || filters.marketId || filters.maintenanceCategoryId || filters.createdAfter || filters.createdBefore || filters.priority) && (
+          {(filters.studioId || filters.marketId || filters.maintenanceCategoryId || filters.createdAfter || filters.createdBefore) && (
             <Button variant="ghost" size="sm" onClick={() => setFilters(emptyFilters)}>
               Clear filters
             </Button>

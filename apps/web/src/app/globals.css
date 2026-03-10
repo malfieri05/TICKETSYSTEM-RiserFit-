@@ -1,20 +1,62 @@
 @import "tailwindcss";
 
+/* Stage 31: Theme token system. Switch via html[data-theme="dark"] | [data-theme="light"]. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg-page: #000000;
+  --color-bg-surface: #111111;
+  --color-bg-surface-raised: #1a1a1a;
+  --color-border-default: #2a2a2a;
+  --color-border-subtle: #252525;
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #cccccc;
+  --color-text-muted: #888888;
+  --color-accent: #14b8a6;
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --color-scrollbar-thumb: #333333;
+  --color-scrollbar-thumb-hover: #555555;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --color-bg-page: #f5f5f5;
+  --color-bg-surface: #ffffff;
+  --color-bg-surface-raised: #ffffff;
+  --color-border-default: #e5e5e5;
+  --color-border-subtle: #eeeeee;
+  --color-text-primary: #171717;
+  --color-text-secondary: #525252;
+  --color-text-muted: #737373;
+  --color-accent: #0d9488;
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --color-scrollbar-thumb: #c4c4c4;
+  --color-scrollbar-thumb-hover: #a3a3a3;
+}
+
 * {
   box-sizing: border-box;
 }
 
-:root {
-  color-scheme: dark;
-}
-
 body {
   font-family: var(--font-inter), system-ui, sans-serif;
-  background: #000000;
-  color: #f0f0f0;
+  background: var(--color-bg-page);
+  color: var(--color-text-primary);
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333333; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #555555; }
+::-webkit-scrollbar-thumb {
+  background: var(--color-scrollbar-thumb);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-thumb-hover);
+}
+
+/* Stage 31: Header nav link hover uses theme vars */
+.header-nav-link:hover {
+  background: var(--color-bg-surface-raised);
+  color: var(--color-text-secondary);
+}

@@ -15,7 +15,7 @@ import { PrismaService } from '../../common/database/prisma.service';
 import { RequestUploadUrlDto } from './dto/attachments.dto';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
-const UPLOAD_URL_TTL = 300;   // 5 minutes — presigned upload URL lifetime
+const UPLOAD_URL_TTL = 300; // 5 minutes — presigned upload URL lifetime
 const DOWNLOAD_URL_TTL = 900; // 15 minutes — presigned download URL lifetime
 
 @Injectable()
@@ -53,7 +53,9 @@ export class AttachmentsService {
     }
 
     // Verify ticket exists
-    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+    });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
     // Build a unique S3 key: tickets/<ticketId>/<timestamp>-<filename>
@@ -86,7 +88,9 @@ export class AttachmentsService {
     dto: RequestUploadUrlDto,
     uploadedById: string,
   ) {
-    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+    });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
     const attachment = await this.prisma.ticketAttachment.create({
@@ -123,7 +127,8 @@ export class AttachmentsService {
     const attachment = await this.prisma.ticketAttachment.findUnique({
       where: { id: attachmentId },
     });
-    if (!attachment) throw new NotFoundException(`Attachment ${attachmentId} not found`);
+    if (!attachment)
+      throw new NotFoundException(`Attachment ${attachmentId} not found`);
 
     const command = new GetObjectCommand({
       Bucket: attachment.s3Bucket,
@@ -135,11 +140,19 @@ export class AttachmentsService {
       expiresIn: DOWNLOAD_URL_TTL,
     });
 
-    return { downloadUrl, filename: attachment.filename, expiresIn: DOWNLOAD_URL_TTL };
+    return {
+      downloadUrl,
+      filename: attachment.filename,
+      expiresIn: DOWNLOAD_URL_TTL,
+    };
   }
 
   /** Upload a buffer to S3 (server-side). Used e.g. for knowledge base PDFs. */
-  async uploadBuffer(key: string, buffer: Buffer, contentType: string): Promise<void> {
+  async uploadBuffer(
+    key: string,
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<void> {
     await this.s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,
@@ -182,7 +195,8 @@ export class AttachmentsService {
     const attachment = await this.prisma.ticketAttachment.findUnique({
       where: { id: attachmentId },
     });
-    if (!attachment) throw new NotFoundException(`Attachment ${attachmentId} not found`);
+    if (!attachment)
+      throw new NotFoundException(`Attachment ${attachmentId} not found`);
 
     // Delete from S3
     await this.s3.send(

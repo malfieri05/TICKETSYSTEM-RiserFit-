@@ -18,7 +18,7 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'get_current_user_context',
       description:
-        'Get the logged-in user\'s id, role, team, studio, market, and permissions scope.',
+        "Get the logged-in user's id, role, team, studio, market, and permissions scope.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -33,23 +33,40 @@ export const AGENT_TOOLS: ToolDef[] = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Free-text search on title/description' },
+          query: {
+            type: 'string',
+            description: 'Free-text search on title/description',
+          },
           status: {
             type: 'array',
             items: {
               type: 'string',
-              enum: ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR', 'RESOLVED', 'CLOSED'],
+              enum: [
+                'NEW',
+                'TRIAGED',
+                'IN_PROGRESS',
+                'WAITING_ON_REQUESTER',
+                'WAITING_ON_VENDOR',
+                'RESOLVED',
+                'CLOSED',
+              ],
             },
             description: 'Filter by one or more statuses',
           },
           priority: {
             type: 'array',
-            items: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+            items: {
+              type: 'string',
+              enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+            },
           },
           category_id: { type: 'string' },
           owner_user_id: { type: 'string' },
           requester_user_id: { type: 'string' },
-          limit: { type: 'number', description: 'Max results (default 10, max 25)' },
+          limit: {
+            type: 'number',
+            description: 'Max results (default 10, max 25)',
+          },
         },
       },
     },
@@ -82,9 +99,15 @@ export const AGENT_TOOLS: ToolDef[] = [
         properties: {
           title: { type: 'string', description: 'Ticket title (required)' },
           description: { type: 'string', description: 'Detailed description' },
-          priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
+          priority: {
+            type: 'string',
+            enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+          },
           category_id: { type: 'string', description: 'Category ID' },
-          owner_user_id: { type: 'string', description: 'User ID to assign the ticket to' },
+          owner_user_id: {
+            type: 'string',
+            description: 'User ID to assign the ticket to',
+          },
         },
         required: ['title'],
       },
@@ -103,7 +126,15 @@ export const AGENT_TOOLS: ToolDef[] = [
           ticket_id: { type: 'string' },
           new_status: {
             type: 'string',
-            enum: ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR', 'RESOLVED', 'CLOSED'],
+            enum: [
+              'NEW',
+              'TRIAGED',
+              'IN_PROGRESS',
+              'WAITING_ON_REQUESTER',
+              'WAITING_ON_VENDOR',
+              'RESOLVED',
+              'CLOSED',
+            ],
           },
         },
         required: ['ticket_id', 'new_status'],
@@ -120,7 +151,10 @@ export const AGENT_TOOLS: ToolDef[] = [
         type: 'object',
         properties: {
           ticket_id: { type: 'string' },
-          owner_user_id: { type: 'string', description: 'User ID to assign, or null to unassign' },
+          owner_user_id: {
+            type: 'string',
+            description: 'User ID to assign, or null to unassign',
+          },
         },
         required: ['ticket_id'],
       },
@@ -131,13 +165,12 @@ export const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'add_ticket_comment',
-      description: 'Add a comment to a ticket. Can be public or internal (agent/admin only).',
+      description: 'Add a comment to a ticket.',
       parameters: {
         type: 'object',
         properties: {
           ticket_id: { type: 'string' },
           body: { type: 'string', description: 'Comment text' },
-          is_internal: { type: 'boolean', description: 'Whether this is an internal note (default false)' },
         },
         required: ['ticket_id', 'body'],
       },
@@ -156,7 +189,11 @@ export const AGENT_TOOLS: ToolDef[] = [
           ticket_id: { type: 'string' },
           title: { type: 'string' },
           owner_user_id: { type: 'string', description: 'Assign to this user' },
-          is_required: { type: 'boolean', description: 'Whether ticket resolution requires this subtask to be done (default true)' },
+          is_required: {
+            type: 'boolean',
+            description:
+              'Whether ticket resolution requires this subtask to be done (default true)',
+          },
         },
         required: ['ticket_id', 'title'],
       },
@@ -167,13 +204,23 @@ export const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'update_subtask_status',
-      description: 'Update a subtask\'s status.',
+      description: "Update a subtask's status.",
       parameters: {
         type: 'object',
         properties: {
           ticket_id: { type: 'string' },
           subtask_id: { type: 'string' },
-          status: { type: 'string', enum: ['LOCKED', 'READY', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'SKIPPED'] },
+          status: {
+            type: 'string',
+            enum: [
+              'LOCKED',
+              'READY',
+              'IN_PROGRESS',
+              'BLOCKED',
+              'DONE',
+              'SKIPPED',
+            ],
+          },
         },
         required: ['ticket_id', 'subtask_id', 'status'],
       },
@@ -193,17 +240,23 @@ export const AGENT_TOOLS: ToolDef[] = [
           group_by: {
             type: 'string',
             enum: ['status', 'priority', 'category', 'market'],
-            description: 'Dimension to group by. Use priority for "how many urgent/high/low" questions.',
+            description:
+              'Dimension to group by. Use priority for "how many urgent/high/low" questions.',
           },
           priority: {
             type: 'array',
-            items: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] },
-            description: 'Optional: filter to these priorities only (e.g. ["URGENT"] for urgent count)',
+            items: {
+              type: 'string',
+              enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
+            },
+            description:
+              'Optional: filter to these priorities only (e.g. ["URGENT"] for urgent count)',
           },
           status: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Optional: filter to specific statuses before grouping',
+            description:
+              'Optional: filter to specific statuses before grouping',
           },
         },
         required: ['group_by'],
@@ -221,8 +274,14 @@ export const AGENT_TOOLS: ToolDef[] = [
       parameters: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'The question or search query' },
-          limit: { type: 'number', description: 'Max chunks to retrieve (default 5)' },
+          query: {
+            type: 'string',
+            description: 'The question or search query',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max chunks to retrieve (default 5)',
+          },
         },
         required: ['query'],
       },
@@ -234,7 +293,8 @@ export const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'list_categories',
-      description: 'List all active ticket categories. Use this when the user wants to create a ticket and you need the category_id.',
+      description:
+        'List all active ticket categories. Use this when the user wants to create a ticket and you need the category_id.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -243,11 +303,16 @@ export const AGENT_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'list_users',
-      description: 'List users (agents/admins) who can be assigned tickets. Use this when you need a user ID for assignment.',
+      description:
+        'List users (agents/admins) who can be assigned tickets. Use this when you need a user ID for assignment.',
       parameters: {
         type: 'object',
         properties: {
-          role: { type: 'string', enum: ['STUDIO_USER', 'DEPARTMENT_USER', 'ADMIN'], description: 'Filter by role' },
+          role: {
+            type: 'string',
+            enum: ['STUDIO_USER', 'DEPARTMENT_USER', 'ADMIN'],
+            description: 'Filter by role',
+          },
         },
       },
     },

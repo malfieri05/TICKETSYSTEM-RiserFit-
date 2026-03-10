@@ -9,7 +9,7 @@ import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 export default function NewWorkflowTemplatePage() {
   const router = useRouter();
@@ -62,7 +62,7 @@ export default function NewWorkflowTemplatePage() {
 
   if (taxonomyLoading || !taxonomy) {
     return (
-      <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+      <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
         <Header title="New workflow template" />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
@@ -72,7 +72,7 @@ export default function NewWorkflowTemplatePage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="New workflow template" />
       <div className="flex-1 p-6 max-w-xl">
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-6">

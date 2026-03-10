@@ -4,13 +4,17 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
 import { ticketsApi, usersApi } from '@/lib/api';
 import type { TicketFilters, TicketStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
+import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
+import { useTicketListQuery } from '@/hooks/useTicketListQuery';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const PAGE_SIZE = 20;
 
@@ -25,9 +29,10 @@ export default function TicketsPage() {
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
   const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const hasInitializedFromUrl = useRef(false);
+  const listContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync filters from URL once on mount (e.g. when coming from dispatch dashboard)
   useEffect(() => {
@@ -49,21 +54,30 @@ export default function TicketsPage() {
     }
   }, [searchParams]);
 
-  // Debounce search input — fires query 300ms after user stops typing
+  // Reset to page 1 when debounced search changes (so next fetch uses page 1)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-      setFilters((f) => ({ ...f, page: 1 }));
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search]);
+    setFilters((f) => ({ ...f, page: 1 }));
+  }, [debouncedSearch]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['tickets', filters, viewTab, debouncedSearch],
-    queryFn: () => ticketsApi.list({ ...filters, search: debouncedSearch || undefined }),
-  });
+  const listParams = {
+    page: filters.page ?? 1,
+    limit: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    teamId: filters.teamId,
+    status: filters.status,
+    ticketClassId: filters.ticketClassId,
+    studioId: filters.studioId,
+    marketId: filters.marketId,
+    maintenanceCategoryId: filters.maintenanceCategoryId,
+  };
 
-  const allTickets = data?.data.data ?? [];
+  const {
+    tickets: allTickets,
+    total,
+    totalPages,
+    isInitialLoading,
+    isFetching,
+  } = useTicketListQuery('list', listParams);
 
   // Departments (teams) derived from users list
   const { data: usersRes } = useQuery({
@@ -81,9 +95,7 @@ export default function TicketsPage() {
 
   const usersById = new Map(users.map((u) => [u.id, u]));
 
-  // Live counts for Active / Completed tabs based on the currently loaded set.
-  // This automatically respects search + filter controls and updates as results change.
-  const matchesDepartment = (ticket: typeof allTickets[number]) => {
+  const matchesDepartment = (ticket: (typeof allTickets)[number]) => {
     if (!filters.teamId) return true;
     const requester = usersById.get(ticket.requester.id);
     const owner = ticket.owner ? usersById.get(ticket.owner.id) : undefined;
@@ -94,30 +106,44 @@ export default function TicketsPage() {
   };
 
   const ticketsByDept = allTickets.filter(matchesDepartment);
-
   const activeCount = ticketsByDept.filter((t) => ACTIVE_STATUSES.includes(t.status as TicketStatus)).length;
   const completedCount = ticketsByDept.filter((t) => COMPLETED_STATUSES.includes(t.status as TicketStatus)).length;
 
   const tickets = ticketsByDept.filter((t) =>
     filters.status
-      ? true // if user picked a specific status from dropdown, don't override
+      ? true
       : viewTab === 'active'
         ? ACTIVE_STATUSES.includes(t.status as TicketStatus)
         : COMPLETED_STATUSES.includes(t.status as TicketStatus),
   );
-  const total = data?.data.total ?? 0;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const setFilter = (key: keyof TicketFilters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
   };
 
+  // Scroll list area to top when page changes (predictable UX)
+  const currentPage = filters.page ?? 1;
+  useEffect(() => {
+    listContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [currentPage]);
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Tickets" />
 
+      {/* View purpose copy */}
+      <div
+        className="px-6 py-3 text-sm space-y-1"
+        style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
+      >
+        <p>Global list of all tickets you are allowed to see across departments and locations.</p>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Use the Active / Completed tabs to switch between open work and historical tickets. Filters and search further narrow this list.
+        </p>
+      </div>
+
       {/* Sub-category tabs */}
-      <div className="flex items-center gap-1 px-6 py-2.5" style={{ background: '#0a0a0a', borderBottom: '1px solid #1e1e1e' }}>
+      <div className="flex items-center gap-1 px-6 py-2.5" style={{ background: 'var(--color-bg-page)', borderBottom: '1px solid var(--color-border-default)' }}>
         {([
           { key: 'active' as ViewTab, label: 'Active', count: activeCount },
           { key: 'completed' as ViewTab, label: 'Completed', count: completedCount },
@@ -129,19 +155,19 @@ export default function TicketsPage() {
               onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
               className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
               style={{
-                background: active ? '#1e1e1e' : 'transparent',
-                color: active ? '#f0f0f0' : '#666666',
-                border: active ? '1px solid #2a2a2a' : '1px solid transparent',
+                background: active ? 'var(--color-bg-surface)' : 'transparent',
+                color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                border: active ? '1px solid var(--color-border-default)' : '1px solid transparent',
               }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#aaaaaa'; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#666666'; }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
             >
               {label}
               <span
                 className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
                 style={{
-                  background: active ? '#2a2a2a' : '#1a1a1a',
-                  color: active ? '#e0e0e0' : '#555555',
+                  background: active ? 'var(--color-bg-surface-raised)' : 'var(--color-bg-surface)',
+                  color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                 }}
               >
                 {count}
@@ -151,11 +177,11 @@ export default function TicketsPage() {
         })}
       </div>
 
-      <div className="flex-1 p-6 space-y-4" style={{ background: '#000000' }}>
+      <div ref={listContainerRef} className="flex-1 p-6 space-y-4 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>
         {/* Filters bar */}
         <div className="flex flex-wrap gap-3 items-end">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: '#555555' }} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
             <Input
               placeholder="Search tickets..."
               value={search}
@@ -177,7 +203,7 @@ export default function TicketsPage() {
             ))}
           </Select>
 
-          {(filters.teamId || filters.search || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId) && (
+          {(filters.teamId || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId || search) && (
             <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
               Clear filters
             </Button>
@@ -185,25 +211,50 @@ export default function TicketsPage() {
         </div>
 
         {/* Table */}
-        <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-              <span className="text-sm text-gray-500">Loading…</span>
+        <div className="rounded-xl overflow-hidden" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}>
+          {isFetching && tickets.length > 0 && (
+            <div
+              className="px-4 py-1.5 flex items-center gap-2 border-b"
+              style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBgHeader }}
+            >
+              <div className="animate-spin h-3 w-3 rounded-full border-2 border-teal-500 border-t-transparent" />
+              <span className="text-xs" style={{ color: POLISH_THEME.metaMuted }}>
+                Fetching…
+              </span>
             </div>
+          )}
+          {isInitialLoading ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Title</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Created</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Progress</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Requester</th>
+                </tr>
+              </thead>
+              <TicketsTableSkeletonRows count={8} />
+            </table>
           ) : tickets.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: '#555555' }}>
+            <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
               {Object.keys(filters).some((k) => k !== 'page' && k !== 'limit' && filters[k as keyof TicketFilters]) || debouncedSearch ? (
                 <>
-                  <p className="text-sm font-medium text-gray-300">No tickets found</p>
+                  <p className="text-sm font-medium text-gray-300">No tickets match your current filters</p>
                   <p className="text-xs text-center">Try adjusting your filters or search.</p>
                   <Button variant="ghost" size="sm" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
                     Clear filters
                   </Button>
                 </>
+              ) : viewTab === 'completed' ? (
+                <>
+                  <p className="text-sm font-medium text-gray-300">No completed tickets yet</p>
+                  <p className="text-xs text-center max-w-sm">
+                    Tickets move here after they are resolved or closed. Check the Active tab for work in progress.
+                  </p>
+                </>
               ) : (
                 <>
-                  <p className="text-sm font-medium text-gray-300">No tickets yet</p>
+                  <p className="text-sm font-medium text-gray-300">No active tickets yet</p>
                   <p className="text-xs text-center max-w-sm">Create your first ticket to start tracking requests.</p>
                   <Button size="sm" onClick={() => router.push('/tickets/new')}>
                     New Ticket
@@ -214,52 +265,32 @@ export default function TicketsPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Title</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Created</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Progress</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Requester</th>
+                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Title</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Created</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Progress</th>
+                  <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>Requester</th>
                 </tr>
               </thead>
               <tbody>
                 {tickets.map((ticket) => {
-                  const total = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-                  const completed = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-                  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                  const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+                  const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
                   return (
-                  <tr
-                    key={ticket.id}
-                    onClick={() => setSelectedId(ticket.id)}
-                    className="cursor-pointer transition-colors"
-                    style={{
-                      borderBottom: '1px solid #222222',
-                      background: selectedId === ticket.id ? '#1e2a1e' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => { if (selectedId !== ticket.id) e.currentTarget.style.background = '#222222'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = selectedId === ticket.id ? '#1e2a1e' : 'transparent'; }}
-                  >
-                    <td className="px-4 py-3">
-                      <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
-                    </td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#aaaaaa' }}>
-                      {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium tabular-nums" style={{ color: '#aaaaaa' }}>{completed} / {total}</span>
-                        {total > 0 && (
-                          <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
-                            <div
-                              className="h-full rounded-full transition-all"
-                              style={{ width: `${pct}%`, background: pct === 100 ? '#22c55e' : '#14b8a6' }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3" style={{ color: '#777777' }}>{ticket.requester.displayName}</td>
-                  </tr>
-                );})}
+                    <TicketTableRow
+                      key={ticket.id}
+                      id={ticket.id}
+                      title={ticket.title}
+                      createdAt={ticket.createdAt}
+                      commentCount={ticket._count?.comments ?? 0}
+                      completedSubtasks={completedSubtasks}
+                      totalSubtasks={totalSubtasks}
+                      requesterDisplayName={ticket.requester.displayName}
+                      isSelected={selectedId === ticket.id}
+                      onSelect={() => setSelectedId(ticket.id)}
+                    />
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -268,18 +299,31 @@ export default function TicketsPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex items-center justify-between">
-            <p className="text-sm" style={{ color: '#555555' }}>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
             </p>
             <div className="flex gap-2">
-              <Button variant="secondary" size="sm" disabled={(filters.page ?? 1) <= 1} onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}>Previous</Button>
-              <Button variant="secondary" size="sm" disabled={(filters.page ?? 1) >= totalPages} onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}>Next</Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={(filters.page ?? 1) <= 1 || isFetching}
+                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={(filters.page ?? 1) >= totalPages || isFetching}
+                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
+              >
+                Next
+              </Button>
             </div>
           </div>
         )}
       </div>
 
-      {/* Slide-in drawer */}
       <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );

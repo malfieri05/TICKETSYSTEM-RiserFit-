@@ -65,8 +65,13 @@ export class TeamsChannel {
         throw new Error(`Teams webhook returned ${res.status}: ${errorText}`);
       }
 
-      await this.markDelivered(payload.notificationDeliveryId, `teams-ok-${Date.now()}`);
-      this.logger.debug(`Teams card sent for delivery ${payload.notificationDeliveryId}`);
+      await this.markDelivered(
+        payload.notificationDeliveryId,
+        `teams-ok-${Date.now()}`,
+      );
+      this.logger.debug(
+        `Teams card sent for delivery ${payload.notificationDeliveryId}`,
+      );
     } catch (error) {
       await this.markFailed(payload.notificationDeliveryId, String(error));
       this.logger.error(`Teams send failed: ${error}`);

@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
-import { ticketsApi, adminApi, ticketFormsApi } from '@/lib/api';
+import { ticketsApi, adminApi, ticketFormsApi, invalidateTicketLists } from '@/lib/api';
 import type {
   TicketFormSchemaDto,
   FormFieldDto,
@@ -83,7 +83,7 @@ export default function NewTicketPage() {
   const mutation = useMutation({
     mutationFn: (payload: CreateTicketPayload) => ticketsApi.create(payload),
     onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['tickets'] });
+      invalidateTicketLists(qc);
       router.push(`/tickets/${res.data.id}`);
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {

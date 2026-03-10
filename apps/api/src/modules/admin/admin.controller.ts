@@ -6,6 +6,7 @@ import {
   Body,
   Param,
   Query,
+  ForbiddenException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import {
@@ -16,11 +17,18 @@ import {
 } from './dto/admin.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequestUser } from '../auth/strategies/jwt.strategy';
+import { PolicyService } from '../../policy/policy.service';
+import { ADMIN_TAXONOMY_MANAGE } from '../../policy/capabilities/capability-keys';
 
 @Controller('admin')
 @Roles(Role.ADMIN)
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private policy: PolicyService,
+  ) {}
 
   // Read-only ticket taxonomy (Stage 2); any authenticated user
   @Get('config/ticket-taxonomy')
@@ -39,12 +47,28 @@ export class AdminController {
   }
 
   @Post('markets')
-  createMarket(@Body() dto: CreateMarketDto) {
+  createMarket(@Body() dto: CreateMarketDto, @CurrentUser() user: RequestUser) {
+    const decision = this.policy.evaluate(ADMIN_TAXONOMY_MANAGE, user, null);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to modify markets',
+      );
+    }
     return this.adminService.createMarket(dto);
   }
 
   @Patch('markets/:id')
-  updateMarket(@Param('id') id: string, @Body() dto: UpdateMarketDto) {
+  updateMarket(
+    @Param('id') id: string,
+    @Body() dto: UpdateMarketDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const decision = this.policy.evaluate(ADMIN_TAXONOMY_MANAGE, user, null);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to modify markets',
+      );
+    }
     return this.adminService.updateMarket(id, dto);
   }
 
@@ -56,7 +80,10 @@ export class AdminController {
     @Query('radiusMiles') radiusMiles?: string,
   ) {
     const parsed = radiusMiles != null ? parseFloat(radiusMiles) : 25;
-    const radius = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 25, 0), 100);
+    const radius = Math.min(
+      Math.max(Number.isFinite(parsed) ? parsed : 25, 0),
+      100,
+    );
     return this.adminService.getNearbyStudios(id, radius);
   }
 
@@ -66,12 +93,28 @@ export class AdminController {
   }
 
   @Post('studios')
-  createStudio(@Body() dto: CreateStudioDto) {
+  createStudio(@Body() dto: CreateStudioDto, @CurrentUser() user: RequestUser) {
+    const decision = this.policy.evaluate(ADMIN_TAXONOMY_MANAGE, user, null);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to modify studios',
+      );
+    }
     return this.adminService.createStudio(dto);
   }
 
   @Patch('studios/:id')
-  updateStudio(@Param('id') id: string, @Body() dto: UpdateStudioDto) {
+  updateStudio(
+    @Param('id') id: string,
+    @Body() dto: UpdateStudioDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const decision = this.policy.evaluate(ADMIN_TAXONOMY_MANAGE, user, null);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to modify studios',
+      );
+    }
     return this.adminService.updateStudio(id, dto);
   }
 }

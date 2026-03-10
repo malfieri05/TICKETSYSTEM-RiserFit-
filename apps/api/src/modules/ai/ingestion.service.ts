@@ -5,7 +5,11 @@ import { Queue } from 'bullmq';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
-import { QUEUES, KnowledgeIngestionJobData, KNOWLEDGE_INGESTION_JOB_OPTIONS } from '../../common/queue/queue.constants';
+import {
+  QUEUES,
+  KnowledgeIngestionJobData,
+  KNOWLEDGE_INGESTION_JOB_OPTIONS,
+} from '../../common/queue/queue.constants';
 
 // How many characters per chunk (~300 tokens ≈ 1200 chars for English text)
 const CHUNK_SIZE = 1200;
@@ -23,11 +27,14 @@ export class IngestionService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly attachmentsService: AttachmentsService,
-    @InjectQueue(QUEUES.KNOWLEDGE_INGESTION) private readonly knowledgeIngestionQueue: Queue,
+    @InjectQueue(QUEUES.KNOWLEDGE_INGESTION)
+    private readonly knowledgeIngestionQueue: Queue,
   ) {
     const key = this.config.get<string>('OPENAI_API_KEY');
     if (!key) {
-      this.logger.warn('OPENAI_API_KEY not set — AI features will be unavailable (dev mode)');
+      this.logger.warn(
+        'OPENAI_API_KEY not set — AI features will be unavailable (dev mode)',
+      );
     } else {
       this._openai = new OpenAI({ apiKey: key });
     }
@@ -35,7 +42,9 @@ export class IngestionService {
 
   private get openai(): OpenAI {
     if (!this._openai) {
-      throw new Error('OPENAI_API_KEY is not configured. Set it in apps/api/.env to use AI features.');
+      throw new Error(
+        'OPENAI_API_KEY is not configured. Set it in apps/api/.env to use AI features.',
+      );
     }
     return this._openai;
   }
@@ -81,8 +90,9 @@ export class IngestionService {
       const embeddings = await this.embedBatch(batch);
 
       await Promise.all(
-        batch.map((text, j) =>
-          this.prisma.$executeRaw`
+        batch.map(
+          (text, j) =>
+            this.prisma.$executeRaw`
             INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt")
             VALUES (
               ${this.generateId()},
@@ -103,7 +113,9 @@ export class IngestionService {
       where: { id: doc.id },
       data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
     });
-    this.logger.log(`Ingestion complete: docId=${doc.id}, chunks=${chunks.length}`);
+    this.logger.log(
+      `Ingestion complete: docId=${doc.id}, chunks=${chunks.length}`,
+    );
     return { documentId: doc.id, chunksCreated: chunks.length };
   }
 
@@ -121,7 +133,9 @@ export class IngestionService {
    * Called by the knowledge-ingestion worker. On failure sets ingestionStatus = 'failed' and rethrows (worker logs).
    */
   async runIngestionForDocument(documentId: string): Promise<void> {
-    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    const doc = await this.prisma.knowledgeDocument.findUnique({
+      where: { id: documentId },
+    });
     if (!doc) {
       throw new Error(`Document ${documentId} not found`);
     }
@@ -151,7 +165,9 @@ export class IngestionService {
       await this.prisma.documentChunk.deleteMany({ where: { documentId } });
 
       const chunks = this.splitIntoChunks(text);
-      this.logger.log(`Ingesting document ${documentId} → ${chunks.length} chunks`);
+      this.logger.log(
+        `Ingesting document ${documentId} → ${chunks.length} chunks`,
+      );
 
       const BATCH = 20;
       let chunkIndex = 0;
@@ -159,8 +175,9 @@ export class IngestionService {
         const batch = chunks.slice(i, i + BATCH);
         const embeddings = await this.embedBatch(batch);
         await Promise.all(
-          batch.map((content, j) =>
-            this.prisma.$executeRaw`
+          batch.map(
+            (content, j) =>
+              this.prisma.$executeRaw`
               INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt")
               VALUES (
                 ${this.generateId()},
@@ -181,7 +198,9 @@ export class IngestionService {
         where: { id: documentId },
         data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
       });
-      this.logger.log(`Ingestion complete: documentId=${documentId}, chunks=${chunks.length}`);
+      this.logger.log(
+        `Ingestion complete: documentId=${documentId}, chunks=${chunks.length}`,
+      );
     } catch (err) {
       await this.prisma.knowledgeDocument.update({
         where: { id: documentId },
@@ -193,7 +212,9 @@ export class IngestionService {
 
   /** Delete a document and all its chunks. Removes S3 object if s3Key is set. */
   async deleteDocument(documentId: string): Promise<void> {
-    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    const doc = await this.prisma.knowledgeDocument.findUnique({
+      where: { id: documentId },
+    });
     if (doc?.s3Key) {
       try {
         await this.attachmentsService.deleteObjectByKey(doc.s3Key);

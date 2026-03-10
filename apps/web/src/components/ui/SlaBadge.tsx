@@ -27,7 +27,7 @@ const SLA_CONFIG: Record<SlaStatusValue, { label: string; style: React.CSSProper
   },
   RESOLVED: {
     label: 'Resolved',
-    style: { background: '#222222', color: '#666666', border: '1px solid #2a2a2a' },
+    style: { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-default)' },
   },
 };
 
@@ -78,13 +78,13 @@ export function SlaProgressBar({ sla }: { sla: SlaStatus }) {
 
   return (
     <div className="flex items-center gap-1.5 min-w-0">
-      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: '#2a2a2a' }}>
+      <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
         <div
           className="h-1 rounded-full transition-all"
           style={{ width: `${pct}%`, background: barColor }}
         />
       </div>
-      <span className="text-xs shrink-0" style={{ color: '#555555' }}>{pct.toFixed(0)}%</span>
+      <span className="text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>{pct.toFixed(0)}%</span>
     </div>
   );
 }

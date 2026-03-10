@@ -20,12 +20,14 @@ function makeActor(overrides: Partial<RequestUser> = {}): RequestUser {
   };
 }
 
-function makeTicket(overrides: Partial<{
-  requesterId: string;
-  ownerId: string | null;
-  studioId: string | null;
-  owner: { teamId: string | null; team?: { name: string } | null } | null;
-}> = {}) {
+function makeTicket(
+  overrides: Partial<{
+    requesterId: string;
+    ownerId: string | null;
+    studioId: string | null;
+    owner: { teamId: string | null; team?: { name: string } | null } | null;
+  }> = {},
+) {
   return {
     requesterId: 'other-user',
     ownerId: null,
@@ -86,7 +88,9 @@ describe('TicketVisibilityService', () => {
     it('DEPARTMENT_USER returns ownerId condition for self', () => {
       const actor = makeActor({ role: 'DEPARTMENT_USER', departments: [] });
       const where = service.buildWhereClause(actor);
-      expect(where).toMatchObject({ OR: expect.arrayContaining([{ ownerId: 'user-1' }]) });
+      expect(where).toMatchObject({
+        OR: expect.arrayContaining([{ ownerId: 'user-1' }]),
+      });
     });
 
     it('DEPARTMENT_USER with departments includes team name condition', () => {
@@ -100,7 +104,10 @@ describe('TicketVisibilityService', () => {
     });
 
     it('DEPARTMENT_USER maps OPERATIONS to "Operations" team name', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', departments: ['OPERATIONS'] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        departments: ['OPERATIONS'],
+      });
       const where = service.buildWhereClause(actor);
       expect(where).toMatchObject({
         OR: expect.arrayContaining([
@@ -110,7 +117,10 @@ describe('TicketVisibilityService', () => {
     });
 
     it('DEPARTMENT_USER maps MARKETING to "Marketing" team name', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', departments: ['MARKETING'] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        departments: ['MARKETING'],
+      });
       const where = service.buildWhereClause(actor);
       expect(where).toMatchObject({
         OR: expect.arrayContaining([
@@ -127,9 +137,7 @@ describe('TicketVisibilityService', () => {
       });
       const where = service.buildWhereClause(actor);
       expect(where).toMatchObject({
-        OR: expect.arrayContaining([
-          { studioId: { in: ['studio-X'] } },
-        ]),
+        OR: expect.arrayContaining([{ studioId: { in: ['studio-X'] } }]),
       });
     });
   });
@@ -139,54 +147,114 @@ describe('TicketVisibilityService', () => {
   describe('assertCanView', () => {
     it('ADMIN can view any ticket', () => {
       const actor = makeActor({ role: 'ADMIN' });
-      expect(() => service.assertCanView(makeTicket({ requesterId: 'stranger', studioId: 'other' }), actor)).not.toThrow();
+      expect(() =>
+        service.assertCanView(
+          makeTicket({ requesterId: 'stranger', studioId: 'other' }),
+          actor,
+        ),
+      ).not.toThrow();
     });
 
     it('STUDIO_USER can view their own submitted ticket', () => {
-      const actor = makeActor({ role: 'STUDIO_USER', id: 'user-1', studioId: null });
-      expect(() => service.assertCanView(makeTicket({ requesterId: 'user-1', studioId: 'other' }), actor)).not.toThrow();
+      const actor = makeActor({
+        role: 'STUDIO_USER',
+        id: 'user-1',
+        studioId: null,
+      });
+      expect(() =>
+        service.assertCanView(
+          makeTicket({ requesterId: 'user-1', studioId: 'other' }),
+          actor,
+        ),
+      ).not.toThrow();
     });
 
     it('STUDIO_USER can view a ticket from their primary studio', () => {
       const actor = makeActor({ role: 'STUDIO_USER', studioId: 'studio-1' });
-      expect(() => service.assertCanView(makeTicket({ requesterId: 'other', studioId: 'studio-1' }), actor)).not.toThrow();
+      expect(() =>
+        service.assertCanView(
+          makeTicket({ requesterId: 'other', studioId: 'studio-1' }),
+          actor,
+        ),
+      ).not.toThrow();
     });
 
     it('STUDIO_USER can view a ticket from a scope-override studio', () => {
-      const actor = makeActor({ role: 'STUDIO_USER', studioId: null, scopeStudioIds: ['studio-X'] });
-      expect(() => service.assertCanView(makeTicket({ requesterId: 'other', studioId: 'studio-X' }), actor)).not.toThrow();
+      const actor = makeActor({
+        role: 'STUDIO_USER',
+        studioId: null,
+        scopeStudioIds: ['studio-X'],
+      });
+      expect(() =>
+        service.assertCanView(
+          makeTicket({ requesterId: 'other', studioId: 'studio-X' }),
+          actor,
+        ),
+      ).not.toThrow();
     });
 
     it('STUDIO_USER throws ForbiddenException for out-of-scope ticket', () => {
-      const actor = makeActor({ role: 'STUDIO_USER', studioId: 'studio-1', scopeStudioIds: [] });
+      const actor = makeActor({
+        role: 'STUDIO_USER',
+        studioId: 'studio-1',
+        scopeStudioIds: [],
+      });
       expect(() =>
-        service.assertCanView(makeTicket({ requesterId: 'other', studioId: 'studio-2' }), actor),
+        service.assertCanView(
+          makeTicket({ requesterId: 'other', studioId: 'studio-2' }),
+          actor,
+        ),
       ).toThrow(ForbiddenException);
     });
 
     it('DEPARTMENT_USER can view a ticket assigned to them', () => {
       const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1' });
       expect(() =>
-        service.assertCanView(makeTicket({ ownerId: 'user-1', studioId: 'other' }), actor),
+        service.assertCanView(
+          makeTicket({ ownerId: 'user-1', studioId: 'other' }),
+          actor,
+        ),
       ).not.toThrow();
     });
 
     it('DEPARTMENT_USER with scope override can view studio ticket', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', scopeStudioIds: ['studio-Y'] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        scopeStudioIds: ['studio-Y'],
+      });
       expect(() =>
-        service.assertCanView(makeTicket({ ownerId: null, studioId: 'studio-Y' }), actor),
+        service.assertCanView(
+          makeTicket({ ownerId: null, studioId: 'studio-Y' }),
+          actor,
+        ),
       ).not.toThrow();
     });
 
     it('DEPARTMENT_USER throws ForbiddenException for unrelated ticket', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1', scopeStudioIds: [] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        id: 'user-1',
+        scopeStudioIds: [],
+      });
       expect(() =>
-        service.assertCanView(makeTicket({ requesterId: 'other', ownerId: 'other', studioId: 'studio-Z' }), actor),
+        service.assertCanView(
+          makeTicket({
+            requesterId: 'other',
+            ownerId: 'other',
+            studioId: 'studio-Z',
+          }),
+          actor,
+        ),
       ).toThrow(ForbiddenException);
     });
 
     it('DEPARTMENT_USER can view ticket owned by teammate in same department', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1', departments: ['HR'], scopeStudioIds: [] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        id: 'user-1',
+        departments: ['HR'],
+        scopeStudioIds: [],
+      });
       const ticket = makeTicket({
         ownerId: 'teammate-id',
         studioId: 'other-studio',
@@ -196,13 +264,20 @@ describe('TicketVisibilityService', () => {
     });
 
     it('DEPARTMENT_USER cannot view ticket when owner is in different department', () => {
-      const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1', departments: ['HR'], scopeStudioIds: [] });
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        id: 'user-1',
+        departments: ['HR'],
+        scopeStudioIds: [],
+      });
       const ticket = makeTicket({
         ownerId: 'other-user',
         studioId: 'other-studio',
         owner: { teamId: 'team-2', team: { name: 'Marketing' } },
       });
-      expect(() => service.assertCanView(ticket, actor)).toThrow(ForbiddenException);
+      expect(() => service.assertCanView(ticket, actor)).toThrow(
+        ForbiddenException,
+      );
     });
   });
 
@@ -211,27 +286,37 @@ describe('TicketVisibilityService', () => {
   describe('canModify', () => {
     it('ADMIN can always modify', () => {
       const actor = makeActor({ role: 'ADMIN' });
-      expect(service.canModify({ requesterId: 'x', ownerId: 'y' }, actor)).toBe(true);
+      expect(service.canModify({ requesterId: 'x', ownerId: 'y' }, actor)).toBe(
+        true,
+      );
     });
 
     it('DEPARTMENT_USER who owns the ticket can modify', () => {
       const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1' });
-      expect(service.canModify({ requesterId: 'x', ownerId: 'user-1' }, actor)).toBe(true);
+      expect(
+        service.canModify({ requesterId: 'x', ownerId: 'user-1' }, actor),
+      ).toBe(true);
     });
 
     it('DEPARTMENT_USER who does not own the ticket cannot modify', () => {
       const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1' });
-      expect(service.canModify({ requesterId: 'x', ownerId: 'user-2' }, actor)).toBe(false);
+      expect(
+        service.canModify({ requesterId: 'x', ownerId: 'user-2' }, actor),
+      ).toBe(false);
     });
 
     it('STUDIO_USER who submitted the ticket can modify', () => {
       const actor = makeActor({ role: 'STUDIO_USER', id: 'user-1' });
-      expect(service.canModify({ requesterId: 'user-1', ownerId: null }, actor)).toBe(true);
+      expect(
+        service.canModify({ requesterId: 'user-1', ownerId: null }, actor),
+      ).toBe(true);
     });
 
     it('STUDIO_USER who did not submit the ticket cannot modify', () => {
       const actor = makeActor({ role: 'STUDIO_USER', id: 'user-1' });
-      expect(service.canModify({ requesterId: 'other', ownerId: 'user-1' }, actor)).toBe(false);
+      expect(
+        service.canModify({ requesterId: 'other', ownerId: 'user-1' }, actor),
+      ).toBe(false);
     });
   });
 
@@ -246,7 +331,10 @@ describe('TicketVisibilityService', () => {
     it('does not throw when canModify is true', () => {
       const actor = makeActor({ role: 'STUDIO_USER', id: 'user-1' });
       expect(() =>
-        service.assertCanModify({ requesterId: 'user-1', ownerId: null }, actor),
+        service.assertCanModify(
+          { requesterId: 'user-1', ownerId: null },
+          actor,
+        ),
       ).not.toThrow();
     });
   });

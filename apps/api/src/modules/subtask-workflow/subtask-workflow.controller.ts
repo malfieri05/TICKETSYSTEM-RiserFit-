@@ -1,4 +1,13 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SubtaskWorkflowService } from './subtask-workflow.service';
 import { CreateWorkflowTemplateDto } from './dto/create-workflow-template.dto';
@@ -42,7 +51,10 @@ export class SubtaskWorkflowController {
 
   @Post('templates/:id/subtask-templates/reorder')
   @Roles('ADMIN')
-  reorderSubtaskTemplates(@Param('id') id: string, @Body() dto: ReorderSubtaskTemplatesDto) {
+  reorderSubtaskTemplates(
+    @Param('id') id: string,
+    @Body() dto: ReorderSubtaskTemplatesDto,
+  ) {
     return this.workflow.reorderSubtaskTemplates(id, dto.subtaskTemplateIds);
   }
 
@@ -60,7 +72,10 @@ export class SubtaskWorkflowController {
 
   @Patch('templates/:id')
   @Roles('ADMIN')
-  updateWorkflowTemplate(@Param('id') id: string, @Body() dto: UpdateWorkflowTemplateDto) {
+  updateWorkflowTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateWorkflowTemplateDto,
+  ) {
     return this.workflow.updateWorkflowTemplate(id, {
       name: dto.name,
       sortOrder: dto.sortOrder,
@@ -90,7 +105,10 @@ export class SubtaskWorkflowController {
 
   @Patch('subtask-templates/:id')
   @Roles('ADMIN')
-  updateSubtaskTemplate(@Param('id') id: string, @Body() dto: UpdateSubtaskTemplateDto) {
+  updateSubtaskTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateSubtaskTemplateDto,
+  ) {
     return this.workflow.updateSubtaskTemplate(id, {
       title: dto.title,
       description: dto.description,

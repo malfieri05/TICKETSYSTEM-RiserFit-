@@ -1,4 +1,10 @@
-import { IsString, IsNotEmpty, IsOptional, IsUrl, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsUrl,
+  MaxLength,
+} from 'class-validator';
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 

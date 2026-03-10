@@ -6,26 +6,12 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as dotenv from 'dotenv';
+import { MAINTENANCE_CATEGORY_NAMES } from '../prisma/seed-data/maintenance-categories';
 dotenv.config();
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter } as never);
-
-const REQUIRED_MAINTENANCE_NAMES = [
-  'Safety',
-  'Electrical / Lighting',
-  'HVAC / Climate Control',
-  'Plumbing',
-  'Flooring',
-  'Mirror / Glass',
-  'Doors / Locks / Hardware',
-  'Walls / Paint / Mounted Items',
-  'Roof / Water Intrusion',
-  'Pest Control',
-  'Equipment / Fixtures',
-  'Other',
-];
 
 const REQUIRED_DEPARTMENT_CODES = ['HR', 'OPERATIONS', 'MARKETING', 'RETAIL'];
 
@@ -126,8 +112,8 @@ async function main() {
   console.log('\n4. Required department codes present:', missingDepts.length === 0 ? 'YES' : `MISSING: ${missingDepts.join(', ')}`);
 
   const maintNames = new Set(taxonomyShape.maintenanceCategories.map((c) => c.name));
-  const missingMaint = REQUIRED_MAINTENANCE_NAMES.filter((n) => !maintNames.has(n));
-  console.log('5. Required 12 maintenance categories present:', missingMaint.length === 0 ? 'YES' : `MISSING: ${missingMaint.join(', ')}`);
+  const missingMaint = MAINTENANCE_CATEGORY_NAMES.filter((n) => !maintNames.has(n));
+  console.log(`5. Required ${MAINTENANCE_CATEGORY_NAMES.length} maintenance categories present:`, missingMaint.length === 0 ? 'YES' : `MISSING: ${missingMaint.join(', ')}`);
 
   if (missingMaint.length > 0) {
     console.log('   Present:', Array.from(maintNames).sort().join(', '));

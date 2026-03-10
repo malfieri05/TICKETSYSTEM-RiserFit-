@@ -35,7 +35,10 @@ describe('SubtaskWorkflowService', () => {
     });
 
     it('returns true when adding edge would create cycle A→B→A', async () => {
-      prisma.subtaskTemplate.findMany.mockResolvedValue([{ id: 't1' }, { id: 't2' }]);
+      prisma.subtaskTemplate.findMany.mockResolvedValue([
+        { id: 't1' },
+        { id: 't2' },
+      ]);
       prisma.subtaskTemplateDependency.findMany.mockResolvedValue([
         { subtaskTemplateId: 't2', dependsOnSubtaskTemplateId: 't1' },
       ]);
@@ -44,7 +47,11 @@ describe('SubtaskWorkflowService', () => {
     });
 
     it('returns true when adding C→A in chain A→B→C creates cycle (t1→t2→t3, add t3→t1)', async () => {
-      prisma.subtaskTemplate.findMany.mockResolvedValue([{ id: 't1' }, { id: 't2' }, { id: 't3' }]);
+      prisma.subtaskTemplate.findMany.mockResolvedValue([
+        { id: 't1' },
+        { id: 't2' },
+        { id: 't3' },
+      ]);
       prisma.subtaskTemplateDependency.findMany.mockResolvedValue([
         { subtaskTemplateId: 't1', dependsOnSubtaskTemplateId: 't2' },
         { subtaskTemplateId: 't2', dependsOnSubtaskTemplateId: 't3' },
@@ -65,7 +72,10 @@ describe('SubtaskWorkflowService', () => {
     });
 
     it('throws when would create cycle', async () => {
-      prisma.subtaskTemplate.findMany.mockResolvedValue([{ id: 't1' }, { id: 't2' }]);
+      prisma.subtaskTemplate.findMany.mockResolvedValue([
+        { id: 't1' },
+        { id: 't2' },
+      ]);
       prisma.subtaskTemplateDependency.findMany.mockResolvedValue([
         { subtaskTemplateId: 't2', dependsOnSubtaskTemplateId: 't1' },
       ]);
@@ -88,7 +98,10 @@ describe('SubtaskWorkflowService', () => {
       tx.subtask.findMany.mockResolvedValue([{ status: 'DONE' }]);
       tx.subtask.update.mockResolvedValue({});
 
-      const result = await service.unlockDownstreamIfSatisfied(tx as never, 'sub-a');
+      const result = await service.unlockDownstreamIfSatisfied(
+        tx as never,
+        'sub-a',
+      );
 
       expect(result).toEqual(['sub-b']);
       expect(tx.subtask.update).toHaveBeenCalledWith({
@@ -101,10 +114,19 @@ describe('SubtaskWorkflowService', () => {
       const tx = buildTxMock();
       tx.subtaskDependency.findMany
         .mockResolvedValueOnce([{ subtaskId: 'sub-b' }])
-        .mockResolvedValueOnce([{ dependsOnSubtaskId: 'sub-a' }, { dependsOnSubtaskId: 'sub-c' }]);
-      tx.subtask.findMany.mockResolvedValue([{ status: 'DONE' }, { status: 'LOCKED' }]);
+        .mockResolvedValueOnce([
+          { dependsOnSubtaskId: 'sub-a' },
+          { dependsOnSubtaskId: 'sub-c' },
+        ]);
+      tx.subtask.findMany.mockResolvedValue([
+        { status: 'DONE' },
+        { status: 'LOCKED' },
+      ]);
 
-      const result = await service.unlockDownstreamIfSatisfied(tx as never, 'sub-a');
+      const result = await service.unlockDownstreamIfSatisfied(
+        tx as never,
+        'sub-a',
+      );
 
       expect(result).toEqual([]);
       expect(tx.subtask.update).not.toHaveBeenCalled();

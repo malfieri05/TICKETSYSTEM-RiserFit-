@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DomainEvent } from './domain-event.types';
-import { QUEUES, FANOUT_JOB_OPTIONS, FanOutJobData } from '../../common/queue/queue.constants';
+import {
+  QUEUES,
+  FANOUT_JOB_OPTIONS,
+  FanOutJobData,
+} from '../../common/queue/queue.constants';
 
 /**
  * DomainEventsService — the bridge between domain mutations and the notification pipeline.
@@ -32,17 +36,15 @@ export class DomainEventsService {
         occurredAt: event.occurredAt.toISOString(),
       };
 
-      await this.fanoutQueue.add(
-        event.type,
-        jobData,
-        {
-          ...FANOUT_JOB_OPTIONS,
-          // Idempotency: if same event is enqueued twice within 5 seconds, deduplicate
-          jobId: `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`,
-        },
-      );
+      await this.fanoutQueue.add(event.type, jobData, {
+        ...FANOUT_JOB_OPTIONS,
+        // Idempotency: if same event is enqueued twice within 5 seconds, deduplicate
+        jobId: `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`,
+      });
 
-      this.logger.debug(`Domain event enqueued: ${event.type} for ticket ${event.ticketId}`);
+      this.logger.debug(
+        `Domain event enqueued: ${event.type} for ticket ${event.ticketId}`,
+      );
     } catch (error) {
       // Non-fatal: log but don't crash the request.
       // The mutation already succeeded — we don't roll it back for a queue failure.

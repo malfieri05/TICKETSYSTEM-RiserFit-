@@ -16,7 +16,9 @@ export interface ResolvedTaxonomy {
 }
 
 /** Transaction client from prisma.$transaction(callback) — same shape as PrismaService for model access. */
-export type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
+export type PrismaTx = Parameters<
+  Parameters<PrismaService['$transaction']>[0]
+>[0];
 
 @Injectable()
 export class SubtaskWorkflowService {
@@ -26,7 +28,12 @@ export class SubtaskWorkflowService {
    * Resolve workflow template by ticket context (same keying as form schemas).
    */
   async resolveWorkflowTemplate(ctx: ResolvedTaxonomy) {
-    const { ticketClassId, departmentId, supportTopicId, maintenanceCategoryId } = ctx;
+    const {
+      ticketClassId,
+      departmentId,
+      supportTopicId,
+      maintenanceCategoryId,
+    } = ctx;
     const ticketClass = await this.prisma.ticketClass.findUnique({
       where: { id: ticketClassId, isActive: true },
       select: { code: true },
@@ -79,7 +86,9 @@ export class SubtaskWorkflowService {
     const templateDeps = await this.prisma.subtaskTemplateDependency.findMany({
       where: {
         subtaskTemplateId: { in: template.subtaskTemplates.map((t) => t.id) },
-        dependsOnSubtaskTemplateId: { in: template.subtaskTemplates.map((t) => t.id) },
+        dependsOnSubtaskTemplateId: {
+          in: template.subtaskTemplates.map((t) => t.id),
+        },
       },
     });
     const depsByTemplate = new Map<string, Set<string>>();
@@ -87,7 +96,9 @@ export class SubtaskWorkflowService {
       depsByTemplate.set(t.id, new Set());
     }
     for (const d of templateDeps) {
-      depsByTemplate.get(d.subtaskTemplateId)?.add(d.dependsOnSubtaskTemplateId);
+      depsByTemplate
+        .get(d.subtaskTemplateId)
+        ?.add(d.dependsOnSubtaskTemplateId);
     }
 
     const now = new Date();
@@ -126,7 +137,10 @@ export class SubtaskWorkflowService {
    * When a subtask becomes DONE or SKIPPED, unlock downstream subtasks whose dependencies are all satisfied.
    * Sets status to READY and readyAt = now(). Returns IDs of subtasks that became READY (for notification emission).
    */
-  async unlockDownstreamIfSatisfied(tx: PrismaTx, completedSubtaskId: string): Promise<string[]> {
+  async unlockDownstreamIfSatisfied(
+    tx: PrismaTx,
+    completedSubtaskId: string,
+  ): Promise<string[]> {
     const downstream = await tx.subtaskDependency.findMany({
       where: { dependsOnSubtaskId: completedSubtaskId },
       select: { subtaskId: true },
@@ -183,7 +197,8 @@ export class SubtaskWorkflowService {
     // Forward graph: X depends on Y => X -> Y. If from tail (dependsOn) we can reach head (subtaskTemplateId), adding (head, tail) would create a cycle: head->tail and tail->...->head.
     const outEdges = new Map<string, string[]>();
     for (const e of edges) {
-      if (!outEdges.has(e.subtaskTemplateId)) outEdges.set(e.subtaskTemplateId, []);
+      if (!outEdges.has(e.subtaskTemplateId))
+        outEdges.set(e.subtaskTemplateId, []);
       outEdges.get(e.subtaskTemplateId)!.push(e.dependsOnSubtaskTemplateId);
     }
     const reachable = new Set<string>();
@@ -207,11 +222,26 @@ export class SubtaskWorkflowService {
     name?: string | null;
     sortOrder?: number;
   }) {
-    const sortOrder = typeof data.sortOrder === 'number' && !Number.isNaN(data.sortOrder) ? data.sortOrder : 0;
-    const departmentId = data.departmentId && String(data.departmentId).trim() ? data.departmentId : undefined;
-    const supportTopicId = data.supportTopicId && String(data.supportTopicId).trim() ? data.supportTopicId : undefined;
-    const maintenanceCategoryId = data.maintenanceCategoryId && String(data.maintenanceCategoryId).trim() ? data.maintenanceCategoryId : undefined;
-    const name = data.name != null && String(data.name).trim() !== '' ? data.name : undefined;
+    const sortOrder =
+      typeof data.sortOrder === 'number' && !Number.isNaN(data.sortOrder)
+        ? data.sortOrder
+        : 0;
+    const departmentId =
+      data.departmentId && String(data.departmentId).trim()
+        ? data.departmentId
+        : undefined;
+    const supportTopicId =
+      data.supportTopicId && String(data.supportTopicId).trim()
+        ? data.supportTopicId
+        : undefined;
+    const maintenanceCategoryId =
+      data.maintenanceCategoryId && String(data.maintenanceCategoryId).trim()
+        ? data.maintenanceCategoryId
+        : undefined;
+    const name =
+      data.name != null && String(data.name).trim() !== ''
+        ? data.name
+        : undefined;
 
     try {
       return await this.prisma.subtaskWorkflowTemplate.create({
@@ -321,10 +351,15 @@ export class SubtaskWorkflowService {
     supportTopicId?: string;
     maintenanceCategoryId?: string;
   }) {
-    const where: { ticketClassId?: string; supportTopicId?: string; maintenanceCategoryId?: string } = {};
+    const where: {
+      ticketClassId?: string;
+      supportTopicId?: string;
+      maintenanceCategoryId?: string;
+    } = {};
     if (params?.ticketClassId) where.ticketClassId = params.ticketClassId;
     if (params?.supportTopicId) where.supportTopicId = params.supportTopicId;
-    if (params?.maintenanceCategoryId) where.maintenanceCategoryId = params.maintenanceCategoryId;
+    if (params?.maintenanceCategoryId)
+      where.maintenanceCategoryId = params.maintenanceCategoryId;
 
     return this.prisma.subtaskWorkflowTemplate.findMany({
       where,
@@ -343,7 +378,9 @@ export class SubtaskWorkflowService {
     id: string,
     data: { name?: string | null; sortOrder?: number; isActive?: boolean },
   ) {
-    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id } });
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
+      where: { id },
+    });
     return this.prisma.subtaskWorkflowTemplate.update({
       where: { id },
       data: {
@@ -355,7 +392,9 @@ export class SubtaskWorkflowService {
   }
 
   async getTemplateStats(workflowTemplateId: string) {
-    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id: workflowTemplateId } });
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
+      where: { id: workflowTemplateId },
+    });
     const templateSubtaskIds = await this.prisma.subtaskTemplate
       .findMany({
         where: { workflowTemplateId },
@@ -363,7 +402,11 @@ export class SubtaskWorkflowService {
       })
       .then((rows) => rows.map((r) => r.id));
     if (templateSubtaskIds.length === 0) {
-      return { ticketsUsingTemplate: 0, activeExecutions: 0, completedExecutions: 0 };
+      return {
+        ticketsUsingTemplate: 0,
+        activeExecutions: 0,
+        completedExecutions: 0,
+      };
     }
     const ticketsUsingTemplate = await this.prisma.subtask.groupBy({
       by: ['ticketId'],
@@ -379,7 +422,9 @@ export class SubtaskWorkflowService {
       select: { ticketId: true },
       distinct: ['ticketId'],
     });
-    const activeTicketIds = new Set(ticketsWithActiveRequired.map((r) => r.ticketId));
+    const activeTicketIds = new Set(
+      ticketsWithActiveRequired.map((r) => r.ticketId),
+    );
     const activeExecutions = activeTicketIds.size;
     const completedExecutions = ticketIds.length - activeExecutions;
     return {
@@ -390,7 +435,9 @@ export class SubtaskWorkflowService {
   }
 
   async deleteWorkflowTemplate(id: string) {
-    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({ where: { id } });
+    await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
+      where: { id },
+    });
     await this.prisma.subtaskWorkflowTemplate.delete({ where: { id } });
     return { deleted: true };
   }
@@ -411,9 +458,15 @@ export class SubtaskWorkflowService {
       where: { id },
       data: {
         ...(data.title !== undefined && { title: data.title }),
-        ...(data.description !== undefined && { description: data.description }),
-        ...(data.departmentId !== undefined && { departmentId: data.departmentId }),
-        ...(data.assignedUserId !== undefined && { assignedUserId: data.assignedUserId }),
+        ...(data.description !== undefined && {
+          description: data.description,
+        }),
+        ...(data.departmentId !== undefined && {
+          departmentId: data.departmentId,
+        }),
+        ...(data.assignedUserId !== undefined && {
+          assignedUserId: data.assignedUserId,
+        }),
         ...(data.isRequired !== undefined && { isRequired: data.isRequired }),
         ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
       },
@@ -426,7 +479,10 @@ export class SubtaskWorkflowService {
     return { deleted: true };
   }
 
-  async removeTemplateDependency(subtaskTemplateId: string, dependsOnSubtaskTemplateId: string) {
+  async removeTemplateDependency(
+    subtaskTemplateId: string,
+    dependsOnSubtaskTemplateId: string,
+  ) {
     await this.prisma.subtaskTemplateDependency.delete({
       where: {
         subtaskTemplateId_dependsOnSubtaskTemplateId: {
@@ -442,7 +498,10 @@ export class SubtaskWorkflowService {
    * Reorder subtask templates by array order. Array index = sortOrder.
    * All updates in a single transaction; only subtask templates belonging to this workflow are updated.
    */
-  async reorderSubtaskTemplates(workflowTemplateId: string, subtaskTemplateIds: string[]) {
+  async reorderSubtaskTemplates(
+    workflowTemplateId: string,
+    subtaskTemplateIds: string[],
+  ) {
     await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
       where: { id: workflowTemplateId },
     });

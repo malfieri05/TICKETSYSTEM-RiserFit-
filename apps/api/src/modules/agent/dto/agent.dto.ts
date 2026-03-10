@@ -1,4 +1,10 @@
-import { IsString, IsOptional, MaxLength, IsNotEmpty, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  MaxLength,
+  IsNotEmpty,
+  IsBoolean,
+} from 'class-validator';
 
 export class AgentChatDto {
   @IsString()

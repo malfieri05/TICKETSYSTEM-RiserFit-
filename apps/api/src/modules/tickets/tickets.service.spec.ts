@@ -56,7 +56,11 @@ function buildPrismaMock() {
     subtask: {
       findMany: jest.fn().mockResolvedValue([]),
     },
-    $transaction: jest.fn().mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(prismaTx)),
+    $transaction: jest
+      .fn()
+      .mockImplementation((fn: (tx: unknown) => Promise<unknown>) =>
+        fn(prismaTx),
+      ),
   };
 }
 
@@ -69,17 +73,32 @@ describe('TicketsService', () => {
   let domainEvents: { emit: jest.Mock };
   let sla: { compute: jest.Mock };
   let mySummaryCache: { invalidate: jest.Mock };
-  let visibility: { buildWhereClause: jest.Mock; assertCanView: jest.Mock; assertCanModify: jest.Mock };
+  let visibility: {
+    buildWhereClause: jest.Mock;
+    assertCanView: jest.Mock;
+    assertCanModify: jest.Mock;
+  };
   let ticketForms: { getSchema: jest.Mock };
+  let policy: { evaluate: jest.Mock };
 
   beforeEach(() => {
     prisma = buildPrismaMock();
     prismaTx = buildPrismaMock();
-    (prisma.$transaction as jest.Mock).mockImplementation((fn: (tx: unknown) => Promise<unknown>) => fn(prismaTx));
+    prisma.$transaction.mockImplementation(
+      (fn: (tx: unknown) => Promise<unknown>) => fn(prismaTx),
+    );
 
     auditLog = { log: jest.fn().mockResolvedValue(undefined) };
     domainEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-    sla = { compute: jest.fn().mockReturnValue({ status: 'OK', targetHours: 24, elapsedHours: 0, remainingHours: 24, percentUsed: 0 }) };
+    sla = {
+      compute: jest.fn().mockReturnValue({
+        status: 'OK',
+        targetHours: 24,
+        elapsedHours: 0,
+        remainingHours: 24,
+        percentUsed: 0,
+      }),
+    };
     mySummaryCache = { invalidate: jest.fn() };
     visibility = {
       buildWhereClause: jest.fn().mockReturnValue({}),
@@ -88,6 +107,9 @@ describe('TicketsService', () => {
     };
     ticketForms = {
       getSchema: jest.fn(),
+    };
+    policy = {
+      evaluate: jest.fn().mockReturnValue({ allowed: true }),
     };
     const subtaskWorkflow = {
       instantiateForTicket: jest.fn().mockResolvedValue(undefined),
@@ -102,6 +124,7 @@ describe('TicketsService', () => {
       visibility as never,
       ticketForms as never,
       subtaskWorkflow as never,
+      policy as never,
     );
   });
 
@@ -110,15 +133,25 @@ describe('TicketsService', () => {
       const actor = makeActor();
 
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({
+        id: MAINT_CAT_ID,
+      });
       prismaTx.ticket.create.mockResolvedValue({
         id: 'ticket-2',
         title: 'New taxonomy ticket',
         status: 'NEW',
         ticketClassId: MAINTENANCE_CLASS_ID,
         maintenanceCategoryId: MAINT_CAT_ID,
-        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
-        maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
+        ticketClass: {
+          id: MAINTENANCE_CLASS_ID,
+          code: 'MAINTENANCE',
+          name: 'Maintenance',
+        },
+        maintenanceCategory: {
+          id: MAINT_CAT_ID,
+          name: 'Plumbing',
+          color: null,
+        },
       });
       prismaTx.ticketWatcher.create.mockResolvedValue({});
 
@@ -150,15 +183,25 @@ describe('TicketsService', () => {
     it('emits SUBTASK_BECAME_READY for each initially READY subtask after create', async () => {
       const actor = makeActor();
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({
+        id: MAINT_CAT_ID,
+      });
       prismaTx.ticket.create.mockResolvedValue({
         id: 'ticket-ready',
         title: 'Ticket with workflow',
         status: 'NEW',
         ticketClassId: MAINTENANCE_CLASS_ID,
         maintenanceCategoryId: MAINT_CAT_ID,
-        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
-        maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
+        ticketClass: {
+          id: MAINTENANCE_CLASS_ID,
+          code: 'MAINTENANCE',
+          name: 'Maintenance',
+        },
+        maintenanceCategory: {
+          id: MAINT_CAT_ID,
+          name: 'Plumbing',
+          color: null,
+        },
       });
       prismaTx.ticketWatcher.create.mockResolvedValue({});
       prisma.subtask.findMany.mockResolvedValue([
@@ -223,7 +266,9 @@ describe('TicketsService', () => {
           },
           actor,
         ),
-      ).rejects.toThrow(/SUPPORT tickets require departmentId and supportTopicId/);
+      ).rejects.toThrow(
+        /SUPPORT tickets require departmentId and supportTopicId/,
+      );
 
       expect(prismaTx.ticket.create).not.toHaveBeenCalled();
     });
@@ -238,15 +283,25 @@ describe('TicketsService', () => {
         ],
       });
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({
+        id: MAINT_CAT_ID,
+      });
       prismaTx.ticket.create.mockResolvedValue({
         id: 'ticket-form-1',
         title: 'With form',
         status: 'NEW',
         ticketClassId: MAINTENANCE_CLASS_ID,
         maintenanceCategoryId: MAINT_CAT_ID,
-        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
-        maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
+        ticketClass: {
+          id: MAINTENANCE_CLASS_ID,
+          code: 'MAINTENANCE',
+          name: 'Maintenance',
+        },
+        maintenanceCategory: {
+          id: MAINT_CAT_ID,
+          name: 'Plumbing',
+          color: null,
+        },
       });
       prismaTx.ticketWatcher.create.mockResolvedValue({});
       prismaTx.ticketFormResponse.create.mockResolvedValue({});
@@ -270,7 +325,11 @@ describe('TicketsService', () => {
       });
       expect(prismaTx.ticketFormResponse.create).toHaveBeenCalledTimes(2);
       expect(prismaTx.ticketFormResponse.create).toHaveBeenCalledWith({
-        data: { ticketId: 'ticket-form-1', fieldKey: 'additional_details', value: 'Some notes' },
+        data: {
+          ticketId: 'ticket-form-1',
+          fieldKey: 'additional_details',
+          value: 'Some notes',
+        },
       });
       expect(prismaTx.ticketFormResponse.create).toHaveBeenCalledWith({
         data: { ticketId: 'ticket-form-1', fieldKey: 'urgency', value: 'high' },
@@ -284,7 +343,9 @@ describe('TicketsService', () => {
         fields: [{ fieldKey: 'required_field', required: true }],
       });
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({
+        id: MAINT_CAT_ID,
+      });
 
       await expect(
         service.create(
@@ -317,22 +378,39 @@ describe('TicketsService', () => {
 
     it('create without formResponses does not call ticketForms.getSchema', async () => {
       const actor = makeActor();
-      prisma.ticketClass.findFirst.mockResolvedValue({ id: MAINTENANCE_CLASS_ID });
+      prisma.ticketClass.findFirst.mockResolvedValue({
+        id: MAINTENANCE_CLASS_ID,
+      });
       prisma.ticketClass.findUnique.mockResolvedValue({ code: 'MAINTENANCE' });
-      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({ id: MAINT_CAT_ID });
+      prisma.maintenanceCategory.findUniqueOrThrow.mockResolvedValue({
+        id: MAINT_CAT_ID,
+      });
       prismaTx.ticket.create.mockResolvedValue({
         id: 'ticket-1',
         title: 'Legacy',
         status: 'NEW',
         ticketClassId: MAINTENANCE_CLASS_ID,
         maintenanceCategoryId: MAINT_CAT_ID,
-        ticketClass: { id: MAINTENANCE_CLASS_ID, code: 'MAINTENANCE', name: 'Maintenance' },
-        maintenanceCategory: { id: MAINT_CAT_ID, name: 'Plumbing', color: null },
+        ticketClass: {
+          id: MAINTENANCE_CLASS_ID,
+          code: 'MAINTENANCE',
+          name: 'Maintenance',
+        },
+        maintenanceCategory: {
+          id: MAINT_CAT_ID,
+          name: 'Plumbing',
+          color: null,
+        },
       });
       prismaTx.ticketWatcher.create.mockResolvedValue({});
 
       await service.create(
-        { title: 'Legacy', description: '', ticketClassId: MAINTENANCE_CLASS_ID, maintenanceCategoryId: MAINT_CAT_ID },
+        {
+          title: 'Legacy',
+          description: '',
+          ticketClassId: MAINTENANCE_CLASS_ID,
+          maintenanceCategoryId: MAINT_CAT_ID,
+        },
         actor,
       );
 

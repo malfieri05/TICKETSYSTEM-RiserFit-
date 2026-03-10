@@ -34,7 +34,13 @@ export interface TitleGeneratorParams {
  * Deterministic; safe for empty/missing data.
  */
 export function generateTicketTitle(params: TitleGeneratorParams): string {
-  const { ticketClassCode, supportTopicName, maintenanceCategoryName, formResponses, studioName } = params;
+  const {
+    ticketClassCode,
+    supportTopicName,
+    maintenanceCategoryName,
+    formResponses,
+    studioName,
+  } = params;
   const r = (key: string) => (formResponses[key] ?? '').trim();
   const loc = (studioName ?? '').trim() || null;
 
@@ -47,7 +53,10 @@ export function generateTicketTitle(params: TitleGeneratorParams): string {
     if (issue) parts.push(truncateDetail(issue, 40));
     const title = segment(parts);
     if (title) return trimToMax(title, MAX_TITLE_LENGTH);
-    return trimToMax(segment([shortCategory + ' Issue', loc]) || 'Maintenance Request', MAX_TITLE_LENGTH);
+    return trimToMax(
+      segment([shortCategory + ' Issue', loc]) || 'Maintenance Request',
+      MAX_TITLE_LENGTH,
+    );
   }
 
   // SUPPORT
@@ -60,17 +69,39 @@ export function generateTicketTitle(params: TitleGeneratorParams): string {
 
   switch (topicName) {
     case 'New Hire':
-      return trimToMax(segment([topicName, fullName || 'Submission', loc]) || 'New Hire – Submission', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment([topicName, fullName || 'Submission', loc]) ||
+          'New Hire – Submission',
+        MAX_TITLE_LENGTH,
+      );
     case 'Resignation / Termination':
-      return trimToMax(segment(['Resignation', fullName || 'Submission', loc]) || 'Resignation – Submission', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment(['Resignation', fullName || 'Submission', loc]) ||
+          'Resignation – Submission',
+        MAX_TITLE_LENGTH,
+      );
     case 'PAN / Change in Relationship':
-      return trimToMax(segment(['PAN', fullName || 'Submission', loc]) || 'PAN – Submission', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment(['PAN', fullName || 'Submission', loc]) || 'PAN – Submission',
+        MAX_TITLE_LENGTH,
+      );
     case 'New Job Posting':
-      return trimToMax(segment([topicName, r('position') || 'Request', loc]) || topicName + ' – Request', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment([topicName, r('position') || 'Request', loc]) ||
+          topicName + ' – Request',
+        MAX_TITLE_LENGTH,
+      );
     case 'Workshop Bonus':
-      return trimToMax(segment([topicName, r('name') || 'Submission', loc]) || topicName + ' – Submission', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment([topicName, r('name') || 'Submission', loc]) ||
+          topicName + ' – Submission',
+        MAX_TITLE_LENGTH,
+      );
     case 'Paycom':
-      return trimToMax(segment([topicName, loc]) || topicName + ' – Request', MAX_TITLE_LENGTH);
+      return trimToMax(
+        segment([topicName, loc]) || topicName + ' – Request',
+        MAX_TITLE_LENGTH,
+      );
     default:
       break;
   }

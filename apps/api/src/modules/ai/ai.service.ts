@@ -44,7 +44,9 @@ export class AiService {
 
   private get openai(): OpenAI {
     if (!this._openai) {
-      throw new Error('OPENAI_API_KEY is not configured. Set it in apps/api/.env to use AI features.');
+      throw new Error(
+        'OPENAI_API_KEY is not configured. Set it in apps/api/.env to use AI features.',
+      );
     }
     return this._openai;
   }
@@ -109,7 +111,9 @@ Keep answers concise and professional.`;
       max_tokens: 800,
     });
 
-    const answer = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.';
+    const answer =
+      completion.choices[0]?.message?.content ??
+      'Sorry, I could not generate a response.';
 
     // Step 5: Deduplicate sources (one entry per unique document)
     const seen = new Set<string>();
@@ -178,7 +182,9 @@ ${contextBlocks}`;
       max_tokens: 800,
     });
 
-    const answer = completion.choices[0]?.message?.content ?? 'Sorry, I could not generate a response.';
+    const answer =
+      completion.choices[0]?.message?.content ??
+      'Sorry, I could not generate a response.';
 
     const seen = new Set<string>();
     const sources = chunks
@@ -236,9 +242,12 @@ ${contextBlocks}`;
   }
 
   async reindexDocument(documentId: string): Promise<void> {
-    const doc = await this.prisma.knowledgeDocument.findUnique({ where: { id: documentId } });
+    const doc = await this.prisma.knowledgeDocument.findUnique({
+      where: { id: documentId },
+    });
     if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
-    if (!doc.s3Key) throw new NotFoundException('Document has no stored file to re-index');
+    if (!doc.s3Key)
+      throw new NotFoundException('Document has no stored file to re-index');
     await this.prisma.knowledgeDocument.update({
       where: { id: documentId },
       data: { ingestionStatus: 'indexing' },

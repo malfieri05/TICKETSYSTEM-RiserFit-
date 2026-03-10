@@ -177,26 +177,26 @@ export function AiChatWidget() {
       {open && (
         <div
           className="fixed bottom-24 right-6 z-50 flex flex-col w-[462px] h-[640px] rounded-2xl shadow-2xl overflow-hidden"
-          style={{ background: '#141414', border: '1px solid #2a2a2a' }}
+          style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: '#111111', borderBottom: '1px solid #2a2a2a' }}>
+          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)' }}>
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600">
                 <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Assistant</p>
-                <p className="text-[10px]" style={{ color: '#666666' }}>Chat · has access to your system</p>
+                <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Assistant</p>
+                <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Chat · has access to your system</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={startNewConversation}
                 className="text-[10px] px-2 py-1 rounded-lg transition-colors font-medium"
-                style={{ color: '#888888', background: '#1a1a1a', border: '1px solid #2a2a2a' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#888888')}
+                style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                 title="New conversation"
               >
                 New
@@ -204,9 +204,9 @@ export function AiChatWidget() {
               <button
                 onClick={() => setOpen(false)}
                 className="p-1 rounded-lg transition-colors"
-                style={{ color: '#666666' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#666666')}
+                style={{ color: 'var(--color-text-muted)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -214,7 +214,7 @@ export function AiChatWidget() {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ background: '#111111' }}>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ background: 'var(--color-bg-surface)' }}>
             {messages.map((msg) => (
               <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}>
                 <div className={cn(
@@ -234,11 +234,11 @@ export function AiChatWidget() {
                     style={msg.role !== 'user'
                       ? msg.isError
                         ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }
-                        : { background: '#1a1a1a', border: '1px solid #2a2a2a', color: '#e5e5e5' }
+                        : { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
                       : undefined}
                   >
                     {msg.isLoading ? (
-                      <div className="flex items-center gap-2" style={{ color: '#888888' }}>
+                      <div className="flex items-center gap-2" style={{ color: 'var(--color-text-muted)' }}>
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         <span>Thinking…</span>
                       </div>
@@ -258,7 +258,7 @@ export function AiChatWidget() {
                       {msg.confirmed ? (
                         <span
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-default opacity-60"
-                          style={{ color: '#9ca3af', background: '#252525' }}
+                          style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg-surface-raised)' }}
                         >
                           <CheckCircle2 className="h-3 w-3" /> Confirmed
                         </span>
@@ -274,7 +274,7 @@ export function AiChatWidget() {
                           <button
                             onClick={() => handleCancel(msg.id)}
                             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
-                            style={{ color: '#888888', background: '#252525' }}
+                            style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg-surface-raised)' }}
                           >
                             <XCircle className="h-3 w-3" /> Cancel
                           </button>
@@ -306,14 +306,14 @@ export function AiChatWidget() {
           </div>
 
           {/* Input area */}
-          <div className="p-3.5 shrink-0 space-y-2.5" style={{ background: '#141414', borderTop: '1px solid #2a2a2a' }}>
+          <div className="p-3.5 shrink-0 space-y-2.5" style={{ background: 'var(--color-bg-surface-raised)', borderTop: '1px solid var(--color-border-default)' }}>
             {/* Web search toggle */}
             <div className="flex items-center justify-between px-1">
               <button
                 type="button"
                 onClick={() => setAllowWebSearch((v) => !v)}
                 className="flex items-center gap-2 text-[10px] select-none"
-                style={{ color: '#666666' }}
+                style={{ color: 'var(--color-text-muted)' }}
                 aria-pressed={allowWebSearch}
               >
                 <div
@@ -335,7 +335,7 @@ export function AiChatWidget() {
                 </div>
               </button>
               {conversationId && (
-                <span className="text-[10px]" style={{ color: '#444444' }}>
+                <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
                   Thread active
                 </span>
               )}
@@ -349,8 +349,8 @@ export function AiChatWidget() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything or request an action…"
                 rows={1}
-                className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 overflow-hidden"
-                style={{ minHeight: '42px', background: '#111111', border: '1px solid #2a2a2a' }}
+                className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 overflow-hidden"
+                style={{ minHeight: '42px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
                 disabled={isLoading}
               />
               <button

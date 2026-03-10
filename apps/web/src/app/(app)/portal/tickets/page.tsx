@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { MessageCircle, Search } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketListItem } from '@/types';
@@ -11,6 +11,7 @@ import { Header } from '@/components/layout/Header';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
+import { useAuth } from '@/hooks/useAuth';
 
 const PAGE_SIZE = 20;
 
@@ -18,6 +19,7 @@ export default function PortalTicketsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const studioIdFromUrl = searchParams.get('studioId') ?? undefined;
+  const { user } = useAuth();
 
   const [filters, setFilters] = useState<TicketFilters>(() => ({
     page: 1,
@@ -48,7 +50,7 @@ export default function PortalTicketsPage() {
   const allowedStudios = scopeData?.data?.allowedStudios ?? [];
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tickets', filters, debouncedSearch],
+    queryKey: ['tickets', 'portal-legacy', filters, debouncedSearch],
     queryFn: () => ticketsApi.list({ ...filters, search: debouncedSearch || undefined }),
   });
 
@@ -91,8 +93,21 @@ export default function PortalTicketsPage() {
   const hasActiveFilters =
     filters.status || filters.studioId || filters.departmentId || debouncedSearch;
 
+  // Legacy route alignment: redirect to modern portal views
+  if (user) {
+    if (user.role === 'STUDIO_USER') {
+      if (studioIdFromUrl) {
+        router.replace(`/portal?tab=studio&studioId=${studioIdFromUrl}`);
+      } else {
+        router.replace('/portal?tab=my');
+      }
+    } else {
+      router.replace('/tickets');
+    }
+  }
+
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="My Tickets" />
 
       <div className="flex-1 overflow-y-auto p-6">
@@ -104,7 +119,7 @@ export default function PortalTicketsPage() {
           {/* Filters */}
           <div className="flex flex-wrap gap-3 items-end">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: '#555555' }} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
               <Input
                 placeholder="Search tickets..."
                 value={search}
@@ -142,14 +157,14 @@ export default function PortalTicketsPage() {
           </div>
 
           {/* Table */}
-          <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-48 gap-2">
                 <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
                 <span className="text-sm text-gray-500">Loading…</span>
               </div>
             ) : tickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: '#555555' }}>
+              <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: 'var(--color-text-muted)' }}>
                 {hasActiveFilters ? (
                   <>
                     <p className="text-sm font-medium text-gray-300">No tickets found</p>
@@ -168,55 +183,65 @@ export default function PortalTicketsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Topic / Category</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Created</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Title</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Location</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Priority</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Updated</th>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Topic / Category</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Created</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Title</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Location</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Priority</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Updated</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tickets.map((ticket) => {
                     const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '—';
+                    const commentCount = ticket._count?.comments ?? 0;
+                    const requesterName =
+                      (ticket.requester as { displayName?: string; name?: string }).displayName ??
+                      (ticket.requester as { displayName?: string; name?: string }).name ??
+                      '—';
                     return (
-                    <tr
-                      key={ticket.id}
-                      onClick={() => router.push(`/tickets/${ticket.id}`)}
-                      className="cursor-pointer transition-colors"
-                      style={{ borderBottom: '1px solid #222222' }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <td className="px-4 py-3 text-sm" style={{ color: '#aaaaaa' }}>{topicLabel}</td>
-                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#aaaaaa' }}>
-                        {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
-                        <span className="block text-xs mt-0.5" style={{ color: '#555555' }}>
-                          {(ticket.requester as { displayName?: string; name?: string }).displayName ??
-                            (ticket.requester as { displayName?: string; name?: string }).name ??
-                            '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs" style={{ color: '#888888' }}>
-                        {ticket.studio?.name ?? '—'}
-                      </td>
-                      <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
-                      <td className="px-4 py-3">
-                        <PriorityBadge
-                          priority={ticket.priority}
-                          muted={['RESOLVED', 'CLOSED'].includes(ticket.status)}
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#555555' }}>
-                        {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
-                      </td>
-                    </tr>
-                  );})}
+                      <tr
+                        key={ticket.id}
+                        onClick={() => router.push(`/tickets/${ticket.id}`)}
+                        className="cursor-pointer transition-colors"
+                        style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{topicLabel}</td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
+                          {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
+                          <div className="flex items-center gap-3 mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            <span>{requesterName}</span>
+                            {commentCount > 0 && (
+                              <span className="flex items-center gap-1">
+                                <MessageCircle className="h-3 w-3" />
+                                <span className="tabular-nums">{commentCount}</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          {ticket.studio?.name ?? '—'}
+                        </td>
+                        <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
+                        <td className="px-4 py-3">
+                          <PriorityBadge
+                            priority={ticket.priority}
+                            muted={['RESOLVED', 'CLOSED'].includes(ticket.status)}
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
+                          {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -224,7 +249,7 @@ export default function PortalTicketsPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <p className="text-sm" style={{ color: '#555555' }}>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                 Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
               </p>
               <div className="flex gap-2">

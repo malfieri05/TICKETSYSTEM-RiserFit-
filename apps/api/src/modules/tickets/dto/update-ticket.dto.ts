@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsEnum, MaxLength, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { Priority } from '@prisma/client';
 
 export class UpdateTicketDto {

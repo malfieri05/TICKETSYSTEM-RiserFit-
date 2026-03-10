@@ -40,7 +40,7 @@ function SourceTypeBadge({ type }: { type: string }) {
     file:   { label: 'File',  style: { background: 'rgba(168,85,247,0.15)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.3)' } },
     url:    { label: 'URL',   style: { background: 'rgba(34,197,94,0.15)',  color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)'  } },
   };
-  const cfg = map[type] ?? { label: type, style: { background: '#222222', color: '#888888', border: '1px solid #2a2a2a' } };
+  const cfg = map[type] ?? { label: type, style: { background: 'var(--color-bg-surface-raised)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-default)' } };
   return (
     <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium" style={cfg.style}>
       {cfg.label}
@@ -48,7 +48,7 @@ function SourceTypeBadge({ type }: { type: string }) {
   );
 }
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 export default function KnowledgeBasePage() {
   const qc = useQueryClient();
@@ -118,7 +118,7 @@ export default function KnowledgeBasePage() {
   const docs: DocRow[] = data ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Knowledge Base" />
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
@@ -131,15 +131,15 @@ export default function KnowledgeBasePage() {
           </h2>
 
           {/* Mode toggle */}
-          <div className="flex rounded-lg p-1 mb-4 w-fit gap-1" style={{ background: '#111111', border: '1px solid #2a2a2a' }}>
+          <div className="flex rounded-lg p-1 mb-4 w-fit gap-1" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {(['text', 'file', 'pdf'] as IngestMode[]).map((m) => (
               <button
                 key={m}
                 onClick={() => { setMode(m); setIngestResult(null); }}
                 className="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
                 style={mode === m
-                  ? { background: '#14b8a6', color: '#ffffff' }
-                  : { color: '#666666' }}
+                  ? { background: 'var(--color-accent)', color: '#ffffff' }
+                  : { color: 'var(--color-text-muted)' }}
               >
                 {m === 'text' ? 'Paste Text' : m === 'pdf' ? 'Handbook PDF' : 'Upload File'}
               </button>
@@ -167,29 +167,29 @@ export default function KnowledgeBasePage() {
                   placeholder="Paste your document text here…"
                   rows={8}
                   className="w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono resize-y"
-                  style={{ background: '#111111', border: '1px solid #2a2a2a' }}
+                  style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
                   required
                 />
-                <p className="text-xs mt-1" style={{ color: '#555555' }}>{textContent.length.toLocaleString()} characters</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{textContent.length.toLocaleString()} characters</p>
               </div>
             ) : mode === 'pdf' ? (
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Handbook PDF (max 15 MB)</label>
-                <p className="text-xs mb-2" style={{ color: '#555555' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
+                <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
                 <div
                   onClick={() => pdfInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
                   style={pdfFile
-                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed #14b8a6' }
-                    : { background: '#111111', border: '2px dashed #333333' }}
-                  onMouseEnter={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = '#14b8a6'; }}
-                  onMouseLeave={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = '#333333'; }}
+                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed var(--color-accent)' }
+                    : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
+                  onMouseEnter={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                  onMouseLeave={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {pdfFile ? (
                     <>
                       <FileText className="h-8 w-8 text-teal-400" />
                       <p className="text-sm font-medium text-teal-300">{pdfFile.name}</p>
-                      <p className="text-xs" style={{ color: '#666666' }}>{formatBytes(pdfFile.size)}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(pdfFile.size)}</p>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setPdfFile(null); if (pdfInputRef.current) pdfInputRef.current.value = ''; }}
@@ -200,8 +200,8 @@ export default function KnowledgeBasePage() {
                     </>
                   ) : (
                     <>
-                      <Upload className="h-8 w-8" style={{ color: '#444444' }} />
-                      <p className="text-sm" style={{ color: '#888888' }}>Click to select a PDF file</p>
+                      <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Click to select a PDF file</p>
                     </>
                   )}
                   <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
@@ -214,16 +214,16 @@ export default function KnowledgeBasePage() {
                   onClick={() => fileInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
                   style={file
-                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed #14b8a6' }
-                    : { background: '#111111', border: '2px dashed #333333' }}
-                  onMouseEnter={(e) => { if (!file) e.currentTarget.style.borderColor = '#14b8a6'; }}
-                  onMouseLeave={(e) => { if (!file) e.currentTarget.style.borderColor = '#333333'; }}
+                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed var(--color-accent)' }
+                    : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
+                  onMouseEnter={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
+                  onMouseLeave={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {file ? (
                     <>
                       <FileText className="h-8 w-8 text-teal-400" />
                       <p className="text-sm font-medium text-teal-300">{file.name}</p>
-                      <p className="text-xs" style={{ color: '#666666' }}>{formatBytes(file.size)}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(file.size)}</p>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
@@ -266,12 +266,12 @@ export default function KnowledgeBasePage() {
 
         {/* ── Document list ── */}
         <div className="rounded-xl overflow-hidden" style={panel}>
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #2a2a2a' }}>
+          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
             <h2 className="text-base font-semibold text-gray-100 flex items-center gap-2">
               <BookOpen className="h-4 w-4 text-teal-500" />
               Documents
             </h2>
-            <span className="text-sm" style={{ color: '#555555' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
           </div>
 
           {isLoading ? (
@@ -280,17 +280,17 @@ export default function KnowledgeBasePage() {
               <span className="text-sm text-gray-500">Loading…</span>
             </div>
           ) : docs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 gap-3" style={{ color: '#555555' }}>
-              <BookOpen className="h-8 w-8" style={{ color: '#333333' }} />
+            <div className="flex flex-col items-center justify-center h-40 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+              <BookOpen className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
               <p className="text-sm font-medium text-gray-300">No documents yet</p>
               <p className="text-xs text-center max-w-sm">Add your first document above to power the Assistant and Handbook.</p>
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
                   {['Title', 'Type', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Index status', 'Active', ''].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>{h}</th>
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -298,8 +298,8 @@ export default function KnowledgeBasePage() {
                 {docs.map((doc, i) => (
                   <tr
                     key={doc.id}
-                    style={{ borderTop: i > 0 ? '1px solid #222222' : undefined }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
+                    style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <td className="px-4 py-3 font-medium text-gray-200 max-w-xs">
@@ -307,14 +307,14 @@ export default function KnowledgeBasePage() {
                     </td>
                     <td className="px-4 py-3"><SourceTypeBadge type={doc.sourceType} /></td>
                     <td className="px-4 py-3">
-                      <span className="text-xs" style={{ color: doc.documentType === 'handbook' ? '#14b8a6' : '#666666' }}>
+                      <span className="text-xs" style={{ color: doc.documentType === 'handbook' ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
                         {doc.documentType === 'handbook' ? 'Handbook' : 'General'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 tabular-nums" style={{ color: '#888888' }}>{doc._count.chunks}</td>
-                    <td className="px-4 py-3 text-xs" style={{ color: '#666666' }}>{formatBytes(doc.sizeBytes)}</td>
-                    <td className="px-4 py-3" style={{ color: '#888888' }}>{doc.uploadedBy.name}</td>
-                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#666666' }}>
+                    <td className="px-4 py-3 tabular-nums" style={{ color: 'var(--color-text-muted)' }}>{doc._count.chunks}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(doc.sizeBytes)}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{doc.uploadedBy.name}</td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
                       {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
                     </td>
                     <td className="px-4 py-3">
@@ -327,7 +327,7 @@ export default function KnowledgeBasePage() {
                               ? { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }
                               : doc.ingestionStatus === 'failed'
                                 ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
-                                : { background: '#222222', color: '#666666' }
+                                : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }
                         }
                       >
                         {doc.ingestionStatus === 'indexed' ? 'Ready' : doc.ingestionStatus === 'indexing' || doc.ingestionStatus === 'pending' ? 'Indexing' : doc.ingestionStatus === 'failed' ? 'Failed' : doc.ingestionStatus}
@@ -338,7 +338,7 @@ export default function KnowledgeBasePage() {
                         className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                         style={doc.isActive
                           ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
-                          : { background: '#222222', color: '#666666' }}
+                          : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                       >
                         {doc.isActive ? 'On' : 'Off'}
                       </span>
@@ -350,9 +350,9 @@ export default function KnowledgeBasePage() {
                           disabled={doc.ingestionStatus === 'indexing' || reindexMut.isPending}
                           onClick={() => reindexMut.mutate(doc.id)}
                           className="p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          style={{ color: '#555555' }}
-                          onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = '#14b8a6'; }}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                          style={{ color: 'var(--color-text-muted)' }}
+                          onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = 'var(--color-accent)'; }}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           <RefreshCw className="h-4 w-4" />
                         </button>

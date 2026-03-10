@@ -8,9 +8,7 @@ import { TeamsChannel } from './channels/teams.channel';
 import { QUEUES } from '../../common/queue/queue.constants';
 
 @Module({
-  imports: [
-    BullModule.registerQueue({ name: QUEUES.NOTIFICATION_DISPATCH }),
-  ],
+  imports: [BullModule.registerQueue({ name: QUEUES.NOTIFICATION_DISPATCH })],
   controllers: [NotificationsController],
   providers: [NotificationsService, SseChannel, EmailChannel, TeamsChannel],
   exports: [NotificationsService, SseChannel, EmailChannel, TeamsChannel],

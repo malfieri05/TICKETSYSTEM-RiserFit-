@@ -5,10 +5,7 @@ export class CreateCommentDto {
   @IsNotEmpty()
   body: string;
 
-  /**
-   * Internal notes are only visible to agents/managers/admins.
-   * Requesters cannot post internal notes and cannot see them.
-   */
+  /** Internal notes feature removed; ignored if sent. Kept for API compatibility. */
   @IsOptional()
   @IsBoolean()
   isInternal?: boolean;

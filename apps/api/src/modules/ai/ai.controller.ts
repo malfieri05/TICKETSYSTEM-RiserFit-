@@ -60,7 +60,9 @@ export class AiController {
   @HttpCode(HttpStatus.OK)
   async handbookChat(@Body() dto: ChatDto, @CurrentUser() user: RequestUser) {
     if (user.studioId == null) {
-      throw new ForbiddenException('Handbook chat is only available to studio users.');
+      throw new ForbiddenException(
+        'Handbook chat is only available to studio users.',
+      );
     }
     return this.aiService.chatHandbook(dto.message);
   }
@@ -108,10 +110,18 @@ export class AiController {
       limits: { fileSize: MAX_DOC_SIZE },
       fileFilter: (_req, file, cb) => {
         const allowed = ['text/plain', 'text/markdown', 'text/x-markdown'];
-        if (allowed.includes(file.mimetype) || file.originalname.match(/\.(txt|md)$/i)) {
+        if (
+          allowed.includes(file.mimetype) ||
+          file.originalname.match(/\.(txt|md)$/i)
+        ) {
           cb(null, true);
         } else {
-          cb(new BadRequestException('Only .txt and .md files are supported for ingestion'), false);
+          cb(
+            new BadRequestException(
+              'Only .txt and .md files are supported for ingestion',
+            ),
+            false,
+          );
         }
       },
     }),
@@ -125,7 +135,9 @@ export class AiController {
     if (!title?.trim()) throw new BadRequestException('title is required');
 
     const content = file.buffer.toString('utf-8');
-    this.logger.log(`Admin ${user.id} ingesting file: "${file.originalname}" (${file.size} bytes)`);
+    this.logger.log(
+      `Admin ${user.id} ingesting file: "${file.originalname}" (${file.size} bytes)`,
+    );
 
     return this.ingestionService.ingestText(title.trim(), content, user.id, {
       sourceType: 'file',
@@ -146,7 +158,10 @@ export class AiController {
       storage: memoryStorage(),
       limits: { fileSize: MAX_PDF_SIZE },
       fileFilter: (_req, file, cb) => {
-        if (file.mimetype === 'application/pdf' || file.originalname?.match(/\.pdf$/i)) {
+        if (
+          file.mimetype === 'application/pdf' ||
+          file.originalname?.match(/\.pdf$/i)
+        ) {
           cb(null, true);
         } else {
           cb(new BadRequestException('Only PDF files are supported'), false);
@@ -162,16 +177,30 @@ export class AiController {
     if (!file) throw new BadRequestException('No file provided');
     if (!title?.trim()) throw new BadRequestException('title is required');
 
-    const doc = await this.aiService.createHandbookDocument(title.trim(), user.id, {
-      mimeType: 'application/pdf',
-      sizeBytes: file.size,
-    });
+    const doc = await this.aiService.createHandbookDocument(
+      title.trim(),
+      user.id,
+      {
+        mimeType: 'application/pdf',
+        sizeBytes: file.size,
+      },
+    );
     const s3Key = `knowledge/${doc.id}.pdf`;
-    await this.attachmentsService.uploadBuffer(s3Key, file.buffer, 'application/pdf');
+    await this.attachmentsService.uploadBuffer(
+      s3Key,
+      file.buffer,
+      'application/pdf',
+    );
     await this.aiService.updateDocumentS3Key(doc.id, s3Key);
     await this.ingestionService.enqueueIngestionJob(doc.id);
-    this.logger.log(`Admin ${user.id} uploaded PDF: "${file.originalname}" → documentId=${doc.id}, job enqueued`);
-    return { documentId: doc.id, status: 'pending', message: 'Document uploaded. Indexing in progress.' };
+    this.logger.log(
+      `Admin ${user.id} uploaded PDF: "${file.originalname}" → documentId=${doc.id}, job enqueued`,
+    );
+    return {
+      documentId: doc.id,
+      status: 'pending',
+      message: 'Document uploaded. Indexing in progress.',
+    };
   }
 
   /**

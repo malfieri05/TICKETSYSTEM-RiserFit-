@@ -8,19 +8,24 @@ export class ReportingService {
   constructor(private prisma: PrismaService) {}
 
   /** Build where clause for OPEN maintenance tickets only (Stage 13 dispatch). */
-  buildOpenMaintenanceWhere(filters: DispatchFiltersDto): Prisma.TicketWhereInput {
+  buildOpenMaintenanceWhere(
+    filters: DispatchFiltersDto,
+  ): Prisma.TicketWhereInput {
     const where: Prisma.TicketWhereInput = {
       ticketClass: { code: 'MAINTENANCE' },
       status: { notIn: ['RESOLVED', 'CLOSED'] },
     };
     if (filters.studioId) where.studioId = filters.studioId;
     if (filters.marketId) where.marketId = filters.marketId;
-    if (filters.maintenanceCategoryId) where.maintenanceCategoryId = filters.maintenanceCategoryId;
+    if (filters.maintenanceCategoryId)
+      where.maintenanceCategoryId = filters.maintenanceCategoryId;
     if (filters.priority) where.priority = filters.priority;
     if (filters.createdAfter || filters.createdBefore) {
       where.createdAt = {};
-      if (filters.createdAfter) where.createdAt.gte = new Date(filters.createdAfter);
-      if (filters.createdBefore) where.createdAt.lte = new Date(filters.createdBefore);
+      if (filters.createdAfter)
+        where.createdAt.gte = new Date(filters.createdAfter);
+      if (filters.createdBefore)
+        where.createdAt.lte = new Date(filters.createdBefore);
     }
     return where;
   }
@@ -48,7 +53,8 @@ export class ReportingService {
       byStatus.map((row) => [row.status, row._count._all]),
     );
 
-    const open = (statusMap['NEW'] ?? 0) +
+    const open =
+      (statusMap['NEW'] ?? 0) +
       (statusMap['TRIAGED'] ?? 0) +
       (statusMap['IN_PROGRESS'] ?? 0) +
       (statusMap['WAITING_ON_REQUESTER'] ?? 0) +
@@ -129,8 +135,12 @@ export class ReportingService {
       }),
     ]);
 
-    const maintIds = byMaintenance.map((r) => r.maintenanceCategoryId).filter((id): id is string => id != null);
-    const topicIds = bySupport.map((r) => r.supportTopicId).filter((id): id is string => id != null);
+    const maintIds = byMaintenance
+      .map((r) => r.maintenanceCategoryId)
+      .filter((id): id is string => id != null);
+    const topicIds = bySupport
+      .map((r) => r.supportTopicId)
+      .filter((id): id is string => id != null);
 
     const [maintenanceCategories, supportTopics] = await Promise.all([
       maintIds.length > 0
@@ -147,18 +157,30 @@ export class ReportingService {
         : [],
     ]);
 
-    const maintMap = Object.fromEntries(maintenanceCategories.map((c) => [c.id, c.name]));
-    const topicMap = Object.fromEntries(supportTopics.map((t) => [t.id, t.name]));
+    const maintMap = Object.fromEntries(
+      maintenanceCategories.map((c) => [c.id, c.name]),
+    );
+    const topicMap = Object.fromEntries(
+      supportTopics.map((t) => [t.id, t.name]),
+    );
 
-    const result: { categoryId: string | null; categoryName: string; count: number }[] = [
+    const result: {
+      categoryId: string | null;
+      categoryName: string;
+      count: number;
+    }[] = [
       ...byMaintenance.map((r) => ({
         categoryId: r.maintenanceCategoryId,
-        categoryName: r.maintenanceCategoryId ? (maintMap[r.maintenanceCategoryId] ?? 'Unknown') : 'Uncategorized',
+        categoryName: r.maintenanceCategoryId
+          ? (maintMap[r.maintenanceCategoryId] ?? 'Unknown')
+          : 'Uncategorized',
         count: r._count._all,
       })),
       ...bySupport.map((r) => ({
         categoryId: r.supportTopicId,
-        categoryName: r.supportTopicId ? (topicMap[r.supportTopicId] ?? 'Unknown') : 'Uncategorized',
+        categoryName: r.supportTopicId
+          ? (topicMap[r.supportTopicId] ?? 'Unknown')
+          : 'Uncategorized',
         count: r._count._all,
       })),
     ];
@@ -223,7 +245,12 @@ export class ReportingService {
   // ── Completion time by owner (avg hours) ───────────────────────────────────
   async getCompletionTimeByOwner() {
     const rows = await this.prisma.$queryRaw<
-      { user_id: string; user_name: string; avg_hours: number | null; closed_count: bigint }[]
+      {
+        user_id: string;
+        user_name: string;
+        avg_hours: number | null;
+        closed_count: bigint;
+      }[]
     >`
       SELECT
         u.id                                        AS user_id,
@@ -256,22 +283,35 @@ export class ReportingService {
       _count: { _all: true },
       orderBy: { _count: { studioId: 'desc' } },
     });
-    const studioIds = rows.map((r) => r.studioId).filter((id): id is string => id !== null);
+    const studioIds = rows
+      .map((r) => r.studioId)
+      .filter((id): id is string => id !== null);
     const studios = await this.prisma.studio.findMany({
       where: { id: { in: studioIds } },
       select: { id: true, name: true, marketId: true },
     });
     const markets = studioIds.length
       ? await this.prisma.market.findMany({
-          where: { id: { in: studios.map((s) => s.marketId).filter(Boolean) as string[] } },
+          where: {
+            id: {
+              in: studios.map((s) => s.marketId).filter(Boolean),
+            },
+          },
           select: { id: true, name: true },
         })
       : [];
     const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
-    const studioMap = Object.fromEntries(studios.map((s) => [s.id, { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' }]));
+    const studioMap = Object.fromEntries(
+      studios.map((s) => [
+        s.id,
+        { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' },
+      ]),
+    );
     return rows.map((r) => ({
       studioId: r.studioId,
-      studioName: r.studioId ? (studioMap[r.studioId]?.name ?? 'Unknown') : 'No Studio',
+      studioName: r.studioId
+        ? (studioMap[r.studioId]?.name ?? 'Unknown')
+        : 'No Studio',
       marketName: r.studioId ? (studioMap[r.studioId]?.marketName ?? '') : '',
       count: r._count._all,
     }));
@@ -285,7 +325,9 @@ export class ReportingService {
       _count: { _all: true },
       orderBy: { _count: { maintenanceCategoryId: 'desc' } },
     });
-    const categoryIds = rows.map((r) => r.maintenanceCategoryId).filter((id): id is string => id !== null);
+    const categoryIds = rows
+      .map((r) => r.maintenanceCategoryId)
+      .filter((id): id is string => id !== null);
     const categories = categoryIds.length
       ? await this.prisma.maintenanceCategory.findMany({
           where: { id: { in: categoryIds } },
@@ -295,7 +337,9 @@ export class ReportingService {
     const nameMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
     return rows.map((r) => ({
       maintenanceCategoryId: r.maintenanceCategoryId,
-      categoryName: r.maintenanceCategoryId ? (nameMap[r.maintenanceCategoryId] ?? 'Unknown') : 'Uncategorized',
+      categoryName: r.maintenanceCategoryId
+        ? (nameMap[r.maintenanceCategoryId] ?? 'Unknown')
+        : 'Uncategorized',
       count: r._count._all,
     }));
   }
@@ -308,7 +352,9 @@ export class ReportingService {
       _count: { _all: true },
       orderBy: { _count: { marketId: 'desc' } },
     });
-    const marketIds = rows.map((r) => r.marketId).filter((id): id is string => id !== null);
+    const marketIds = rows
+      .map((r) => r.marketId)
+      .filter((id): id is string => id !== null);
     const markets = marketIds.length
       ? await this.prisma.market.findMany({
           where: { id: { in: marketIds } },
@@ -331,7 +377,9 @@ export class ReportingService {
       _count: { _all: true },
     });
     const filtered = rows.filter((r) => r._count._all >= 2);
-    const studioIds = filtered.map((r) => r.studioId).filter((id): id is string => id !== null);
+    const studioIds = filtered
+      .map((r) => r.studioId)
+      .filter((id): id is string => id !== null);
     const studios = studioIds.length
       ? await this.prisma.studio.findMany({
           where: { id: { in: studioIds } },
@@ -340,15 +388,26 @@ export class ReportingService {
       : [];
     const markets = studios.length
       ? await this.prisma.market.findMany({
-          where: { id: { in: studios.map((s) => s.marketId).filter(Boolean) as string[] } },
+          where: {
+            id: {
+              in: studios.map((s) => s.marketId).filter(Boolean),
+            },
+          },
           select: { id: true, name: true },
         })
       : [];
     const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
-    const studioMap = Object.fromEntries(studios.map((s) => [s.id, { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' }]));
+    const studioMap = Object.fromEntries(
+      studios.map((s) => [
+        s.id,
+        { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' },
+      ]),
+    );
     return filtered.map((r) => ({
       studioId: r.studioId,
-      studioName: r.studioId ? (studioMap[r.studioId]?.name ?? 'Unknown') : 'No Studio',
+      studioName: r.studioId
+        ? (studioMap[r.studioId]?.name ?? 'Unknown')
+        : 'No Studio',
       marketName: r.studioId ? (studioMap[r.studioId]?.marketName ?? '') : '',
       count: r._count._all,
     }));
@@ -374,7 +433,9 @@ export class ReportingService {
         maintenanceCategory: { select: { name: true } },
         market: { select: { name: true } },
         studio: { select: { name: true } },
-        _count: { select: { comments: true, subtasks: true, attachments: true } },
+        _count: {
+          select: { comments: true, subtasks: true, attachments: true },
+        },
       },
     });
 
@@ -408,25 +469,27 @@ export class ReportingService {
       return str;
     };
 
-    const rows = tickets.map((t) => [
-      t.id,
-      escape(t.title),
-      t.status,
-      t.priority,
-      escape(t.maintenanceCategory?.name ?? t.supportTopic?.name ?? null),
-      escape(t.market?.name),
-      escape(t.studio?.name),
-      escape(t.requester?.name),
-      escape(t.requester?.email),
-      escape(t.owner?.name ?? ''),
-      escape(t.owner?.email ?? ''),
-      t._count.comments,
-      t._count.subtasks,
-      t._count.attachments,
-      t.createdAt.toISOString(),
-      t.resolvedAt?.toISOString() ?? '',
-      t.closedAt?.toISOString() ?? '',
-    ].join(','));
+    const rows = tickets.map((t) =>
+      [
+        t.id,
+        escape(t.title),
+        t.status,
+        t.priority,
+        escape(t.maintenanceCategory?.name ?? t.supportTopic?.name ?? null),
+        escape(t.market?.name),
+        escape(t.studio?.name),
+        escape(t.requester?.name),
+        escape(t.requester?.email),
+        escape(t.owner?.name ?? ''),
+        escape(t.owner?.email ?? ''),
+        t._count.comments,
+        t._count.subtasks,
+        t._count.attachments,
+        t.createdAt.toISOString(),
+        t.resolvedAt?.toISOString() ?? '',
+        t.closedAt?.toISOString() ?? '',
+      ].join(','),
+    );
 
     return [headers.join(','), ...rows].join('\n');
   }

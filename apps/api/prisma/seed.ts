@@ -10,6 +10,7 @@ import { MARKETING_TOPIC_FIELDS } from './seed-data/support/marketing.schema';
 import { RETAIL_TOPIC_FIELDS } from './seed-data/support/retail.schema';
 import { OPERATIONS_TOPIC_FIELDS } from './seed-data/support/operations.schema';
 import { MAINTENANCE_FIELDS } from './seed-data/maintenance.schema';
+import { MAINTENANCE_CATEGORY_NAMES } from './seed-data/maintenance-categories';
 
 dotenv.config();
 
@@ -59,12 +60,6 @@ const SUPPORT_TOPICS: { departmentCode: string; name: string; sortOrder: number 
     'Ops General Support ONLY - No Paycom',
   ].map((name, i) => ({ departmentCode: 'OPERATIONS', name, sortOrder: i })),
 ];
-const MAINTENANCE_CATEGORY_NAMES = [
-  'Safety', 'Electrical / Lighting', 'HVAC / Climate Control', 'Plumbing', 'Flooring',
-  'Mirror / Glass', 'Doors / Locks / Hardware', 'Walls / Paint / Mounted Items',
-  'Roof / Water Intrusion', 'Pest Control', 'Equipment / Fixtures', 'Other',
-];
-
 async function main() {
   console.log('🌱 Seeding database...\n');
 
@@ -118,9 +113,19 @@ async function main() {
       await prisma.maintenanceCategory.create({
         data: { name, sortOrder: 100 + i, isActive: true },
       });
+    } else if (!existing.isActive) {
+      await prisma.maintenanceCategory.update({
+        where: { id: existing.id },
+        data: { isActive: true },
+      });
     }
   }
-  console.log('📋 Maintenance categories: ensured 12 required');
+  // Deactivate any legacy/non-canonical maintenance categories so they do not appear in selectors.
+  await prisma.maintenanceCategory.updateMany({
+    where: { name: { notIn: MAINTENANCE_CATEGORY_NAMES } },
+    data: { isActive: false },
+  });
+  console.log(`📋 Maintenance categories: ensured ${MAINTENANCE_CATEGORY_NAMES.length} required and deactivated legacy entries`);
 
   // Stage 3: Form schemas (one per support topic, one per maintenance category)
   const supportTopics = await prisma.supportTopic.findMany({ where: { isActive: true }, select: { id: true, name: true, departmentId: true } });

@@ -13,7 +13,9 @@ export interface AuditLogEntry {
   metadata?: Record<string, unknown>;
 }
 
-function toJson(val: Record<string, unknown> | undefined): Prisma.InputJsonValue | undefined {
+function toJson(
+  val: Record<string, unknown> | undefined,
+): Prisma.InputJsonValue | undefined {
   if (val === undefined) return undefined;
   return val as unknown as Prisma.InputJsonValue;
 }

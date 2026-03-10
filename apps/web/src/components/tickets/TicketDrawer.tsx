@@ -5,20 +5,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare, Paperclip,
-  Clock, Lock, Send, Plus, User, Download, Trash2, Upload,
+  Clock, Send, Plus, User, Download, Trash2, Upload,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, attachmentsApi } from '@/lib/api';
+import { ticketsApi, commentsApi, subtasksApi, attachmentsApi, invalidateTicketLists } from '@/lib/api';
 import type { SubtaskStatus, Attachment } from '@/types';
 import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
-
-// ── Color tokens ────────────────────────────────────────────────────────────
-// Tier 1 – primary content    → #f0f0f0
-// Tier 2 – secondary content  → #aaaaaa
-// Tier 3 – muted / labels     → #666666
-// Surfaces: panel #141414, content area #111111, sidebar #0f0f0f, card #1e1e1e
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 interface Props {
   ticketId: string | null;
@@ -32,7 +27,6 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
   const [commentBody, setCommentBody] = useState('');
-  const [isInternal, setIsInternal] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -41,7 +35,6 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   useEffect(() => {
     setActiveTab('subtasks');
     setCommentBody('');
-    setIsInternal(false);
     setNewSubtask('');
     setUploadError(null);
   }, [ticketId]);
@@ -72,9 +65,75 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   });
   const attachments: Attachment[] = attachmentsRes?.data ?? [];
 
-  const commentMut    = useMutation({ mutationFn: () => commentsApi.create(ticketId!, { body: commentBody, isInternal }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticket', ticketId] }); setCommentBody(''); } });
-  const subtaskMut    = useMutation({ mutationFn: () => subtasksApi.create(ticketId!, { title: newSubtask }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['ticket', ticketId] }); setNewSubtask(''); } });
-  const subtaskStMut  = useMutation({ mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) => subtasksApi.update(ticketId!, subtaskId, { status }), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId] }) });
+  const commentMut = useMutation({
+    mutationFn: () => commentsApi.create(ticketId!, { body: commentBody }),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ['ticket', ticketId] });
+      const prev = qc.getQueryData<{ data: { comments: unknown[] } }>(['ticket', ticketId]);
+      const body = commentBody;
+      setCommentBody('');
+      const optimisticComment = {
+        id: `opt-${Date.now()}`,
+        body,
+        author: { id: user?.id ?? '', displayName: user?.displayName ?? '' },
+        createdAt: new Date().toISOString(),
+      };
+      qc.setQueryData(['ticket', ticketId], (old: typeof prev) => {
+        if (!old?.data) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            comments: [...(old.data.comments ?? []), optimisticComment],
+          },
+        };
+      });
+      return { prev };
+    },
+    onError: (_err, _v, context) => {
+      if (context?.prev) qc.setQueryData(['ticket', ticketId], context.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const subtaskMut    = useMutation({
+    mutationFn: () => subtasksApi.create(ticketId!, { title: newSubtask }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      invalidateTicketLists(qc);
+      setNewSubtask('');
+    },
+  });
+  const subtaskStMut = useMutation({
+    mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) =>
+      subtasksApi.update(ticketId!, subtaskId, { status }),
+    onMutate: async ({ subtaskId, status: newStatus }) => {
+      await qc.cancelQueries({ queryKey: ['ticket', ticketId] });
+      const prev = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', ticketId]);
+      qc.setQueryData(['ticket', ticketId], (old: typeof prev) => {
+        if (!old?.data?.subtasks) return old;
+        return {
+          ...old,
+          data: {
+            ...old.data,
+            subtasks: old.data.subtasks.map((s) =>
+              s.id === subtaskId ? { ...s, status: newStatus } : s,
+            ),
+          },
+        };
+      });
+      return { prev };
+    },
+    onError: (_err, _v, context) => {
+      if (context?.prev) qc.setQueryData(['ticket', ticketId], context.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
   const delAttachMut  = useMutation({ mutationFn: (id: string) => attachmentsApi.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', ticketId, 'attachments'] }) });
 
   const handleFileUpload = async (file: File) => {
@@ -110,23 +169,23 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
         className="fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-300 ease-out"
         style={{
           width: 'min(920px, 76vw)',
-          background: '#141414',
-          borderLeft: '1px solid #2a2a2a',
+          background: 'var(--color-bg-surface-raised)',
+          borderLeft: `1px solid ${POLISH_THEME.listBorder}`,
           transform: open ? 'translateX(0)' : 'translateX(100%)',
-          boxShadow: open ? '-16px 0 60px rgba(0,0,0,0.6)' : 'none',
+          boxShadow: open ? 'var(--shadow-raised)' : 'none',
         }}
       >
         {/* ── Header bar ─────────────────────────────────────────────────── */}
         <div
           className="flex items-center justify-end px-6 h-12 shrink-0"
-          style={{ background: '#111111', borderBottom: '1px solid #252525' }}
+          style={{ background: 'var(--color-bg-surface)', borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}
         >
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg transition-colors"
-            style={{ color: '#555555' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+            style={{ color: 'var(--color-text-muted)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -134,7 +193,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
         {/* ── Loading ─────────────────────────────────────────────────────── */}
         {isLoading && (
-          <div className="flex-1 flex items-center justify-center" style={{ background: '#141414' }}>
+          <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-surface-raised)' }}>
             <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
           </div>
         )}
@@ -144,18 +203,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
           <div className="flex-1 overflow-hidden flex">
 
             {/* ── Left: main column ──────────────────────────────────────── */}
-            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#111111' }}>
+            <div className="flex-1 flex flex-col overflow-hidden" style={{ background: 'var(--color-bg-surface)' }}>
 
               {/* Header: title, created, requester, location, progress, ticket # */}
-              <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid #1e1e1e' }}>
-                <h2 className="text-xl font-bold leading-snug" style={{ color: '#f0f0f0', letterSpacing: '-0.01em' }}>
+              <div className="px-6 pt-5 pb-4 shrink-0" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+                <h2 className="text-xl font-bold leading-snug" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>
                   {ticket.title}
                 </h2>
-                <p className="text-sm mt-1.5" style={{ color: '#aaaaaa' }}>
+                <p className="text-sm mt-1.5" style={{ color: POLISH_THEME.metaSecondary }}>
                   Created {format(new Date(ticket.createdAt), 'MMM d')} · Requested by {ticket.requester?.displayName ?? '—'}
                 </p>
                 {(ticket.studio?.name ?? ticket.market?.name) && (
-                  <p className="text-sm mt-0.5" style={{ color: '#888888' }}>
+                  <p className="text-sm mt-0.5" style={{ color: POLISH_THEME.metaDim }}>
                     {[ticket.studio?.name, ticket.market?.name].filter(Boolean).join(' · ')}
                   </p>
                 )}
@@ -163,18 +222,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   const total = ticket.subtasks?.length ?? 0;
                   const done = ticket.subtasks?.filter((s: { status: string }) => s.status === 'DONE' || s.status === 'SKIPPED').length ?? 0;
                   return (
-                    <p className="text-sm mt-1" style={{ color: '#888888' }}>
+                    <p className="text-sm mt-1" style={{ color: POLISH_THEME.metaDim }}>
                       Progress {done} / {total}
                     </p>
                   );
                 })()}
-                <p className="text-xs mt-2" style={{ color: '#666666' }}>
+                <p className="text-xs mt-2" style={{ color: POLISH_THEME.metaMuted }}>
                   Ticket #{ticket.id?.slice(0, 8) ?? ticketId?.slice(0, 8)}
                 </p>
               </div>
 
-              {/* Tab bar — pill-style active state */}
-              <div className="px-6 shrink-0" style={{ background: '#111111', borderBottom: '1px solid #1e1e1e' }}>
+              {/* Tab bar — pill-style, sticky on scroll */}
+              <div className="sticky top-0 z-10 px-6 shrink-0" style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)' }}>
                 <nav className="flex gap-1 py-2">
                   {TABS.map(({ key, label, icon: Icon }) => {
                     const active = activeTab === key;
@@ -184,12 +243,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                         onClick={() => setActiveTab(key)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
                         style={{
-                          background: active ? '#1e1e1e' : 'transparent',
-                          color: active ? '#14b8a6' : '#999999',
-                          border: active ? '1px solid #2a2a2a' : '1px solid transparent',
+                          background: active ? 'var(--color-bg-surface-raised)' : 'transparent',
+                          color: active ? POLISH_THEME.accent : 'var(--color-text-muted)',
+                          border: active ? `1px solid ${POLISH_THEME.listBorder}` : '1px solid transparent',
                         }}
-                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#dddddd'; }}
-                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#999999'; }}
+                        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+                        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
                       >
                         <Icon className="h-3.5 w-3.5 shrink-0" />
                         {label}
@@ -200,38 +259,31 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </div>
 
               {/* Scrollable tab content */}
-              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-3">
+              <div className={`flex-1 overflow-y-auto px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
 
                 {/* ── Comments ── */}
                 {activeTab === 'comments' && (
                   <>
                     {ticket.comments.length === 0 && (
-                      <p className="text-sm text-center py-10" style={{ color: '#777777' }}>No comments yet.</p>
+                      <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No comments yet.</p>
                     )}
 
                     {ticket.comments.map((c) => (
                       <div
                         key={c.id}
                         className="rounded-xl p-4 space-y-2.5"
-                        style={c.isInternal
-                          ? { background: 'rgba(234,179,8,0.07)', border: '1px solid rgba(234,179,8,0.22)' }
-                          : { background: '#1a1a1a', border: '1px solid #252525' }}
+                        style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="h-7 w-7 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
                             {(c.author.displayName?.[0] ?? '?').toUpperCase()}
                           </div>
-                          <span className="text-sm font-semibold" style={{ color: '#e0e0e0' }}>{c.author.displayName}</span>
-                          {c.isInternal && (
-                            <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide" style={{ color: '#d97706', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.25)' }}>
-                              <Lock className="h-2.5 w-2.5" /> Internal
-                            </span>
-                          )}
-                          <span className="ml-auto text-xs shrink-0" style={{ color: '#777777' }}>
+                          <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{c.author.displayName}</span>
+                          <span className="ml-auto text-xs shrink-0" style={{ color: POLISH_THEME.metaDim }}>
                             {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
                           </span>
                         </div>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap pl-9" style={{ color: '#e8e8e8' }}>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap pl-9" style={{ color: 'var(--color-text-primary)' }}>
                           {c.body}
                         </p>
                       </div>
@@ -240,7 +292,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                     {/* Comment compose box */}
                     <div
                       className="rounded-xl overflow-hidden"
-                      style={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderLeft: '3px solid #14b8a6' }}
+                      style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, borderLeft: `3px solid ${POLISH_THEME.accent}` }}
                     >
                       <Textarea
                         placeholder="Write a comment…"
@@ -251,14 +303,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       />
                       <div
                         className="flex items-center justify-between px-3 py-2"
-                        style={{ borderTop: '1px solid #252525', background: '#161616' }}
+                        style={{ borderTop: `1px solid ${POLISH_THEME.innerBorder}`, background: 'var(--color-bg-surface)' }}
                       >
-                        {canManage ? (
-                          <label className="flex items-center gap-2 text-xs cursor-pointer select-none" style={{ color: '#aaaaaa' }}>
-                            <input type="checkbox" checked={isInternal} onChange={(e) => setIsInternal(e.target.checked)} className="rounded" />
-                            Internal note
-                          </label>
-                        ) : <div />}
+                        <div />
                         <Button size="sm" onClick={() => commentMut.mutate()} disabled={!commentBody.trim()} loading={commentMut.isPending}>
                           <Send className="h-3.5 w-3.5" /> Add Comment
                         </Button>
@@ -271,7 +318,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 {activeTab === 'subtasks' && (
                   <>
                     {/* Progress header */}
-                    <div className="rounded-xl px-3.5 py-3 mb-2 flex items-center justify-between" style={{ background: '#151515', border: '1px solid #252525' }}>
+                    <div className="rounded-xl px-3.5 py-3 mb-2 flex items-center justify-between" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-subtle)' }}>
                       {(() => {
                         const total = ticket.subtasks.length;
                         const done = ticket.subtasks.filter((s) => s.status === 'DONE').length;
@@ -279,15 +326,15 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                         return (
                           <>
                             <div className="flex flex-col gap-1">
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: '#777777' }}>
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: 'var(--color-text-muted)' }}>
                                 Subtask Progress
                               </span>
-                              <span className="text-xs font-medium" style={{ color: '#e5e5e5' }}>
+                              <span className="text-xs font-medium" style={{ color: 'var(--color-text-primary)' }}>
                                 {done} of {total} complete
                               </span>
                             </div>
                             <div className="flex items-center gap-3 w-52">
-                              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#1f2933' }}>
+                              <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                                 <div
                                   className="h-full rounded-full transition-all"
                                   style={{
@@ -299,7 +346,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                                   }}
                                 />
                               </div>
-                              <span className="text-[11px] font-semibold tabular-nums" style={{ color: '#9ca3af' }}>
+                              <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--color-text-muted)' }}>
                                 {percent}%
                               </span>
                             </div>
@@ -308,19 +355,19 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       })()}
                     </div>
                     {ticket.subtasks.length === 0 && (
-                      <p className="text-sm text-center py-10" style={{ color: '#777777' }}>No subtasks yet.</p>
+                      <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No subtasks yet.</p>
                     )}
                     {ticket.subtasks.map((s) => (
-                      <div key={s.id} className="rounded-xl p-3.5 flex items-center gap-3" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
+                      <div key={s.id} className="rounded-xl p-3.5 flex items-center gap-3" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}>
                         <div className="flex-1 min-w-0">
                           <p
                             className="text-sm font-medium"
-                            style={{ color: s.status === 'DONE' ? '#555555' : '#f0f0f0', textDecoration: s.status === 'DONE' ? 'line-through' : 'none' }}
+                            style={{ color: s.status === 'DONE' ? 'var(--color-text-muted)' : 'var(--color-text-primary)', textDecoration: s.status === 'DONE' ? 'line-through' : 'none' }}
                           >
                             {s.title}
                           </p>
                           {s.owner && (
-                            <p className="text-xs mt-0.5" style={{ color: '#888888' }}>
+                            <p className="text-xs mt-0.5" style={{ color: POLISH_THEME.metaDim }}>
                               <User className="inline h-3 w-3 mr-1" />{s.owner.name}
                             </p>
                           )}
@@ -338,7 +385,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       </div>
                     ))}
                     {canManage && (
-                      <div className="rounded-xl p-3 flex gap-2" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
+                      <div className="rounded-xl p-3 flex gap-2" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}>
                         <Input
                           placeholder="Add a subtask…"
                           value={newSubtask}
@@ -358,31 +405,31 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 {activeTab === 'submission' && (
                   <>
                     {/* Read-only form data */}
-                    <div className="rounded-xl overflow-hidden space-y-1" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
-                      <div className="px-4 py-3" style={{ borderBottom: '1px solid #252525' }}>
-                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#888888' }}>Submission data</span>
+                    <div className="rounded-xl overflow-hidden space-y-1" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                      <div className="px-4 py-3" style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaDim }}>Submission data</span>
                       </div>
                       {formResponses.length === 0 && (
-                        <p className="px-4 py-6 text-sm" style={{ color: '#777777' }}>No form data.</p>
+                        <p className="px-4 py-6 text-sm" style={{ color: POLISH_THEME.metaDim }}>No form data.</p>
                       )}
                       {formResponses.map((r) => (
-                        <div key={r.fieldKey} className="flex gap-3 px-4 py-3" style={{ borderTop: '1px solid #222222' }}>
-                          <span className="text-sm shrink-0 w-36" style={{ color: '#888888' }}>{r.fieldKey}</span>
-                          <span className="text-sm min-w-0 break-words" style={{ color: '#e8e8e8' }}>{r.value ?? '—'}</span>
+                        <div key={r.fieldKey} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 px-4 py-3 items-baseline" style={{ borderTop: `1px solid ${POLISH_THEME.rowBorder}` }}>
+                          <dt className="text-sm break-words" style={{ color: POLISH_THEME.metaDim }}>{r.fieldKey}</dt>
+                          <dd className="text-sm min-w-0 break-words" style={{ color: 'var(--color-text-primary)' }}>{r.value ?? '—'}</dd>
                         </div>
                       ))}
                     </div>
                     {/* Attachments section */}
-                    <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #252525' }}>
-                      <div className="px-4 py-3" style={{ borderBottom: '1px solid #252525' }}>
-                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#888888' }}>Attachments</span>
+                    <div className="rounded-xl overflow-hidden" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                      <div className="px-4 py-3" style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaDim }}>Attachments</span>
                       </div>
                       <div
                         className="mx-4 mt-3 mb-2 rounded-lg p-4 text-center cursor-pointer transition-all"
-                        style={{ background: '#161616', border: '2px dashed #2a2a2a' }}
+                        style={{ background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
                         onClick={() => !uploading && fileInputRef.current?.click()}
-                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#14b8a6')}
-                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#2a2a2a')}
+                        onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileUpload(f); }}
                       >
@@ -394,9 +441,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           </div>
                         ) : (
                           <div className="flex flex-col items-center gap-2">
-                            <Upload className="h-6 w-6" style={{ color: '#3a3a3a' }} />
-                            <p className="text-sm font-medium" style={{ color: '#777777' }}>Click or drag to upload</p>
-                            <p className="text-xs" style={{ color: '#555555' }}>Max 25 MB</p>
+                            <Upload className="h-6 w-6" style={{ color: 'var(--color-text-muted)' }} />
+                            <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Click or drag to upload</p>
+                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Max 25 MB</p>
                           </div>
                         )}
                       </div>
@@ -406,20 +453,20 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       {attachments.length > 0 && (
                         <div className="px-4 pb-4 space-y-1">
                           {attachments.map((att, i) => (
-                            <div key={att.id} className="flex items-center gap-3 py-2" style={i > 0 ? { borderTop: '1px solid #222222' } : undefined}>
-                              <Paperclip className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
+                            <div key={att.id} className="flex items-center gap-3 py-2" style={i > 0 ? { borderTop: `1px solid ${POLISH_THEME.rowBorder}` } : undefined}>
+                              <Paperclip className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate" style={{ color: '#f0f0f0' }}>{att.filename}</p>
-                                <p className="text-xs" style={{ color: '#888888' }}>{fmt(att.sizeBytes)} · {att.uploadedBy?.name ?? '—'}</p>
+                                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-text-primary)' }}>{att.filename}</p>
+                                <p className="text-xs" style={{ color: POLISH_THEME.metaDim }}>{fmt(att.sizeBytes)} · {att.uploadedBy?.name ?? '—'}</p>
                               </div>
-                              <button onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#14b8a6')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Download className="h-4 w-4" /></button>
-                              {canManage && <button onClick={() => delAttachMut.mutate(att.id)} className="p-1.5 rounded transition-colors" style={{ color: '#555555' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}><Trash2 className="h-4 w-4" /></button>}
+                              <button onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-accent)')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}><Download className="h-4 w-4" /></button>
+                              {canManage && <button onClick={() => delAttachMut.mutate(att.id)} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}><Trash2 className="h-4 w-4" /></button>}
                             </div>
                           ))}
                         </div>
                       )}
                       {attachments.length === 0 && !uploading && (
-                        <p className="px-4 pb-4 text-sm" style={{ color: '#777777' }}>No attachments yet.</p>
+                        <p className="px-4 pb-4 text-sm" style={{ color: POLISH_THEME.metaDim }}>No attachments yet.</p>
                       )}
                     </div>
                   </>
@@ -429,16 +476,16 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 {activeTab === 'history' && (
                   <div className="space-y-1">
                     {(historyRes?.data ?? []).length === 0 && (
-                      <p className="text-sm text-center py-10" style={{ color: '#777777' }}>No history yet.</p>
+                      <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No history yet.</p>
                     )}
                     {(historyRes?.data ?? []).map((entry) => (
-                      <div key={entry.id} className="flex gap-3 py-2 text-sm" style={{ borderBottom: '1px solid #1a1a1a' }}>
-                        <div className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: '#555555' }} />
+                      <div key={entry.id} className="flex gap-3 py-2 text-sm" style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}>
+                        <div className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--color-text-muted)' }} />
                         <div>
-                          <span className="font-semibold" style={{ color: '#e8e8e8' }}>{entry.actor?.displayName ?? 'System'}</span>
+                          <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>{entry.actor?.displayName ?? 'System'}</span>
                           {' '}
-                          <span style={{ color: '#aaaaaa' }}>{entry.action.toLowerCase().replace(/_/g, ' ')}</span>
-                          <span className="block text-xs mt-0.5" style={{ color: '#777777' }}>
+                          <span style={{ color: 'var(--color-text-secondary)' }}>{entry.action.toLowerCase().replace(/_/g, ' ')}</span>
+                          <span className="block text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                             {format(new Date(entry.createdAt), 'MMM d, yyyy · h:mm a')}
                           </span>
                         </div>

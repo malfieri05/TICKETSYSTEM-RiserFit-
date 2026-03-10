@@ -13,6 +13,12 @@ import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { Role } from '@prisma/client';
+import { PolicyService } from '../../policy/policy.service';
+import {
+  SUBTASK_CREATE,
+  SUBTASK_UPDATE,
+  SUBTASK_VIEW,
+} from '../../policy/capabilities/capability-keys';
 
 const TICKET_FOR_VISIBILITY_SELECT = {
   id: true,
@@ -52,6 +58,7 @@ export class SubtasksService {
     private domainEvents: DomainEventsService,
     private subtaskWorkflow: SubtaskWorkflowService,
     private visibility: TicketVisibilityService,
+    private policy: PolicyService,
   ) {}
 
   async create(ticketId: string, dto: CreateSubtaskDto, actor: RequestUser) {
@@ -61,11 +68,18 @@ export class SubtasksService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    this.visibility.assertCanView(ticket, actor);
-
-    // Studio users cannot create subtasks
-    if (actor.role === Role.STUDIO_USER) {
-      throw new ForbiddenException('Studio users cannot create subtasks');
+    const decision = this.policy.evaluate(SUBTASK_CREATE, actor, {
+      id: 'new',
+      ticket: {
+        requesterId: ticket.requesterId,
+        ownerId: ticket.ownerId,
+        studioId: ticket.studioId,
+      },
+    });
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to create subtasks for this ticket',
+      );
     }
 
     // Validate team exists when provided
@@ -137,49 +151,83 @@ export class SubtasksService {
     });
     if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
 
-    this.visibility.assertCanView(ticket, actor);
+    const decision = this.policy.evaluate(SUBTASK_VIEW, actor, {
+      id: 'list',
+      ticket: {
+        requesterId: ticket.requesterId,
+        ownerId: ticket.ownerId,
+        studioId: ticket.studioId,
+      },
+    });
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to view subtasks for this ticket',
+      );
+    }
 
     return this.prisma.subtask.findMany({
       where: { ticketId },
       select: SUBTASK_SELECT,
-      orderBy: [{ subtaskTemplate: { sortOrder: 'asc' } }, { createdAt: 'asc' }],
+      orderBy: [
+        { subtaskTemplate: { sortOrder: 'asc' } },
+        { createdAt: 'asc' },
+      ],
     });
   }
 
   async update(subtaskId: string, dto: UpdateSubtaskDto, actor: RequestUser) {
-    const subtask = await this.findSubtaskOrThrow(subtaskId);
+    const subtask = await this.findSubtaskOrThrow(subtaskId, actor);
 
-    if (actor.role === Role.STUDIO_USER) {
-      throw new ForbiddenException('Studio users cannot update subtasks');
+    const decision = this.policy.evaluate(SUBTASK_UPDATE, actor, {
+      id: subtask.id,
+      ticket: {
+        requesterId: subtask.ticket.requesterId,
+        ownerId: subtask.ticket.ownerId,
+        studioId: subtask.ticket.studioId,
+      },
+    });
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to update subtasks for this ticket',
+      );
     }
 
     const previousStatus = subtask.status;
     const now = new Date();
     const completing = dto.status === 'DONE' || dto.status === 'SKIPPED';
 
-    const { updated, becameReadyIds } = await this.prisma.$transaction(async (tx) => {
-      const out = await tx.subtask.update({
-        where: { id: subtaskId },
-        data: {
-          ...(dto.title && { title: dto.title }),
-          ...(dto.description !== undefined && { description: dto.description }),
-          ...(dto.ownerId !== undefined && { ownerId: dto.ownerId }),
-          ...(dto.status && { status: dto.status }),
-          ...(dto.dueDate !== undefined && {
-            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-          }),
-          ...(completing ? { completedAt: now } : {}),
-          ...(dto.status && !completing && (previousStatus === 'DONE' || previousStatus === 'SKIPPED')
-            ? { completedAt: null }
-            : {}),
-        },
-        select: SUBTASK_SELECT,
-      });
-      const becameReadyIds = completing
-        ? await this.subtaskWorkflow.unlockDownstreamIfSatisfied(tx, subtaskId)
-        : [];
-      return { updated: out, becameReadyIds };
-    });
+    const { updated, becameReadyIds } = await this.prisma.$transaction(
+      async (tx) => {
+        const out = await tx.subtask.update({
+          where: { id: subtaskId },
+          data: {
+            ...(dto.title && { title: dto.title }),
+            ...(dto.description !== undefined && {
+              description: dto.description,
+            }),
+            ...(dto.ownerId !== undefined && { ownerId: dto.ownerId }),
+            ...(dto.status && { status: dto.status }),
+            ...(dto.dueDate !== undefined && {
+              dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+            }),
+            ...(completing ? { completedAt: now } : {}),
+            ...(dto.status &&
+            !completing &&
+            (previousStatus === 'DONE' || previousStatus === 'SKIPPED')
+              ? { completedAt: null }
+              : {}),
+          },
+          select: SUBTASK_SELECT,
+        });
+        const becameReadyIds = completing
+          ? await this.subtaskWorkflow.unlockDownstreamIfSatisfied(
+              tx,
+              subtaskId,
+            )
+          : [];
+        return { updated: out, becameReadyIds };
+      },
+    );
 
     await this.auditLog.log({
       actorId: actor.id,
@@ -214,7 +262,12 @@ export class SubtasksService {
       for (const readyId of becameReadyIds) {
         const readySubtask = await this.prisma.subtask.findUnique({
           where: { id: readyId },
-          select: { title: true, ticketId: true, departmentId: true, ownerId: true },
+          select: {
+            title: true,
+            ticketId: true,
+            departmentId: true,
+            ownerId: true,
+          },
         });
         if (readySubtask) {
           await this.domainEvents.emit({
@@ -281,7 +334,7 @@ export class SubtasksService {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  private async findSubtaskOrThrow(id: string) {
+  private async findSubtaskOrThrow(id: string, actor: RequestUser) {
     const subtask = await this.prisma.subtask.findUnique({
       where: { id },
       select: {
@@ -292,6 +345,13 @@ export class SubtasksService {
         status: true,
         teamId: true,
         departmentId: true,
+        ticket: {
+          select: {
+            requesterId: true,
+            ownerId: true,
+            studioId: true,
+          },
+        },
       },
     });
     if (!subtask) throw new NotFoundException(`Subtask ${id} not found`);

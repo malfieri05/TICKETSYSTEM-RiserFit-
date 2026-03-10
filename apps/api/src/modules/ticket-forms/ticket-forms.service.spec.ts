@@ -62,7 +62,11 @@ describe('TicketFormsService', () => {
       expect(result.fields).toHaveLength(1);
       expect(result.fields[0].fieldKey).toBe('additional_details');
       expect(prisma.ticketFormSchema.findFirst).toHaveBeenCalledWith({
-        where: { ticketClassId: SUPPORT_CLASS_ID, supportTopicId: TOPIC_ID, isActive: true },
+        where: {
+          ticketClassId: SUPPORT_CLASS_ID,
+          supportTopicId: TOPIC_ID,
+          isActive: true,
+        },
         include: expect.any(Object),
       });
     });
@@ -102,7 +106,11 @@ describe('TicketFormsService', () => {
       expect(result.id).toBe('schema-m1');
       expect(result.fields).toHaveLength(1);
       expect(prisma.ticketFormSchema.findFirst).toHaveBeenCalledWith({
-        where: { ticketClassId: MAINTENANCE_CLASS_ID, maintenanceCategoryId: MAINT_CAT_ID, isActive: true },
+        where: {
+          ticketClassId: MAINTENANCE_CLASS_ID,
+          maintenanceCategoryId: MAINT_CAT_ID,
+          isActive: true,
+        },
         include: expect.any(Object),
       });
     });

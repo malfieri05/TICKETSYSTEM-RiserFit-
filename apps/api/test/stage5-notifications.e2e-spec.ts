@@ -25,7 +25,12 @@ const deptId = 'dept_hr';
 /** Wait for queue processing (fan-out + optional dispatch). */
 async function waitForNotifications(
   prisma: PrismaService,
-  opts: { userId?: string; ticketId?: string; eventType: string; maxWaitMs?: number },
+  opts: {
+    userId?: string;
+    ticketId?: string;
+    eventType: string;
+    maxWaitMs?: number;
+  },
 ): Promise<void> {
   const maxWaitMs = opts.maxWaitMs ?? 8000;
   const step = 400;
@@ -81,7 +86,12 @@ describe('Stage 5 Notifications (e2e)', () => {
       throw new Error(`Admin login failed: ${adminLogin.status}`);
     }
     adminToken = adminLogin.body.access_token;
-    adminUserId = adminLogin.body.user?.id ?? (await prisma.user.findUnique({ where: { email: ADMIN_EMAIL }, select: { id: true } }))!.id;
+    adminUserId =
+      adminLogin.body.user?.id ??
+      (await prisma.user.findUnique({
+        where: { email: ADMIN_EMAIL },
+        select: { id: true },
+      }))!.id;
 
     const deptLogin = await request(app.getHttpServer())
       .post('/api/auth/login')
@@ -90,7 +100,12 @@ describe('Stage 5 Notifications (e2e)', () => {
       throw new Error(`Dept user login failed: ${deptLogin.status}`);
     }
     deptUserToken = deptLogin.body.access_token;
-    deptUserId = deptLogin.body.user?.id ?? (await prisma.user.findUnique({ where: { email: DEPT_USER_EMAIL }, select: { id: true } }))!.id;
+    deptUserId =
+      deptLogin.body.user?.id ??
+      (await prisma.user.findUnique({
+        where: { email: DEPT_USER_EMAIL },
+        select: { id: true },
+      }))!.id;
 
     await prisma.userDepartment.upsert({
       where: { userId_department: { userId: deptUserId, department: 'HR' } },
@@ -154,7 +169,11 @@ describe('Stage 5 Notifications (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/subtask-workflow/template-dependencies')
         .set(auth(adminToken))
-        .send({ workflowTemplateId: wfId, subtaskTemplateId: b, dependsOnSubtaskTemplateId: a })
+        .send({
+          workflowTemplateId: wfId,
+          subtaskTemplateId: b,
+          dependsOnSubtaskTemplateId: a,
+        })
         .expect(201);
 
       const createTicket = await request(app.getHttpServer())
@@ -178,7 +197,9 @@ describe('Stage 5 Notifications (e2e)', () => {
         .get(`/api/tickets/${ticketId}/subtasks`)
         .set(auth(adminToken))
         .expect(200);
-      subAId = (list.body as Array<{ id: string; title: string }>).find((s) => s.title === 'Step A')!.id;
+      subAId = (list.body as Array<{ id: string; title: string }>).find(
+        (s) => s.title === 'Step A',
+      )!.id;
     });
 
     it('Completing A triggers B READY and creates in-app + email delivery for correct recipients', async () => {
@@ -199,7 +220,12 @@ describe('Stage 5 Notifications (e2e)', () => {
         select: { userId: true, title: true },
       });
       expect(inApp.length).toBeGreaterThanOrEqual(1);
-      expect(inApp.some((n) => n.title.includes("your turn") || n.title.includes("It's your turn"))).toBe(true);
+      expect(
+        inApp.some(
+          (n) =>
+            n.title.includes('your turn') || n.title.includes("It's your turn"),
+        ),
+      ).toBe(true);
       expect(inApp.every((n) => n.userId !== adminUserId)).toBe(true);
 
       const deliveries = await prisma.notificationDelivery.findMany({
@@ -210,12 +236,23 @@ describe('Stage 5 Notifications (e2e)', () => {
         select: { id: true, status: true, notificationId: true },
       });
       expect(deliveries.length).toBeGreaterThanOrEqual(1);
-      expect(deliveries.every((d) => d.status === 'PENDING' || d.status === 'SENT' || d.status === 'FAILED')).toBe(true);
+      expect(
+        deliveries.every(
+          (d) =>
+            d.status === 'PENDING' ||
+            d.status === 'SENT' ||
+            d.status === 'FAILED',
+        ),
+      ).toBe(true);
     });
 
     it('Actor who completed A is excluded from SUBTASK_BECAME_READY recipients', async () => {
       const forAdmin = await prisma.notification.findMany({
-        where: { ticketId, eventType: 'SUBTASK_BECAME_READY', userId: adminUserId },
+        where: {
+          ticketId,
+          eventType: 'SUBTASK_BECAME_READY',
+          userId: adminUserId,
+        },
       });
       expect(forAdmin.length).toBe(0);
     });
@@ -292,7 +329,10 @@ describe('Stage 5 Notifications (e2e)', () => {
       const beforeEmail = await prisma.notificationDelivery.count({
         where: {
           channel: 'EMAIL',
-          notification: { userId: deptUserId, eventType: 'SUBTASK_BECAME_READY' },
+          notification: {
+            userId: deptUserId,
+            eventType: 'SUBTASK_BECAME_READY',
+          },
         },
       });
       await request(app.getHttpServer())
@@ -310,7 +350,10 @@ describe('Stage 5 Notifications (e2e)', () => {
         .send({ eventType: 'SUBTASK_BECAME_READY', inApp: true, email: false })
         .expect(200);
       const wf = await prisma.subtaskWorkflowTemplate.findFirst({
-        where: { maintenanceCategoryId: maintCat1Id, name: 'Stage5 Root READY' },
+        where: {
+          maintenanceCategoryId: maintCat1Id,
+          name: 'Stage5 Root READY',
+        },
       });
       if (wf) {
         const createTicket = await request(app.getHttpServer())
@@ -329,7 +372,11 @@ describe('Stage 5 Notifications (e2e)', () => {
           maxWaitMs: 8000,
         });
         const lastNotif = await prisma.notification.findFirst({
-          where: { userId: deptUserId, eventType: 'SUBTASK_BECAME_READY', ticketId: createTicket.body.id },
+          where: {
+            userId: deptUserId,
+            eventType: 'SUBTASK_BECAME_READY',
+            ticketId: createTicket.body.id,
+          },
           orderBy: { createdAt: 'desc' },
         });
         if (lastNotif) {
@@ -366,7 +413,8 @@ describe('Stage 5 Notifications (e2e)', () => {
     });
 
     it('Dispatch queue options include retries and backoff', async () => {
-      const { DISPATCH_JOB_OPTIONS } = await import('../src/common/queue/queue.constants');
+      const { DISPATCH_JOB_OPTIONS } =
+        await import('../src/common/queue/queue.constants');
       expect(DISPATCH_JOB_OPTIONS.attempts).toBeGreaterThanOrEqual(3);
       expect(DISPATCH_JOB_OPTIONS.backoff).toBeDefined();
     });

@@ -5,9 +5,16 @@ import { AuditLogModule } from '../../common/audit-log/audit-log.module';
 import { EventsModule } from '../events/events.module';
 import { SubtaskWorkflowModule } from '../subtask-workflow/subtask-workflow.module';
 import { PermissionsModule } from '../../common/permissions/permissions.module';
+import { PolicyModule } from '../../policy/policy.module';
 
 @Module({
-  imports: [AuditLogModule, EventsModule, SubtaskWorkflowModule, PermissionsModule],
+  imports: [
+    AuditLogModule,
+    EventsModule,
+    SubtaskWorkflowModule,
+    PermissionsModule,
+    PolicyModule,
+  ],
   controllers: [SubtasksController],
   providers: [SubtasksService],
   exports: [SubtasksService],

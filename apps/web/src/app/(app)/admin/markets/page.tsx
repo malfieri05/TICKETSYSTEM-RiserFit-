@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Market, Studio } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
+import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
 
 interface MarketWithStudios extends Market {
   studios: (Studio & { formattedAddress?: string | null; latitude?: number | null; longitude?: number | null })[];
@@ -21,14 +22,22 @@ interface NearbyStudio {
   distanceMiles: number;
 }
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
+
+type FlatLocation = Studio & {
+  formattedAddress?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  marketId: string;
+  marketName: string;
+};
 
 export default function AdminMarketsPage() {
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [addingMarket, setAddingMarket] = useState(false);
-  const [addingStudioFor, setAddingStudioFor] = useState<string | null>(null);
-  const [marketName, setMarketName] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addFormMarketId, setAddFormMarketId] = useState('');
   const [selectedStudio, setSelectedStudio] = useState<{
     id: string;
     name: string;
@@ -48,7 +57,6 @@ export default function AdminMarketsPage() {
   const [nearbyEnabled, setNearbyEnabled] = useState(false);
   const [radiusMiles, setRadiusMiles] = useState(25);
 
-  // Add studio form state
   const [addForm, setAddForm] = useState({ name: '', formattedAddress: '', latitude: '', longitude: '' });
 
   const { data, isLoading } = useQuery({
@@ -56,26 +64,37 @@ export default function AdminMarketsPage() {
     queryFn: () => api.get<MarketWithStudios[]>('/admin/markets'),
   });
   const markets = data?.data ?? [];
-  const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredMarkets = (() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return markets;
-    return markets.filter((m) => {
-      const marketName = (m.name ?? '').toLowerCase();
-      const studioMatch = (m.studios ?? []).some(
-        (s) =>
-          (s.name ?? '').toLowerCase().includes(q) ||
-          ((s.formattedAddress ?? '').toLowerCase().includes(q)),
-      );
-      return marketName.includes(q) || studioMatch;
+  const locations = useMemo(() => {
+    const flat: FlatLocation[] = markets.flatMap((market) =>
+      (market.studios ?? []).map((studio) => ({
+        ...studio,
+        marketId: market.id,
+        marketName: market.name,
+      })),
+    );
+    flat.sort((a, b) => {
+      const byMarket = (a.marketName ?? '').localeCompare(b.marketName ?? '');
+      if (byMarket !== 0) return byMarket;
+      return (a.name ?? '').localeCompare(b.name ?? '');
     });
-  })();
+    return flat;
+  }, [markets]);
 
-  const createMarketMut = useMutation({
-    mutationFn: () => api.post('/admin/markets', { name: marketName }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['markets'] }); setMarketName(''); setAddingMarket(false); },
-  });
+  const filteredLocations = useMemo(() => {
+    let list = locations;
+    if (selectedMarketId != null && selectedMarketId !== '') {
+      list = list.filter((loc) => loc.marketId === selectedMarketId);
+    }
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (loc) =>
+        (loc.name ?? '').toLowerCase().includes(q) ||
+        (loc.formattedAddress ?? '').toLowerCase().includes(q) ||
+        (loc.marketName ?? '').toLowerCase().includes(q),
+    );
+  }, [locations, selectedMarketId, searchQuery]);
 
   const createStudioMut = useMutation({
     mutationFn: ({ marketId }: { marketId: string }) =>
@@ -89,7 +108,8 @@ export default function AdminMarketsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['markets'] });
       setAddForm({ name: '', formattedAddress: '', latitude: '', longitude: '' });
-      setAddingStudioFor(null);
+      setShowAddForm(false);
+      setAddFormMarketId('');
     },
   });
 
@@ -135,176 +155,154 @@ export default function AdminMarketsPage() {
   });
   const nearbyStudios = nearbyData?.data ?? [];
 
-  const toggle = (id: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const openAddForm = () => {
+    setAddFormMarketId(selectedMarketId ?? markets[0]?.id ?? '');
+    setAddForm({ name: '', formattedAddress: '', latitude: '', longitude: '' });
+    setShowAddForm(true);
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
-      <Header
-        title="Locations"
-        action={
-          <Button size="sm" onClick={() => setAddingMarket(true)}>
-            <Plus className="h-4 w-4" />
-            Add Market
-          </Button>
-        }
-      />
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
+      <Header title="Locations" />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="p-6 space-y-4 max-w-2xl overflow-auto flex-shrink-0">
-        <div className="mb-2">
-          <Input
-            placeholder="Search locations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-sm"
-          />
-        </div>
-        {addingMarket && (
-          <div className="rounded-xl p-4 space-y-3" style={panel}>
-            <h3 className="text-sm font-semibold text-gray-100">New Market</h3>
-            <Input label="Name" value={marketName} onChange={(e) => setMarketName(e.target.value)} placeholder="e.g. Northeast" />
-            <div className="flex gap-2">
-              <Button size="sm" onClick={() => createMarketMut.mutate()} disabled={!marketName.trim()} loading={createMarketMut.isPending}>Save</Button>
-              <Button size="sm" variant="secondary" onClick={() => setAddingMarket(false)}>Cancel</Button>
-            </div>
+        <div className="p-6 space-y-4 max-w-2xl overflow-auto flex-shrink-0 flex flex-col">
+          <div className="flex flex-wrap items-end gap-3">
+            <Input
+              placeholder="Search locations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-sm flex-1 min-w-[200px]"
+            />
+            <MarketSearchSelect
+              markets={markets.map((m) => ({ id: m.id, name: m.name }))}
+              value={selectedMarketId ?? ''}
+              onChange={(id) => setSelectedMarketId(id === '' ? null : id)}
+              className="min-w-[160px]"
+            />
           </div>
-        )}
 
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-2">
-            <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-            <span className="text-sm text-gray-500">Loading…</span>
-          </div>
-        ) : filteredMarkets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: '#555555' }}>
-            {markets.length === 0 ? (
-              <>
-                <p className="text-sm font-medium text-gray-300">No markets yet</p>
-                <p className="text-xs text-center max-w-sm">Add a market to organize locations by region, then add locations under each market.</p>
-                <Button size="sm" onClick={() => setAddingMarket(true)}>
-                  <Plus className="h-4 w-4" />
-                  Add Market
-                </Button>
-              </>
-            ) : (
-              <p className="text-sm text-gray-400">No locations match your search.</p>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl overflow-hidden" style={panel}>
-            {filteredMarkets.map((market, i) => (
-              <div key={market.id} style={i > 0 ? { borderTop: '1px solid #2a2a2a' } : undefined}>
-                <div
-                  className="flex items-center gap-2 px-4 py-3 cursor-pointer transition-colors"
-                  style={{ background: 'transparent' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  onClick={() => toggle(market.id)}
-                >
-                  {expanded.has(market.id)
-                    ? <ChevronDown className="h-4 w-4" style={{ color: '#555555' }} />
-                    : <ChevronRight className="h-4 w-4" style={{ color: '#555555' }} />}
-                  <span className="font-medium text-gray-200">{market.name}</span>
-                  <span className="ml-auto text-xs" style={{ color: '#555555' }}>{market.studios?.length ?? 0} locations</span>
-                </div>
-
-                {expanded.has(market.id) && (
-                  <div style={{ borderTop: '1px solid #222222', background: '#111111' }}>
-                    {(market.studios ?? []).map((studio) => (
-                      <button
-                        key={studio.id}
-                        type="button"
-                        className="w-full text-left flex items-center gap-2 pl-10 pr-4 py-2 transition-colors"
-                        style={{ borderBottom: '1px solid #1a1a1a', color: '#888888' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                        onClick={() =>
-                          setSelectedStudio({
-                            id: studio.id,
-                            name: studio.name,
-                            formattedAddress: studio.formattedAddress ?? null,
-                            marketName: market.name,
-                            latitude: studio.latitude ?? null,
-                            longitude: studio.longitude ?? null,
-                          })
-                        }
-                      >
-                        <span className="text-sm">{studio.name}</span>
-                      </button>
-                    ))}
-                    {addingStudioFor === market.id ? (
-                      <div className="pl-10 pr-4 py-3 space-y-3" style={{ borderTop: '1px solid #222222' }}>
-                        <Input label="Name" placeholder="Location name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
-                        <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
-                        <div>
-                          <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
-                          <input type="number" step="any" placeholder="-90 to 90" value={addForm.latitude} onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
-                        </div>
-                        <div>
-                          <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
-                          <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
-                        </div>
-                        <p className="text-xs text-gray-500">Coordinates are used to calculate nearby locations for dispatching.</p>
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={() => createStudioMut.mutate({ marketId: market.id })} disabled={!addFormValid} loading={createStudioMut.isPending}>Add</Button>
-                          <Button size="sm" variant="secondary" onClick={() => setAddingStudioFor(null)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => { setAddingStudioFor(market.id); setAddForm({ name: '', formattedAddress: '', latitude: '', longitude: '' }); }}
-                        className="w-full text-left pl-10 pr-4 py-2 text-sm flex items-center gap-1 transition-colors"
-                        style={{ color: '#14b8a6', borderTop: '1px solid #222222' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#1a1a1a')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <Plus className="h-3.5 w-3.5" /> Add Location
-                      </button>
-                    )}
-                  </div>
-                )}
+          {showAddForm && (
+            <div className="rounded-xl p-4 space-y-3" style={panel}>
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Add Location</h3>
+              <Select label="State (market)" value={addFormMarketId} onChange={(e) => setAddFormMarketId(e.target.value)}>
+                <option value="">— Select state —</option>
+                {markets.map((m) => (
+                  <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </Select>
+              <Input label="Name" placeholder="Location name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
+              <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
+              <div>
+                <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Latitude</label>
+                <input type="number" step="any" placeholder="-90 to 90" value={addForm.latitude} onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
               </div>
-            ))}
-          </div>
-        )}
+              <div>
+                <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Longitude</label>
+                <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+              </div>
+              <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Coordinates are used to calculate nearby locations for dispatching.</p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => createStudioMut.mutate({ marketId: addFormMarketId })} disabled={!addFormValid || !addFormMarketId} loading={createStudioMut.isPending}>Add</Button>
+                <Button size="sm" variant="secondary" onClick={() => setShowAddForm(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+
+          {!showAddForm && (
+            <Button size="sm" variant="secondary" onClick={openAddForm} className="w-fit">
+              <Plus className="h-4 w-4" />
+              Add Location
+            </Button>
+          )}
+
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
+            </div>
+          ) : markets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>No markets yet</p>
+              <p className="text-xs text-center max-w-sm">Markets (states) are configured by your system administrator.</p>
+            </div>
+          ) : locations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>No locations yet</p>
+              <p className="text-xs text-center max-w-sm">Add a location using the button above.</p>
+            </div>
+          ) : filteredLocations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>No locations match your search.</p>
+              <p className="text-xs">Try a different search or state filter.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col" style={panel}>
+              <div className="flex-1 overflow-y-auto">
+                {filteredLocations.map((loc, i) => (
+                  <button
+                    key={loc.id}
+                    type="button"
+                    className="w-full text-left flex flex-col gap-0.5 px-4 py-3 transition-colors"
+                    style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    onClick={() =>
+                      setSelectedStudio({
+                        id: loc.id,
+                        name: loc.name,
+                        formattedAddress: loc.formattedAddress ?? null,
+                        marketName: loc.marketName,
+                        latitude: loc.latitude ?? null,
+                        longitude: loc.longitude ?? null,
+                      })
+                    }
+                  >
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{loc.name}</span>
+                    {loc.formattedAddress && (
+                      <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{loc.formattedAddress}</span>
+                    )}
+                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{loc.marketName}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {selectedStudio && (
           <div
             className="flex-shrink-0 w-full max-w-md border-l overflow-auto"
-            style={{ background: '#111111', borderColor: '#2a2a2a' }}
+            style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-default)' }}
           >
             <div className="p-4 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-100">Location details</h3>
+                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Location details</h3>
                 <button
                   type="button"
                   onClick={() => { setSelectedStudio(null); setEditingStudio(null); }}
-                  className="p-1 rounded hover:bg-white/10"
+                  className="p-1 rounded transition-colors"
+                  style={{ color: 'var(--color-text-muted)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   aria-label="Close"
                 >
-                  <X className="h-4 w-4 text-gray-400" />
+                  <X className="h-4 w-4" />
                 </button>
               </div>
 
               {editingStudio ? (
                 <div className="space-y-3">
-                  <h4 className="text-sm font-medium text-gray-200">Edit location</h4>
+                  <h4 className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>Edit location</h4>
                   <Input label="Name" value={editingStudio.name} onChange={(e) => setEditingStudio((s) => (s ? { ...s, name: e.target.value } : null))} />
                   <Input label="Formatted address" value={editingStudio.formattedAddress} onChange={(e) => setEditingStudio((s) => (s ? { ...s, formattedAddress: e.target.value } : null))} />
                   <div>
                     <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
-                    <input type="number" step="any" placeholder="-90 to 90" value={editingStudio.latitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, latitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                    <input type="number" step="any" placeholder="-90 to 90" value={editingStudio.latitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, latitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
-                    <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: '#111111', border: '1px solid #2a2a2a' }} />
+                    <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                   </div>
                   <p className="text-xs text-gray-500">Coordinates are used to calculate nearby locations for dispatching.</p>
                   <div className="flex gap-2">
@@ -315,31 +313,32 @@ export default function AdminMarketsPage() {
               ) : (
                 <>
                   <div>
-                    <p className="text-sm font-medium text-gray-200">{selectedStudio.name}</p>
+                    <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{selectedStudio.name}</p>
                     {selectedStudio.formattedAddress && (
-                      <p className="text-sm mt-1" style={{ color: '#888888' }}>{selectedStudio.formattedAddress}</p>
+                      <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>{selectedStudio.formattedAddress}</p>
                     )}
-                    <p className="text-xs mt-1" style={{ color: '#666666' }}>Market: {selectedStudio.marketName}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Market: {selectedStudio.marketName}</p>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => setEditingStudio(selectedStudio ? { id: selectedStudio.id, name: selectedStudio.name, formattedAddress: selectedStudio.formattedAddress ?? '', latitude: selectedStudio.latitude != null ? String(selectedStudio.latitude) : '', longitude: selectedStudio.longitude != null ? String(selectedStudio.longitude) : '', marketName: selectedStudio.marketName } : null)}>Edit location</Button>
                 </>
               )}
 
-              <div className="pt-4 border-t" style={{ borderColor: '#2a2a2a' }}>
-                <h4 className="text-sm font-semibold text-gray-200 mb-3">Nearby Locations</h4>
+              <div className="pt-4 border-t" style={{ borderColor: 'var(--color-border-default)' }}>
+                <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--color-text-secondary)' }}>Nearby Locations</h4>
                 <label className="flex items-center gap-2 mb-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={nearbyEnabled}
                     onChange={(e) => setNearbyEnabled(e.target.checked)}
-                    className="rounded border-gray-600 bg-gray-800 text-teal-500 focus:ring-teal-500"
+                    className="rounded text-teal-500 focus:ring-teal-500"
+                    style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)' }}
                   />
-                  <span className="text-sm text-gray-300">Enable nearby search</span>
+                  <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Enable nearby search</span>
                 </label>
                 {nearbyEnabled && (
                   <>
                     <div className="mb-3">
-                      <label className="text-xs text-gray-500 block mb-1">Radius: {radiusMiles} miles</label>
+                      <label className="text-xs block mb-1" style={{ color: 'var(--color-text-muted)' }}>Radius: {radiusMiles} miles</label>
                       <input
                         type="range"
                         min={0}
@@ -347,13 +346,13 @@ export default function AdminMarketsPage() {
                         value={radiusMiles}
                         onChange={(e) => setRadiusMiles(Number(e.target.value))}
                         className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                        style={{ background: '#2a2a2a' }}
+                        style={{ background: 'var(--color-border-default)' }}
                       />
                     </div>
                     {nearbyLoading && (
                       <div className="flex flex-col items-center justify-center py-4 gap-2">
                         <div className="animate-spin h-5 w-5 rounded-full border-2 border-teal-500 border-t-transparent" />
-                        <span className="text-xs text-gray-500">Loading…</span>
+                        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
                       </div>
                     )}
                     {nearbyError && (
@@ -364,16 +363,16 @@ export default function AdminMarketsPage() {
                       </p>
                     )}
                     {!nearbyLoading && !nearbyError && nearbyStudios.length === 0 && (
-                      <p className="text-sm text-gray-500 py-2">No other locations within this radius.</p>
+                      <p className="text-sm py-2" style={{ color: 'var(--color-text-muted)' }}>No other locations within this radius.</p>
                     )}
                     {!nearbyLoading && !nearbyError && nearbyStudios.length > 0 && (
                       <>
-                        <p className="text-xs text-gray-500 mb-2">
+                        <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>
                           Nearby locations within {radiusMiles} miles ({nearbyStudios.length} found)
                         </p>
                         <ul className="space-y-1.5">
                           {nearbyStudios.map((s) => (
-                            <li key={s.id} className="text-sm" style={{ color: '#cccccc' }}>
+                            <li key={s.id} className="text-sm" style={{ color: 'var(--color-text-primary)' }}>
                               {s.name} ({s.marketName}) — {s.distanceMiles} mi
                             </li>
                           ))}

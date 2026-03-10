@@ -124,7 +124,8 @@ export class AuthService {
       include: { team: { select: { name: true } } },
     });
     if (!user) throw new UnauthorizedException('User not found');
-    if (!user.isActive) throw new UnauthorizedException('Your account has been deactivated.');
+    if (!user.isActive)
+      throw new UnauthorizedException('Your account has been deactivated.');
 
     return this.issueToken(user);
   }
@@ -145,32 +146,52 @@ export class AuthService {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
-      role: user.role as RequestUser['role'],
+      role: user.role,
     };
 
+    // Refresh team/departments/scopes to align with JwtStrategy.validate()
+    const fullUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        teamId: true,
+        studioId: true,
+        marketId: true,
+        team: { select: { name: true } },
+        departments: { select: { department: true } },
+        studioScopes: { select: { studioId: true } },
+      },
+    });
+
     const teamName =
-      user.team?.name ??
-      (user.teamId != null
-        ? (await this.prisma.team.findUnique({
-            where: { id: user.teamId },
-            select: { name: true },
-          }))?.name ?? null
+      fullUser?.team?.name ??
+      (fullUser?.teamId != null
+        ? ((
+            await this.prisma.team.findUnique({
+              where: { id: fullUser.teamId },
+              select: { name: true },
+            })
+          )?.name ?? null)
         : null);
 
     return {
       access_token: this.jwtService.sign(payload),
       user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.name,
-        role: user.role as RequestUser['role'],
-        isActive: user.isActive,
-        teamId: user.teamId ?? null,
+        id: fullUser?.id ?? user.id,
+        email: fullUser?.email ?? user.email,
+        displayName: fullUser?.name ?? user.name,
+        role: fullUser?.role ?? user.role,
+        isActive: fullUser?.isActive ?? user.isActive,
+        teamId: fullUser?.teamId ?? user.teamId ?? null,
         teamName: teamName ?? null,
-        studioId: user.studioId ?? null,
-        marketId: user.marketId ?? null,
-        departments: [],
-        scopeStudioIds: [],
+        studioId: fullUser?.studioId ?? user.studioId ?? null,
+        marketId: fullUser?.marketId ?? user.marketId ?? null,
+        departments: fullUser?.departments.map((d) => d.department) ?? [],
+        scopeStudioIds: fullUser?.studioScopes.map((s) => s.studioId) ?? [],
       },
     };
   }

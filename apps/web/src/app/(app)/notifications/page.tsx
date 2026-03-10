@@ -18,12 +18,18 @@ export default function NotificationsPage() {
   const listParams = { limit: 50 };
   const markReadMut = useMutation({
     mutationFn: (id: string) => notificationsApi.markRead(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['notifications', 'count'] });
+    },
   });
 
   const markAllMut = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: ['notifications', 'count'] });
+    },
   });
 
   /** Optimistic read: update UI immediately, then call API in background. */
@@ -49,7 +55,7 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header
         title="Notifications"
         action={
@@ -66,16 +72,16 @@ export default function NotificationsPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
             <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-            <span className="text-sm text-gray-500">Loading…</span>
+            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
           </div>
         ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: '#555555' }}>
-            <Bell className="h-10 w-10 mb-1" style={{ color: '#333333' }} />
-            <p className="text-sm font-medium text-gray-300">No notifications yet</p>
-            <p className="text-xs text-center max-w-sm">When ticket and subtask updates happen, they'll appear here.</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+            <Bell className="h-10 w-10 mb-1" style={{ color: 'var(--color-text-muted)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>No notifications yet</p>
+            <p className="text-xs text-center max-w-sm" style={{ color: 'var(--color-text-secondary)' }}>When ticket and subtask updates happen, they'll appear here.</p>
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden" style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}>
+          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {notifications.map((notif, i) => (
               <div
                 key={notif.id}
@@ -83,20 +89,20 @@ export default function NotificationsPage() {
                 className="flex items-start gap-3 px-4 py-3 transition-colors"
                 style={{
                   background: !notif.isRead ? 'rgba(20,184,166,0.06)' : 'transparent',
-                  borderTop: i > 0 ? '1px solid #222222' : undefined,
+                  borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined,
                   cursor: notif.ticketId ? 'pointer' : 'default',
                 }}
-                onMouseEnter={(e) => { if (notif.ticketId) e.currentTarget.style.background = '#222222'; }}
+                onMouseEnter={(e) => { if (notif.ticketId) e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = !notif.isRead ? 'rgba(20,184,166,0.06)' : 'transparent'; }}
               >
-                <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: !notif.isRead ? '#14b8a6' : 'transparent' }} />
+                <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: !notif.isRead ? 'var(--color-accent)' : 'transparent' }} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm" style={{ fontWeight: !notif.isRead ? 600 : 400, color: !notif.isRead ? '#e5e5e5' : '#888888' }}>
+                  <p className="text-sm" style={{ fontWeight: !notif.isRead ? 600 : 400, color: !notif.isRead ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}>
                     {notif.title}
                   </p>
-                  <p className="text-xs mt-0.5 truncate" style={{ color: '#555555' }}>{notif.body}</p>
+                  <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-text-muted)' }}>{notif.body}</p>
                 </div>
-                <span className="text-xs shrink-0 mt-0.5" style={{ color: '#555555' }}>
+                <span className="text-xs shrink-0 mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
                   {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                 </span>
               </div>

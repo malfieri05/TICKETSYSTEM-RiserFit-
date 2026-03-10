@@ -3,7 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { ToolRouterService } from './tool-router.service';
-import { AGENT_TOOLS, MUTATION_TOOLS, CONFIRM_STATUS_TRANSITIONS } from './tool-definitions';
+import {
+  AGENT_TOOLS,
+  MUTATION_TOOLS,
+  CONFIRM_STATUS_TRANSITIONS,
+} from './tool-definitions';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 
 const CHAT_MODEL = 'gpt-4o-mini';
@@ -33,7 +37,11 @@ export interface AgentResponse {
 }
 
 /** OpenAI tool call with function payload (narrows union for type safety). */
-type ToolCallWithFunction = { id: string; type: 'function'; function: { name: string; arguments: string } };
+type ToolCallWithFunction = {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+};
 
 const SYSTEM_PROMPT = `You are an AI assistant for an internal ticketing system used by ~500 employees.
 
@@ -95,13 +103,22 @@ export class AgentService {
 
   // ── Main chat entry point ─────────────────────────────────────────────────
 
-  async chat(message: string, actor: RequestUser, conversationId?: string, allowWebSearch?: boolean): Promise<AgentResponse> {
+  async chat(
+    message: string,
+    actor: RequestUser,
+    conversationId?: string,
+    allowWebSearch?: boolean,
+  ): Promise<AgentResponse> {
     await this.checkQuota(actor);
 
     // Get or create conversation
     const convo = conversationId
-      ? await this.prisma.agentConversation.findUniqueOrThrow({ where: { id: conversationId } })
-      : await this.prisma.agentConversation.create({ data: { userId: actor.id } });
+      ? await this.prisma.agentConversation.findUniqueOrThrow({
+          where: { id: conversationId },
+        })
+      : await this.prisma.agentConversation.create({
+          data: { userId: actor.id },
+        });
 
     // Save user message
     const userMsg = await this.prisma.agentMessage.create({
@@ -210,7 +227,8 @@ export class AgentService {
 
     if (needsConfirmation) {
       // Build an action plan and return it for confirmation
-      const rawSummary = assistantMessage.content ?? 'The following actions will be performed:';
+      const rawSummary =
+        assistantMessage.content ?? 'The following actions will be performed:';
       const plan: ActionPlan = {
         summary: this.stripConfirmCancelPhrase(rawSummary),
         actions: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
@@ -242,19 +260,31 @@ export class AgentService {
     }
 
     // Execute tools immediately (no confirmation needed)
-    return this.executeToolCalls(convo.id, toolCalls, assistantMessage.content, actor, completion.usage?.total_tokens);
+    return this.executeToolCalls(
+      convo.id,
+      toolCalls,
+      assistantMessage.content,
+      actor,
+      completion.usage?.total_tokens,
+    );
   }
 
   // ── Confirm a pending action plan ─────────────────────────────────────────
 
-  async confirmAction(conversationId: string, messageId: string, actor: RequestUser): Promise<AgentResponse> {
+  async confirmAction(
+    conversationId: string,
+    messageId: string,
+    actor: RequestUser,
+  ): Promise<AgentResponse> {
     const msg = await this.prisma.agentMessage.findUniqueOrThrow({
       where: { id: messageId },
       select: { actionPlan: true, conversationId: true },
     });
 
     if (msg.conversationId !== conversationId) {
-      throw new ForbiddenException('Message does not belong to this conversation');
+      throw new ForbiddenException(
+        'Message does not belong to this conversation',
+      );
     }
 
     const plan = msg.actionPlan as unknown as ActionPlan;
@@ -267,7 +297,11 @@ export class AgentService {
 
     for (const action of plan.actions) {
       const start = Date.now();
-      const result = await this.toolRouter.execute(action.tool, action.args, actor);
+      const result = await this.toolRouter.execute(
+        action.tool,
+        action.args,
+        actor,
+      );
 
       await this.prisma.agentActionLog.create({
         data: {
@@ -276,14 +310,19 @@ export class AgentService {
           messageId,
           toolName: action.tool,
           toolArgs: action.args as any,
-          resultSummary: result.success ? JSON.stringify(result.data).slice(0, 500) : null,
+          resultSummary: result.success
+            ? JSON.stringify(result.data).slice(0, 500)
+            : null,
           success: result.success,
           errorMessage: result.error,
           executionMs: Date.now() - start,
         },
       });
 
-      results.push({ tool: action.tool, result: result.success ? result.data : { error: result.error } });
+      results.push({
+        tool: action.tool,
+        result: result.success ? result.data : { error: result.error },
+      });
       if (!result.success) errors.push(`${action.tool}: ${result.error}`);
     }
 
@@ -302,7 +341,13 @@ export class AgentService {
       },
     });
 
-    return { conversationId, messageId: saved.id, mode: 'DO', content, toolResults: results };
+    return {
+      conversationId,
+      messageId: saved.id,
+      mode: 'DO',
+      content,
+      toolResults: results,
+    };
   }
 
   // ── Execute tool calls immediately ────────────────────────────────────────
@@ -315,13 +360,18 @@ export class AgentService {
     tokenCount?: number,
   ): Promise<AgentResponse> {
     const results: Array<{ tool: string; result: unknown }> = [];
-    const toolMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
+    const toolMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+      [];
 
     for (const raw of toolCalls) {
       const tc: any = raw;
       const args = JSON.parse(tc.function.arguments);
       const start = Date.now();
-      const result = await this.toolRouter.execute(tc.function.name, args, actor);
+      const result = await this.toolRouter.execute(
+        tc.function.name,
+        args,
+        actor,
+      );
 
       await this.prisma.agentActionLog.create({
         data: {
@@ -329,19 +379,26 @@ export class AgentService {
           conversationId,
           toolName: tc.function.name,
           toolArgs: args,
-          resultSummary: result.success ? JSON.stringify(result.data).slice(0, 500) : null,
+          resultSummary: result.success
+            ? JSON.stringify(result.data).slice(0, 500)
+            : null,
           success: result.success,
           errorMessage: result.error,
           executionMs: Date.now() - start,
         },
       });
 
-      results.push({ tool: tc.function.name, result: result.success ? result.data : { error: result.error } });
+      results.push({
+        tool: tc.function.name,
+        result: result.success ? result.data : { error: result.error },
+      });
 
       toolMessages.push({
         role: 'tool' as const,
         tool_call_id: tc.id,
-        content: JSON.stringify(result.success ? result.data : { error: result.error }),
+        content: JSON.stringify(
+          result.success ? result.data : { error: result.error },
+        ),
       });
     }
 
@@ -357,17 +414,22 @@ export class AgentService {
       model: CHAT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        ...history.filter((h) => h.content).map((h) => ({
-          role: h.role as 'user' | 'assistant',
-          content: h.content!,
-        })),
+        ...history
+          .filter((h) => h.content)
+          .map((h) => ({
+            role: h.role as 'user' | 'assistant',
+            content: h.content!,
+          })),
         {
           role: 'assistant' as const,
           content: assistantContent,
           tool_calls: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
             id: tc.id,
             type: 'function' as const,
-            function: { name: tc.function.name, arguments: tc.function.arguments },
+            function: {
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            },
           })),
         },
         ...toolMessages,
@@ -376,13 +438,21 @@ export class AgentService {
       max_tokens: MAX_OUTPUT_TOKENS,
     });
 
-    const finalContent = followUp.choices[0]?.message?.content ?? this.summarizeResults(results);
-    const mode = (toolCalls as ToolCallWithFunction[]).some((tc) => MUTATION_TOOLS.has(tc.function.name)) ? 'DO' : 'ASK';
+    const finalContent =
+      followUp.choices[0]?.message?.content ?? this.summarizeResults(results);
+    const mode = (toolCalls as ToolCallWithFunction[]).some((tc) =>
+      MUTATION_TOOLS.has(tc.function.name),
+    )
+      ? 'DO'
+      : 'ASK';
 
     // Detect knowledge search sources
     const knowledgeResults = results.find((r) => r.tool === 'knowledge_search');
     const sources = knowledgeResults
-      ? ((knowledgeResults.result as any)?.chunks ?? []).map((c: any) => ({ title: c.title, text: c.text }))
+      ? ((knowledgeResults.result as any)?.chunks ?? []).map((c: any) => ({
+          title: c.title,
+          text: c.text,
+        }))
       : undefined;
 
     const saved = await this.prisma.agentMessage.create({
@@ -397,7 +467,14 @@ export class AgentService {
       },
     });
 
-    return { conversationId, messageId: saved.id, mode, content: finalContent, toolResults: results, sources };
+    return {
+      conversationId,
+      messageId: saved.id,
+      mode,
+      content: finalContent,
+      toolResults: results,
+      sources,
+    };
   }
 
   // ── Get conversation history ──────────────────────────────────────────────
@@ -412,15 +489,23 @@ export class AgentService {
   }
 
   async getMessages(conversationId: string, userId: string) {
-    const convo = await this.prisma.agentConversation.findUniqueOrThrow({ where: { id: conversationId } });
-    if (convo.userId !== userId) throw new ForbiddenException('Not your conversation');
+    const convo = await this.prisma.agentConversation.findUniqueOrThrow({
+      where: { id: conversationId },
+    });
+    if (convo.userId !== userId)
+      throw new ForbiddenException('Not your conversation');
 
     return this.prisma.agentMessage.findMany({
       where: { conversationId },
       orderBy: { createdAt: 'asc' },
       select: {
-        id: true, role: true, content: true, mode: true,
-        actionPlan: true, toolResults: true, createdAt: true,
+        id: true,
+        role: true,
+        content: true,
+        mode: true,
+        actionPlan: true,
+        toolResults: true,
+        createdAt: true,
       },
     });
   }
@@ -431,7 +516,10 @@ export class AgentService {
   private stripConfirmCancelPhrase(text: string): string {
     if (!text || typeof text !== 'string') return text;
     return text
-      .replace(/\n*Click \*\*Confirm\*\* to proceed or \*\*Cancel\*\* to stop\.?/gi, '')
+      .replace(
+        /\n*Click \*\*Confirm\*\* to proceed or \*\*Cancel\*\* to stop\.?/gi,
+        '',
+      )
       .replace(/\n*Click Confirm to proceed or Cancel to stop\.?/gi, '')
       .replace(/\n*Confirm to proceed or Cancel to stop\.?/gi, '')
       .replace(/\n*\(Click Confirm or Cancel below\.?\)/gi, '')
@@ -444,35 +532,57 @@ export class AgentService {
   ): boolean {
     // For now, keep it simple and safe:
     // ANY mutating tool call requires an explicit confirmation step.
-    return (toolCalls as ToolCallWithFunction[]).some((tc) => MUTATION_TOOLS.has(tc.function?.name));
+    return (toolCalls as ToolCallWithFunction[]).some((tc) =>
+      MUTATION_TOOLS.has(tc.function?.name),
+    );
   }
 
-  private assessRisk(toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]): 'LOW' | 'MEDIUM' | 'HIGH' {
+  private assessRisk(
+    toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
+  ): 'LOW' | 'MEDIUM' | 'HIGH' {
     const withFn = toolCalls as ToolCallWithFunction[];
-    const mutations = withFn.filter((tc) => MUTATION_TOOLS.has(tc.function.name));
+    const mutations = withFn.filter((tc) =>
+      MUTATION_TOOLS.has(tc.function.name),
+    );
     if (mutations.length === 0) return 'LOW';
-    if (mutations.some((tc) => {
-      if (tc.function.name !== 'update_ticket_status') return false;
-      const args = JSON.parse(tc.function.arguments);
-      return args.new_status === 'CLOSED';
-    })) return 'HIGH';
+    if (
+      mutations.some((tc) => {
+        if (tc.function.name !== 'update_ticket_status') return false;
+        const args = JSON.parse(tc.function.arguments);
+        return args.new_status === 'CLOSED';
+      })
+    )
+      return 'HIGH';
     if (mutations.length > 1) return 'MEDIUM';
     return 'LOW';
   }
 
-  private summarizeResults(results: Array<{ tool: string; result: unknown }>): string {
-    return results.map((r) => {
-      const d = r.result as any;
-      if (r.tool === 'create_ticket') return `Created ticket "${d?.title}" (${d?.ticket_id?.slice(0, 8)})`;
-      if (r.tool === 'update_ticket_status') return `Updated status: ${d?.old_status} → ${d?.new_status}`;
-      if (r.tool === 'assign_ticket') return `Assigned to ${d?.assigned_to}`;
-      if (r.tool === 'add_ticket_comment') return `Added comment on ticket`;
-      if (r.tool === 'create_subtask') return `Created subtask "${d?.title}"`;
-      return `Executed ${r.tool}`;
-    }).join('. ');
+  private summarizeResults(
+    results: Array<{ tool: string; result: unknown }>,
+  ): string {
+    return results
+      .map((r) => {
+        const d = r.result as any;
+        if (r.tool === 'create_ticket')
+          return `Created ticket "${d?.title}" (${d?.ticket_id?.slice(0, 8)})`;
+        if (r.tool === 'update_ticket_status')
+          return `Updated status: ${d?.old_status} → ${d?.new_status}`;
+        if (r.tool === 'assign_ticket') return `Assigned to ${d?.assigned_to}`;
+        if (r.tool === 'add_ticket_comment') return `Added comment on ticket`;
+        if (r.tool === 'create_subtask') return `Created subtask "${d?.title}"`;
+        return `Executed ${r.tool}`;
+      })
+      .join('. ');
   }
 
-  private buildHistoryMessages(history: Array<{ role: string; content: string | null; toolCalls: unknown; toolResults: unknown }>) {
+  private buildHistoryMessages(
+    history: Array<{
+      role: string;
+      content: string | null;
+      toolCalls: unknown;
+      toolResults: unknown;
+    }>,
+  ) {
     return history
       .filter((h) => h.content && (h.role === 'user' || h.role === 'assistant'))
       .map((h) => ({
@@ -481,11 +591,14 @@ export class AgentService {
       }));
   }
 
-  private async tryBuildCreateTicketPlan(message: string): Promise<ActionPlan | null> {
+  private async tryBuildCreateTicketPlan(
+    message: string,
+  ): Promise<ActionPlan | null> {
     const lower = message.toLowerCase();
     const asksToCreateTicket =
-      /(?:create|make|open)\s+(?:a\s+)?(?:new\s+)?(?:.*\s+)?ticket/.test(lower)
-      || /new\s+ticket/.test(lower);
+      /(?:create|make|open)\s+(?:a\s+)?(?:new\s+)?(?:.*\s+)?ticket/.test(
+        lower,
+      ) || /new\s+ticket/.test(lower);
 
     if (!asksToCreateTicket) return null;
 
@@ -502,16 +615,18 @@ export class AgentService {
     // Need category for deterministic creation. If absent, fall back to model.
     if (!matchedCategory) return null;
 
-    const priority =
-      lower.includes('urgent') ? 'URGENT'
-        : lower.includes('high') ? 'HIGH'
-          : lower.includes('low') ? 'LOW'
-            : 'MEDIUM';
+    const priority = lower.includes('urgent')
+      ? 'URGENT'
+      : lower.includes('high')
+        ? 'HIGH'
+        : lower.includes('low')
+          ? 'LOW'
+          : 'MEDIUM';
 
     const locationMatch =
-      message.match(/at\s+the\s+(.+?)\s+location/i)
-      || message.match(/in\s+the\s+(.+?)\s+location/i)
-      || message.match(/at\s+(.+?)\s+location/i);
+      message.match(/at\s+the\s+(.+?)\s+location/i) ||
+      message.match(/in\s+the\s+(.+?)\s+location/i) ||
+      message.match(/at\s+(.+?)\s+location/i);
     const location = locationMatch?.[1]?.trim();
 
     const title = location
@@ -524,7 +639,9 @@ export class AgentService {
       `Priority: ${priority}`,
       location ? `Location: ${location}` : null,
       `Original request: ${message}`,
-    ].filter(Boolean).join(' | ');
+    ]
+      .filter(Boolean)
+      .join(' | ');
 
     return {
       summary:
@@ -560,7 +677,9 @@ export class AgentService {
     });
 
     if (count >= DAILY_QUOTA) {
-      throw new ForbiddenException(`Daily AI agent quota reached (${DAILY_QUOTA} messages/day). Try again tomorrow.`);
+      throw new ForbiddenException(
+        `Daily AI agent quota reached (${DAILY_QUOTA} messages/day). Try again tomorrow.`,
+      );
     }
   }
 }

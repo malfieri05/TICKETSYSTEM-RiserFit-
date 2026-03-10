@@ -6,6 +6,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { DatabaseModule } from './common/database/database.module';
 import { CacheModule } from './common/cache/cache.module';
 import { AuditLogModule } from './common/audit-log/audit-log.module';
+import { HealthModule } from './health/health.module';
+import { RedisSseModule } from './common/redis/redis-sse.module';
 
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
@@ -23,6 +25,7 @@ import { AgentModule } from './modules/agent/agent.module';
 import { TicketFormsModule } from './modules/ticket-forms/ticket-forms.module';
 import { SubtaskWorkflowModule } from './modules/subtask-workflow/subtask-workflow.module';
 import { WorkflowAnalyticsModule } from './modules/workflow-analytics/workflow-analytics.module';
+import { PolicyModule } from './policy/policy.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -50,6 +53,12 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     DatabaseModule,
     CacheModule,
     AuditLogModule,
+
+    // ── Health (readiness + queue visibility) ──────────────────────────────────
+    HealthModule,
+
+    // ── Redis SSE (multi-instance real-time) ───────────────────────────────────
+    RedisSseModule,
 
     // ── Feature Modules ───────────────────────────────────────────────────────
     AuthModule,
@@ -81,6 +90,7 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     // ── Subtask workflow (Stage 4 templates + dependencies) ───────────────────
     SubtaskWorkflowModule,
     WorkflowAnalyticsModule,
+    PolicyModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,

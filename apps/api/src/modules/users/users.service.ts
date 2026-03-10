@@ -98,7 +98,11 @@ export class UsersService {
 
   // ─── UPDATE ROLE ──────────────────────────────────────────────────────────────
 
-  async updateRole(targetUserId: string, newRole: Role, requestingUser: RequestUser) {
+  async updateRole(
+    targetUserId: string,
+    newRole: Role,
+    requestingUser: RequestUser,
+  ) {
     if (requestingUser.role !== Role.ADMIN) {
       throw new ForbiddenException('Only admins can change user roles');
     }
@@ -158,7 +162,10 @@ export class UsersService {
       where: { userId: targetUserId },
       select: { department: true, assignedAt: true },
     });
-    return rows.map((r) => ({ department: r.department, assignedAt: r.assignedAt }));
+    return rows.map((r) => ({
+      department: r.department,
+      assignedAt: r.assignedAt,
+    }));
   }
 
   async setDepartments(
@@ -167,12 +174,16 @@ export class UsersService {
     requestingUser: RequestUser,
   ) {
     if (requestingUser.role !== Role.ADMIN) {
-      throw new ForbiddenException('Only admins can manage department assignments');
+      throw new ForbiddenException(
+        'Only admins can manage department assignments',
+      );
     }
 
     const user = await this.assertUserExists(targetUserId);
     if (user.role !== Role.DEPARTMENT_USER) {
-      throw new BadRequestException('Department assignments only apply to DEPARTMENT_USER accounts');
+      throw new BadRequestException(
+        'Department assignments only apply to DEPARTMENT_USER accounts',
+      );
     }
 
     if (departments.length === 0) {
@@ -181,7 +192,9 @@ export class UsersService {
 
     // Replace all department assignments atomically
     await this.prisma.$transaction([
-      this.prisma.userDepartment.deleteMany({ where: { userId: targetUserId } }),
+      this.prisma.userDepartment.deleteMany({
+        where: { userId: targetUserId },
+      }),
       this.prisma.userDepartment.createMany({
         data: departments.map((department) => ({
           userId: targetUserId,
@@ -217,7 +230,9 @@ export class UsersService {
     requestingUser: RequestUser,
   ) {
     if (requestingUser.role !== Role.ADMIN) {
-      throw new ForbiddenException('Only admins can grant studio scope overrides');
+      throw new ForbiddenException(
+        'Only admins can grant studio scope overrides',
+      );
     }
 
     await this.assertUserExists(targetUserId);
@@ -241,7 +256,9 @@ export class UsersService {
     requestingUser: RequestUser,
   ) {
     if (requestingUser.role !== Role.ADMIN) {
-      throw new ForbiddenException('Only admins can revoke studio scope overrides');
+      throw new ForbiddenException(
+        'Only admins can revoke studio scope overrides',
+      );
     }
 
     await this.assertUserExists(targetUserId);
@@ -264,7 +281,9 @@ export class UsersService {
     requestingUser: RequestUser,
   ) {
     if (requestingUser.role !== Role.ADMIN) {
-      throw new ForbiddenException('Only admins can set a user\'s default location');
+      throw new ForbiddenException(
+        "Only admins can set a user's default location",
+      );
     }
 
     await this.assertUserExists(targetUserId);

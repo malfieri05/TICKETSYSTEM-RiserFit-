@@ -22,10 +22,17 @@ async function bootstrap() {
     process.env.FRONTEND_URL,
   ].filter(Boolean);
   app.enableCors({
-    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean) => void) => {
+    origin: (
+      origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void,
+    ) => {
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
-      if (/^https?:\/\/localhost(:\d+)?$/.test(origin) || /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return cb(null, true);
+      if (
+        /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
+        /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
+      )
+        return cb(null, true);
       cb(null, false);
     },
     credentials: true,
@@ -34,9 +41,9 @@ async function bootstrap() {
   // Global validation pipe — auto-validates all DTOs
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,        // Strip unknown fields
+      whitelist: true, // Strip unknown fields
       forbidNonWhitelisted: true, // Throw on unknown fields
-      transform: true,        // Auto-transform types
+      transform: true, // Auto-transform types
     }),
   );
 

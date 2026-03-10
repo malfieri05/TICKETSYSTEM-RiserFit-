@@ -1,4 +1,13 @@
-import { IsOptional, IsEnum, IsString, IsInt, Min, Max, IsDateString, IsBoolean } from 'class-validator';
+import {
+  IsOptional,
+  IsEnum,
+  IsString,
+  IsInt,
+  Min,
+  Max,
+  IsDateString,
+  IsBoolean,
+} from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { TicketStatus, Priority } from '@prisma/client';
 

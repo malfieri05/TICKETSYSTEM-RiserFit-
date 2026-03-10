@@ -22,27 +22,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const storedToken = localStorage.getItem('auth_token');
     const storedUser = localStorage.getItem('auth_user');
-    try {
-      if (storedToken && storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
-        const parsed = JSON.parse(storedUser);
-        setToken(storedToken);
-        setUser(parsed);
-        // Validate token is still good
-        authApi.me().catch(() => {
+
+    const hydrateFromMe = async () => {
+      try {
+        if (!storedToken) {
           localStorage.removeItem('auth_token');
           localStorage.removeItem('auth_user');
           setToken(null);
           setUser(null);
-        });
-      } else {
+          return;
+        }
+
+        // Prefer live /auth/me payload so role/departments/scopes stay current.
+        const res = await authApi.me();
+        const me = res.data;
+        localStorage.setItem('auth_token', storedToken);
+        localStorage.setItem('auth_user', JSON.stringify(me));
+        setToken(storedToken);
+        setUser(me);
+      } catch {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_user');
+        setToken(null);
+        setUser(null);
+      } finally {
+        setIsLoading(false);
       }
-    } catch {
+    };
+
+    // If we have a stored token (and maybe a stored user), always refresh from /auth/me.
+    if (storedToken) {
+      hydrateFromMe();
+    } else {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
+      setIsLoading(false);
     }
-    setIsLoading(false);
   }, []);
 
   const login = useCallback((newToken: string, newUser: User) => {

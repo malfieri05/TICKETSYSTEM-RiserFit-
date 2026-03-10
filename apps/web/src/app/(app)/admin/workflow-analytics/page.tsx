@@ -9,7 +9,7 @@ import {
 } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
 function formatHours(h: number | null): string {
   if (h == null) return '—';
@@ -59,7 +59,7 @@ export default function AdminWorkflowAnalyticsPage() {
   const error = templatesQuery.error || departmentsQuery.error || bottlenecksQuery.error;
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Workflow Analytics" />
       <div className="p-6 max-w-5xl space-y-8">
         {error && (
@@ -80,7 +80,7 @@ export default function AdminWorkflowAnalyticsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
                     <th className="text-left py-3 px-4 font-semibold text-gray-300">Template</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-300">Total</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-300">Active</th>
@@ -98,7 +98,7 @@ export default function AdminWorkflowAnalyticsPage() {
                     </tr>
                   ) : (
                     templates.map((row) => (
-                      <tr key={row.templateId} className="border-b border-[#2a2a2a] hover:bg-[#222]">
+                      <tr key={row.templateId} className="hover:bg-[var(--color-bg-surface)]" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
                         <td className="py-3 px-4 text-gray-200">{row.templateName ?? row.templateId}</td>
                         <td className="py-3 px-4 text-right text-gray-300">{row.totalExecutions}</td>
                         <td className="py-3 px-4 text-right text-gray-300">{row.activeExecutions}</td>
@@ -126,7 +126,7 @@ export default function AdminWorkflowAnalyticsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
                     <th className="text-left py-3 px-4 font-semibold text-gray-300">Department</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-300">Tickets created</th>
                     <th className="text-right py-3 px-4 font-semibold text-gray-300">Workflows started</th>
@@ -143,7 +143,7 @@ export default function AdminWorkflowAnalyticsPage() {
                     </tr>
                   ) : (
                     departments.map((row) => (
-                      <tr key={row.departmentId} className="border-b border-[#2a2a2a] hover:bg-[#222]">
+                      <tr key={row.departmentId} className="hover:bg-[var(--color-bg-surface)]" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
                         <td className="py-3 px-4 text-gray-200">{row.departmentName}</td>
                         <td className="py-3 px-4 text-right text-gray-300">{row.ticketsCreated}</td>
                         <td className="py-3 px-4 text-right text-gray-300">{row.workflowsStarted}</td>
@@ -171,9 +171,9 @@ export default function AdminWorkflowAnalyticsPage() {
               ) : bottlenecks.longestSubtasks.length === 0 ? (
                 <div className="py-8 text-center text-gray-500 text-sm">No completed subtasks to rank.</div>
               ) : (
-                <ul className="divide-y divide-[#2a2a2a]">
+                <ul className="divide-y">
                   {bottlenecks.longestSubtasks.map((item) => (
-                    <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[#222]">
+                    <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[var(--color-bg-surface)]">
                       <span className="text-gray-300 truncate pr-2">{item.title || item.subtaskTemplateId}</span>
                       <span className="text-teal-400 shrink-0 font-medium">{formatHours(item.avgDurationHours)}</span>
                     </li>
@@ -193,9 +193,9 @@ export default function AdminWorkflowAnalyticsPage() {
               ) : bottlenecks.mostBlockedSubtasks.length === 0 ? (
                 <div className="py-8 text-center text-gray-500 text-sm">No blocked subtasks.</div>
               ) : (
-                <ul className="divide-y divide-[#2a2a2a]">
+                <ul className="divide-y">
                   {bottlenecks.mostBlockedSubtasks.map((item) => (
-                    <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[#222]">
+                    <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[var(--color-bg-surface)]">
                       <span className="text-gray-300 truncate pr-2">{item.title || item.subtaskTemplateId}</span>
                       <span className="text-amber-400 shrink-0 font-medium">{item.blockedCount}</span>
                     </li>
