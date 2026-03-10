@@ -1,12 +1,12 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
   Body,
-  Param,
-  Query,
+  Controller,
   ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import {
@@ -116,5 +116,18 @@ export class AdminController {
       );
     }
     return this.adminService.updateStudio(id, dto);
+  }
+
+  // ─── System monitoring (admin-only) ────────────────────────────────────────
+
+  /**
+   * GET /api/admin/system/services
+   * Returns a curated list of external services that power the system plus a
+   * small environment summary. Admin-only, read-only, and safe for exposure to
+   * the web frontend (no secrets, only high-level metadata).
+   */
+  @Get('system/services')
+  getSystemServices() {
+    return this.adminService.getSystemServices();
   }
 }

@@ -3,8 +3,13 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
+import { ConfigService } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUES } from '../../common/queue/queue.constants';
 import {
   CreateMarketDto,
   UpdateMarketDto,
@@ -13,9 +18,433 @@ import {
 } from './dto/admin.dto';
 import { haversineMiles } from '../../utils/geoDistance';
 
+export type SystemServiceCategory =
+  | 'database'
+  | 'cache'
+  | 'storage'
+  | 'email'
+  | 'ai'
+  | 'policy'
+  | 'hosting'
+  | 'monitoring'
+  | 'other';
+
+export type SystemServiceStatus =
+  | 'healthy'
+  | 'degraded'
+  | 'unknown'
+  | 'not_configured';
+
+export type SystemServiceCriticality = 'critical' | 'important' | 'optional';
+
+export interface SystemServiceDto {
+  id: string;
+  name: string;
+  category: SystemServiceCategory;
+  roleDescription: string;
+  status: SystemServiceStatus;
+  statusReason?: string;
+  criticality: SystemServiceCriticality;
+  lastCheckedAt: string;
+  lastError?: string | null;
+  details: {
+    host?: string;
+    region?: string;
+    planHint?: string;
+  };
+  links: {
+    label: string;
+    url: string;
+    kind: 'dashboard' | 'docs' | 'other';
+  }[];
+}
+
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(AdminService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private readonly config: ConfigService,
+    @InjectQueue(QUEUES.NOTIFICATION_FANOUT)
+    private readonly fanoutQueue: Queue,
+  ) {}
+
+  // ─── System services (admin monitoring) ─────────────────────────────────────
+
+  private getEnv(key: string): string | undefined {
+    const v = this.config.get<string>(key);
+    return v != null && v !== '' ? v : undefined;
+  }
+
+  private safeHostFromUrl(url?: string): string | undefined {
+    if (!url) return undefined;
+    try {
+      return new URL(url).host;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async checkDatabaseHealth(): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`System monitoring DB check failed — ${message}`);
+      return { ok: false, reason: message };
+    }
+  }
+
+  private async checkRedisHealth(): Promise<{ ok: boolean; reason?: string }> {
+    try {
+      await this.fanoutQueue.getJobCounts();
+      return { ok: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`System monitoring Redis check failed — ${message}`);
+      return { ok: false, reason: message };
+    }
+  }
+
+  async getSystemServices(): Promise<{
+    environment: { name: string; region?: string; version?: string | null };
+    services: SystemServiceDto[];
+  }> {
+    const now = new Date();
+    const nowIso = now.toISOString();
+
+    const nodeEnv = this.getEnv('NODE_ENV') ?? 'development';
+    const appEnv = this.getEnv('APP_ENV');
+    const envName = appEnv ?? nodeEnv;
+    const region =
+      this.getEnv('APP_REGION') ??
+      this.getEnv('REGION') ??
+      this.getEnv('FLY_REGION');
+    const version =
+      this.getEnv('APP_VERSION') ??
+      this.getEnv('RENDER_GIT_COMMIT') ??
+      null;
+
+    const dbUrl = this.getEnv('DATABASE_URL');
+    const dbHost = dbUrl ? this.safeHostFromUrl(dbUrl) : undefined;
+
+    const redisHost = this.getEnv('REDIS_HOST');
+    const redisRegion = this.getEnv('REDIS_REGION');
+
+    const s3Endpoint = this.getEnv('S3_ENDPOINT');
+    const s3Bucket = this.getEnv('S3_BUCKET');
+    const s3Region = this.getEnv('S3_REGION');
+
+    const hasPostmark = !!this.getEnv('POSTMARK_API_TOKEN');
+    const hasTeamsWebhook = !!this.getEnv('TEAMS_WEBHOOK_URL');
+    const hasOpenAi = !!this.getEnv('OPENAI_API_KEY');
+    const riserBaseUrl = this.getEnv('RISER_API_BASE_URL');
+    const riserKey = this.getEnv('RISER_API_KEY');
+
+    const appHostingDashboardUrl = this.getEnv('APP_HOSTING_DASHBOARD_URL');
+    const neonDashboardUrl = this.getEnv('NEON_DASHBOARD_URL');
+    const upstashDashboardUrl = this.getEnv('UPSTASH_DASHBOARD_URL');
+    const postmarkDashboardUrl = this.getEnv('POSTMARK_DASHBOARD_URL');
+    const openAiDashboardUrl = this.getEnv('OPENAI_DASHBOARD_URL');
+    const riserDashboardUrl = this.getEnv('RISER_DASHBOARD_URL');
+    const uptimeDashboardUrl = this.getEnv('UPTIME_MONITOR_DASHBOARD_URL');
+    const sentryDashboardUrl = this.getEnv('SENTRY_DASHBOARD_URL');
+    const s3DashboardUrl = this.getEnv('S3_DASHBOARD_URL');
+
+    // Health checks where justified
+    const [dbHealth, redisHealth] = await Promise.all([
+      dbUrl ? this.checkDatabaseHealth() : Promise.resolve({ ok: false, reason: 'DATABASE_URL not configured' }),
+      redisHost
+        ? this.checkRedisHealth()
+        : Promise.resolve({ ok: false, reason: 'REDIS_HOST not configured' }),
+    ]);
+
+    const services: SystemServiceDto[] = [];
+
+    // App Hosting
+    services.push({
+      id: 'app-hosting',
+      name: 'App Hosting',
+      category: 'hosting',
+      roleDescription:
+        'Runs the API, web frontend, and background workers for the ticketing system.',
+      status: appHostingDashboardUrl ? 'unknown' : 'unknown',
+      statusReason: appHostingDashboardUrl
+        ? 'Hosting dashboard configured.'
+        : 'Hosting dashboard URL not configured.',
+      criticality: 'critical',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {
+        planHint: appHostingDashboardUrl ? 'Configured' : 'Unknown',
+      },
+      links: appHostingDashboardUrl
+        ? [
+            {
+              label: 'Open hosting dashboard',
+              url: appHostingDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Neon Postgres
+    services.push({
+      id: 'postgres',
+      name: 'Neon Postgres',
+      category: 'database',
+      roleDescription:
+        'Primary transactional database for tickets, users, notifications, and reporting.',
+      status: dbUrl
+        ? dbHealth.ok
+          ? 'healthy'
+          : 'degraded'
+        : 'not_configured',
+      statusReason: !dbUrl
+        ? 'DATABASE_URL is not configured.'
+        : dbHealth.ok
+          ? 'Database reachable.'
+          : `Database check failed.`,
+      criticality: 'critical',
+      lastCheckedAt: nowIso,
+      lastError: !dbUrl ? null : dbHealth.ok ? null : dbHealth.reason ?? null,
+      details: {
+        host: dbHost,
+        planHint: neonDashboardUrl ? 'Managed by Neon.tech' : undefined,
+      },
+      links: neonDashboardUrl
+        ? [
+            {
+              label: 'Open Neon dashboard',
+              url: neonDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Redis / Upstash
+    services.push({
+      id: 'redis',
+      name: 'Redis (Queues & SSE)',
+      category: 'cache',
+      roleDescription:
+        'Backs BullMQ queues for notifications/SLA and supports multi-instance SSE.',
+      status: redisHost
+        ? redisHealth.ok
+          ? 'healthy'
+          : 'degraded'
+        : 'not_configured',
+      statusReason: !redisHost
+        ? 'REDIS_HOST is not configured.'
+        : redisHealth.ok
+          ? 'Redis reachable via notification-fanout queue.'
+          : 'Redis check failed.',
+      criticality: 'critical',
+      lastCheckedAt: nowIso,
+      lastError: !redisHost
+        ? null
+        : redisHealth.ok
+          ? null
+          : redisHealth.reason ?? null,
+      details: {
+        host: redisHost,
+        region: redisRegion,
+        planHint: upstashDashboardUrl ? 'Managed Redis (e.g. Upstash)' : undefined,
+      },
+      links: upstashDashboardUrl
+        ? [
+            {
+              label: 'Open Redis dashboard',
+              url: upstashDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // S3 / Object Storage
+    const s3Configured = !!s3Bucket && !!(s3Endpoint || s3Region);
+    services.push({
+      id: 's3',
+      name: 'S3-Compatible Storage',
+      category: 'storage',
+      roleDescription: 'Stores ticket attachments (files up to 25MB).',
+      status: s3Configured ? 'unknown' : 'not_configured',
+      statusReason: s3Configured
+        ? 'Attachment storage configured.'
+        : 'S3_BUCKET and S3 endpoint/region not fully configured.',
+      criticality: 'important',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {
+        host: this.safeHostFromUrl(s3Endpoint),
+        region: s3Region,
+        planHint: s3Bucket ? `Bucket: ${s3Bucket}` : undefined,
+      },
+      links: s3DashboardUrl
+        ? [
+            {
+              label: 'Open storage dashboard',
+              url: s3DashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Postmark
+    services.push({
+      id: 'postmark',
+      name: 'Postmark',
+      category: 'email',
+      roleDescription: 'Sends transactional email notifications for tickets.',
+      status: hasPostmark ? 'unknown' : 'not_configured',
+      statusReason: hasPostmark
+        ? 'POSTMARK_API_TOKEN configured.'
+        : 'POSTMARK_API_TOKEN not configured; email notifications disabled.',
+      criticality: 'important',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {
+        planHint: hasPostmark ? 'Transactional email enabled' : 'Email disabled',
+      },
+      links: postmarkDashboardUrl
+        ? [
+            {
+              label: 'Open Postmark dashboard',
+              url: postmarkDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Microsoft Teams webhook
+    services.push({
+      id: 'teams',
+      name: 'Microsoft Teams Webhook',
+      category: 'other',
+      roleDescription:
+        'Sends ticket and notification events into configured Microsoft Teams channels.',
+      status: hasTeamsWebhook ? 'unknown' : 'not_configured',
+      statusReason: hasTeamsWebhook
+        ? 'TEAMS_WEBHOOK_URL configured.'
+        : 'TEAMS_WEBHOOK_URL not configured; Teams notifications disabled.',
+      criticality: 'optional',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {},
+      links: [],
+    });
+
+    // OpenAI
+    services.push({
+      id: 'openai',
+      name: 'OpenAI',
+      category: 'ai',
+      roleDescription:
+        'Embeddings and chat completions for the AI assistant and handbook Q&A.',
+      status: hasOpenAi ? 'unknown' : 'not_configured',
+      statusReason: hasOpenAi
+        ? 'OPENAI_API_KEY configured.'
+        : 'OPENAI_API_KEY not configured; assistant and handbook chat disabled.',
+      criticality: 'optional',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {},
+      links: openAiDashboardUrl
+        ? [
+            {
+              label: 'Open OpenAI dashboard',
+              url: openAiDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Riser Policy API
+    const riserConfigured = !!riserBaseUrl && !!riserKey;
+    services.push({
+      id: 'riser',
+      name: 'Riser Policy API',
+      category: 'policy',
+      roleDescription:
+        'Syncs company policies and manuals that ground the AI assistant for all users.',
+      status: riserConfigured ? 'unknown' : 'not_configured',
+      statusReason: riserConfigured
+        ? 'Riser API base URL and key configured.'
+        : 'RISER_API_BASE_URL or RISER_API_KEY not configured; policy sync disabled.',
+      criticality: 'important',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {
+        host: this.safeHostFromUrl(riserBaseUrl),
+      },
+      links: riserDashboardUrl
+        ? [
+            {
+              label: 'Open Riser dashboard',
+              url: riserDashboardUrl,
+              kind: 'dashboard',
+            },
+          ]
+        : [],
+    });
+
+    // Monitoring / Uptime
+    const hasUptime = !!uptimeDashboardUrl;
+    const hasSentry = !!sentryDashboardUrl;
+    services.push({
+      id: 'monitoring',
+      name: 'Monitoring & Uptime',
+      category: 'monitoring',
+      roleDescription:
+        'External uptime monitoring and error tracking for the ticketing system.',
+      status: hasUptime || hasSentry ? 'unknown' : 'not_configured',
+      statusReason:
+        hasUptime || hasSentry
+          ? 'Monitoring and/or uptime tools configured.'
+          : 'No monitoring or uptime dashboards configured.',
+      criticality: 'important',
+      lastCheckedAt: nowIso,
+      lastError: null,
+      details: {},
+      links: [
+        ...(uptimeDashboardUrl
+          ? [
+              {
+                label: 'Open uptime dashboard',
+                url: uptimeDashboardUrl,
+                kind: 'dashboard' as const,
+              },
+            ]
+          : []),
+        ...(sentryDashboardUrl
+          ? [
+              {
+                label: 'Open Sentry dashboard',
+                url: sentryDashboardUrl,
+                kind: 'dashboard' as const,
+              },
+            ]
+          : []),
+      ],
+    });
+
+    return {
+      environment: {
+        name: envName,
+        region,
+        version,
+      },
+      services,
+    };
+  }
 
   // ─── Ticket taxonomy (Stage 2, read-only config) ──────────────────────────
 

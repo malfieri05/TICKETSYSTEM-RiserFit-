@@ -511,6 +511,42 @@ export const adminApi = {
       isActive?: boolean;
     },
   ) => api.patch(`/admin/studios/${id}`, data),
+
+  // System monitoring (admin-only)
+  getSystemServices: () =>
+    api.get<{
+      environment: { name: string; region?: string; version?: string | null };
+      services: {
+        id: string;
+        name: string;
+        category:
+          | 'database'
+          | 'cache'
+          | 'storage'
+          | 'email'
+          | 'ai'
+          | 'policy'
+          | 'hosting'
+          | 'monitoring'
+          | 'other';
+        roleDescription: string;
+        status: 'healthy' | 'degraded' | 'unknown' | 'not_configured';
+        statusReason?: string;
+        criticality: 'critical' | 'important' | 'optional';
+        lastCheckedAt: string;
+        lastError?: string | null;
+        details: {
+          host?: string;
+          region?: string;
+          planHint?: string;
+        };
+        links: {
+          label: string;
+          url: string;
+          kind: 'dashboard' | 'docs' | 'other';
+        }[];
+      }[];
+    }>('/admin/system/services'),
 };
 
 export const usersApi = {

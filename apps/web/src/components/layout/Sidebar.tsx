@@ -18,6 +18,7 @@ import {
   Inbox,
   Sun,
   Moon,
+  Activity,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
@@ -86,6 +87,7 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
     items: [
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
       { href: '/assistant', label: 'Assistant', icon: BookOpen },
+      { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },
     ],
   },
 ];
