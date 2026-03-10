@@ -747,6 +747,12 @@ model KnowledgeDocument {
   documentType     String?   @default("general") // "general" | "handbook"
   ingestionStatus  String    @default("pending") // pending | indexing | indexed | failed
   lastIndexedAt    DateTime?
+  upstreamProvider String?   // e.g. "riser"
+  upstreamId       String?   // e.g. Riser policy_id
+  upstreamVersion  String?
+  reviewOn         DateTime?
+  reviewDue        DateTime?
+  lastSyncedAt     DateTime?
   uploadedById     String
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -758,6 +764,7 @@ model KnowledgeDocument {
   @@index([isActive])
   @@index([documentType])
   @@index([ingestionStatus])
+  @@index([upstreamProvider, upstreamId])
   @@map("knowledge_documents")
 }
 
@@ -770,6 +777,7 @@ model DocumentChunk {
   embedding  Unsupported("vector(1536)")?
   tokenCount Int      @default(0)
   createdAt  DateTime @default(now())
+  pageNumber Int?
 
   document KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
 

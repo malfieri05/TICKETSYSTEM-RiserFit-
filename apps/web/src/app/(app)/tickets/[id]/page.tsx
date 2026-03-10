@@ -6,10 +6,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow, format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
-  Send, Plus, User, Paperclip, Download, Trash2, Upload,
+  Send, Plus, User,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, usersApi, attachmentsApi, invalidateTicketLists } from '@/lib/api';
-import type { TicketStatus, SubtaskStatus, Attachment } from '@/types';
+import { ticketsApi, commentsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
+import type { TicketStatus, SubtaskStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,7 @@ import { Select, Textarea, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -42,8 +43,6 @@ export default function TicketDetailPage() {
   const [commentBody, setCommentBody] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: ticketRes, isLoading } = useQuery({
@@ -197,59 +196,6 @@ export default function TicketDetailPage() {
     mutationFn: () => ticketsApi.unwatch(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
   });
-
-  const { data: attachmentsRes } = useQuery({
-    queryKey: ['ticket', id, 'attachments'],
-    queryFn: () => attachmentsApi.list(id),
-    enabled: activeTab === 'submission' && !!id,
-  });
-  const attachments: Attachment[] = attachmentsRes?.data ?? [];
-
-  const deleteAttachmentMut = useMutation({
-    mutationFn: (attachmentId: string) => attachmentsApi.delete(attachmentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id, 'attachments'] }),
-  });
-
-  const handleFileUpload = async (file: File) => {
-    setUploading(true);
-    setUploadError(null);
-    try {
-      const urlRes = await attachmentsApi.requestUploadUrl(id, {
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        sizeBytes: file.size,
-      });
-      const { uploadUrl, s3Key } = urlRes.data;
-      await attachmentsApi.uploadToS3(uploadUrl, file);
-      await attachmentsApi.confirmUpload(id, {
-        s3Key,
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        sizeBytes: file.size,
-      });
-      qc.invalidateQueries({ queryKey: ['ticket', id, 'attachments'] });
-    } catch (err: unknown) {
-      setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const handleDownload = async (attachment: Attachment) => {
-    try {
-      const res = await attachmentsApi.getDownloadUrl(attachment.id);
-      window.open(res.data.downloadUrl, '_blank');
-    } catch {
-      // no-op
-    }
-  };
-
-  const formatBytes = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   if (isLoading) {
     return (
@@ -521,72 +467,7 @@ export default function TicketDetailPage() {
                   <p className="text-sm py-4" style={{ color: POLISH_THEME.theadText }}>No submitted form data.</p>
                 )}
 
-                <div className="rounded-xl p-4 space-y-3" style={panel}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.theadText }}>Attachments</p>
-                  <div
-                    className="rounded-lg p-6 text-center cursor-pointer transition-colors"
-                    style={{ background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
-                    onClick={() => !uploading && fileInputRef.current?.click()}
-                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--color-border-default)')}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      const file = e.dataTransfer.files[0];
-                      if (file) handleFileUpload(file);
-                    }}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleFileUpload(file);
-                      }}
-                    />
-                    {uploading ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
-                        <p className="text-sm font-medium text-teal-400">Uploading…</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
-                        <p className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>Click to upload or drag &amp; drop</p>
-                        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Any file type · Max 25 MB</p>
-                      </div>
-                    )}
-                  </div>
-                  {uploadError && (
-                    <div className="rounded-lg px-4 py-2 text-sm" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}>
-                      {uploadError}
-                    </div>
-                  )}
-                  {attachments.length === 0 && !uploading ? (
-                    <p className="text-sm text-center py-2" style={{ color: POLISH_THEME.theadText }}>No attachments yet.</p>
-                  ) : (
-                    <div className="rounded-lg overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-                      {attachments.map((att, i) => (
-                        <div key={att.id} className="flex items-center gap-3 px-4 py-3" style={i > 0 ? panelSection : undefined}>
-                          <Paperclip className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-200 truncate">{att.filename}</p>
-                            <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(att.sizeBytes)} · {att.uploadedBy.name}</p>
-                          </div>
-                          <button type="button" onClick={() => handleDownload(att)} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-accent)')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')} title="Download">
-                            <Download className="h-4 w-4" />
-                          </button>
-                          {canManage && (
-                            <button type="button" onClick={() => deleteAttachmentMut.mutate(att.id)} disabled={deleteAttachmentMut.isPending} className="p-1.5 rounded transition-colors" style={{ color: 'var(--color-text-muted)' }} onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')} title="Delete">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                <TicketAttachmentsSection ticketId={id} canManage={canManage} variant="detail" />
               </div>
             )}
 

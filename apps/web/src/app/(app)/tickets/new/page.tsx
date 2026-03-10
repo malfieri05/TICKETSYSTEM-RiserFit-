@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
-import { ticketsApi, adminApi, ticketFormsApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, adminApi, ticketFormsApi, attachmentsApi, invalidateTicketLists } from '@/lib/api';
 import type {
   TicketFormSchemaDto,
   FormFieldDto,
@@ -14,6 +14,7 @@ import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
+import { UploadDropzone } from '@/components/uploads/UploadDropzone';
 
 const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
 
@@ -33,6 +34,8 @@ export default function NewTicketPage() {
   const [description, setDescription] = useState('');
   const [formResponses, setFormResponses] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const [stagedFiles, setStagedFiles] = useState<{ id: string; file: File }[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -82,9 +85,8 @@ export default function NewTicketPage() {
 
   const mutation = useMutation({
     mutationFn: (payload: CreateTicketPayload) => ticketsApi.create(payload),
-    onSuccess: (res) => {
+    onSuccess: () => {
       invalidateTicketLists(qc);
-      router.push(`/tickets/${res.data.id}`);
     },
     onError: (err: { response?: { data?: { message?: string } } }) => {
       const msg = err.response?.data?.message;
@@ -135,6 +137,21 @@ export default function NewTicketPage() {
     () => studiosList.find((s) => s.id === studioId)?.name ?? null,
     [studiosList, studioId],
   );
+
+  const allowAttachmentsOnCreate = isSupport || isMaintenance;
+
+  const handleStagedFilesSelected = (files: File[]) => {
+    setStagedFiles((prev) => [
+      ...prev,
+      ...files.map((file) => ({ id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`, file })),
+    ]);
+  };
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   /** Stage 21: preview mirrors backend title-generator logic; backend remains source of truth. */
   function deriveTitlePreview(): string {
@@ -196,7 +213,7 @@ export default function NewTicketPage() {
     [hasSchemaFields, topicLabel, isMaintenance, formResponses, studioName],
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!submitterName.trim()) {
@@ -236,7 +253,66 @@ export default function NewTicketPage() {
     if (Object.keys(formResponses).length > 0) {
       payload.formResponses = { ...formResponses };
     }
-    mutation.mutate(payload);
+
+    try {
+      const res = await mutation.mutateAsync(payload);
+      const ticketId = res.data.id;
+
+      if (stagedFiles.length > 0) {
+        setUploadingAttachments(true);
+        try {
+          const failedUploads: string[] = [];
+          for (const { file } of stagedFiles) {
+            try {
+              const { data } = await attachmentsApi.requestUploadUrl(ticketId, {
+                filename: file.name,
+                mimeType: file.type || 'application/octet-stream',
+                sizeBytes: file.size,
+              });
+              try {
+                await attachmentsApi.uploadToS3(data.uploadUrl, file);
+              } catch (err) {
+                failedUploads.push(file.name);
+                // eslint-disable-next-line no-console
+                console.error('Attachment upload failed at s3-put stage:', file.name, err);
+                continue;
+              }
+              try {
+                await attachmentsApi.confirmUpload(ticketId, {
+                  s3Key: data.s3Key,
+                  filename: file.name,
+                  mimeType: file.type || 'application/octet-stream',
+                  sizeBytes: file.size,
+                });
+              } catch (err) {
+                failedUploads.push(file.name);
+                // eslint-disable-next-line no-console
+                console.error('Attachment upload failed at confirm stage:', file.name, err);
+              }
+            } catch (err) {
+              failedUploads.push(file.name);
+              // Non-fatal: log for debugging while keeping ticket creation independent
+              // eslint-disable-next-line no-console
+              console.error('Attachment upload failed at upload-url stage:', file.name, err);
+            }
+          }
+          if (failedUploads.length > 0) {
+            // eslint-disable-next-line no-console
+            console.warn(
+              'Some attachments failed to upload:',
+              failedUploads.join(', '),
+            );
+          }
+        } finally {
+          setUploadingAttachments(false);
+        }
+      }
+
+      setStagedFiles([]);
+      router.push(`/tickets/${ticketId}`);
+    } catch {
+      // error already handled in mutation onError
+    }
   };
 
   if (taxonomyLoading || !taxonomy) {
@@ -428,6 +504,72 @@ export default function NewTicketPage() {
                     rows={3}
                   />
                 </>
+              )}
+
+              {allowAttachmentsOnCreate && (
+                <div className="space-y-3 pt-2" style={{ borderTop: '1px solid #2a2a2a' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>
+                    Attachments (optional)
+                  </p>
+                  <UploadDropzone
+                    label="Upload files"
+                    description="Attach images, PDFs or documents. Files are uploaded after the ticket is created. Max 25MB per file."
+                    multiple
+                    onFilesSelected={handleStagedFilesSelected}
+                  />
+                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                    Attachments are uploaded after the ticket is created. If an upload fails you can retry from the ticket page.
+                  </p>
+                  {stagedFiles.length > 0 && (
+                    <div className="rounded-lg border border-dashed border-gray-700 divide-y divide-gray-800">
+                      {stagedFiles.map(({ id, file }) => {
+                        const isImage = file.type.startsWith('image/');
+                        const isPdf = file.type === 'application/pdf';
+                        return (
+                          <div key={id} className="flex items-center gap-3 px-3 py-2">
+                            {isImage && (
+                              <div className="h-10 w-10 rounded-md overflow-hidden border border-gray-700 shrink-0">
+                                <img
+                                  src={URL.createObjectURL(file)}
+                                  alt={file.name}
+                                  className="h-full w-full object-cover"
+                                />
+                              </div>
+                            )}
+                            {!isImage && (
+                              <div className="h-8 w-8 rounded-md flex items-center justify-center border border-gray-700 text-xs shrink-0" style={{ color: '#a3a3a3' }}>
+                                {isPdf ? 'PDF' : 'FILE'}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate text-gray-100">
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {formatBytes(file.size)}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="xs"
+                              onClick={() =>
+                                setStagedFiles((prev) => prev.filter((f) => f.id !== id))
+                              }
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {uploadingAttachments && (
+                    <p className="text-xs text-gray-400">
+                      Uploading attachments after ticket creation…
+                    </p>
+                  )}
+                </div>
               )}
 
               {error && (

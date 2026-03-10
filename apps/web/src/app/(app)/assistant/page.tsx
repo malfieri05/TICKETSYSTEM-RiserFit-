@@ -11,6 +11,7 @@ interface Source {
   documentId: string;
   title: string;
   excerpt: string;
+  pageNumber?: number;
 }
 
 interface Message {
@@ -129,21 +130,30 @@ export default function AssistantPage() {
                 <div className="flex flex-wrap gap-2">
                   {message.sources.map((src) => (
                     <div
-                      key={src.documentId}
+                      key={src.documentId + (src.pageNumber ?? '')}
                       title={src.excerpt}
                       className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs text-teal-300"
                       style={{ background: 'rgba(20,184,166,0.15)', border: '1px solid rgba(20,184,166,0.3)' }}
                     >
                       <BookOpen className="h-3 w-3 shrink-0" />
                       {src.title}
+                      {typeof src.pageNumber === 'number' && (
+                        <span className="opacity-80">— Page {src.pageNumber}</span>
+                      )}
                     </div>
                   ))}
                 </div>
               )}
 
-              {message.role === 'assistant' && !message.isLoading && !message.isError && message.usedContext === false && message.id !== 'welcome' && (
-                <p className="text-xs italic" style={{ color: '#555555' }}>No matching docs found — general answer provided</p>
-              )}
+              {message.role === 'assistant' &&
+                !message.isLoading &&
+                !message.isError &&
+                message.usedContext === false &&
+                message.id !== 'welcome' && (
+                  <p className="text-xs italic" style={{ color: '#555555' }}>
+                    I couldn’t find a strong match in the policies/manuals. This answer is not policy-backed — consider submitting a ticket.
+                  </p>
+                )}
             </div>
           </div>
         ))}

@@ -152,13 +152,40 @@ export const attachmentsApi = {
   // Step 1b: upload the file directly to S3 using the presigned URL
   // This does NOT go through our API — it hits S3/R2 directly
   uploadToS3: async (uploadUrl: string, file: File): Promise<void> => {
-    const res = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': file.type },
-      body: file,
-    });
-    if (!res.ok) {
-      throw new Error(`S3 upload failed: ${res.status} ${res.statusText}`);
+    try {
+      const res = await fetch(uploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!res.ok) {
+        let host = '';
+        try {
+          host = new URL(uploadUrl).host;
+        } catch {
+          // ignore URL parse failure
+        }
+        throw new Error(
+          `Direct upload to storage failed (s3-put stage)${
+            host ? ` for host ${host}` : ''
+          }: ${res.status} ${res.statusText}`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof TypeError) {
+        let host = '';
+        try {
+          host = new URL(uploadUrl).host;
+        } catch {
+          // ignore URL parse failure
+        }
+        throw new Error(
+          `Direct upload to storage failed (network/CORS at s3-put stage)${
+            host ? ` for host ${host}` : ''
+          }: ${err.message}`,
+        );
+      }
+      throw err;
     }
   },
 
@@ -243,14 +270,14 @@ export const reportingApi = {
 export const aiApi = {
   /** Ask the AI assistant a question */
   chat: (message: string) =>
-    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string }[]; usedContext: boolean }>(
+    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string; pageNumber?: number }[]; usedContext: boolean }>(
       '/ai/chat',
       { message },
     ),
 
   /** Studio users only: RAG over handbook documents */
   handbookChat: (message: string) =>
-    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string }[]; usedContext: boolean }>(
+    api.post<{ answer: string; sources: { documentId: string; title: string; excerpt: string; pageNumber?: number }[]; usedContext: boolean }>(
       '/ai/handbook-chat',
       { message },
     ),
@@ -268,6 +295,12 @@ export const aiApi = {
       isActive: boolean;
       ingestionStatus: string;
       lastIndexedAt: string | null;
+      upstreamProvider: string | null;
+      upstreamId: string | null;
+      upstreamVersion: string | null;
+      reviewOn: string | null;
+      reviewDue: string | null;
+      lastSyncedAt: string | null;
       createdAt: string;
       uploadedBy: { id: string; name: string };
       _count: { chunks: number };
@@ -307,6 +340,13 @@ export const aiApi = {
 
   /** Permanently delete a document and its chunks */
   deleteDocument: (id: string) => api.delete(`/ai/documents/${id}`),
+
+  /** Sync Riser policies into the knowledge base (admin). */
+  syncRiserPolicies: () =>
+    api.post<{ synced: number; skipped: number; failed: number; details: unknown[] }>(
+      '/ai/riser/sync',
+      {},
+    ),
 };
 
 // ─── AI Agent (tool calling) ────────────────────────────────────────────────

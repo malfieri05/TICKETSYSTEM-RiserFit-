@@ -9,6 +9,12 @@ import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
+import dynamic from 'next/dynamic';
+
+const LocationsMap = dynamic(
+  () => import('@/components/admin/LocationsMap').then((m) => m.LocationsMap),
+  { ssr: false },
+);
 
 interface MarketWithStudios extends Market {
   studios: (Studio & { formattedAddress?: string | null; latitude?: number | null; longitude?: number | null })[];
@@ -58,6 +64,7 @@ export default function AdminMarketsPage() {
   const [radiusMiles, setRadiusMiles] = useState(25);
 
   const [addForm, setAddForm] = useState({ name: '', formattedAddress: '', latitude: '', longitude: '' });
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
 
   const { data, isLoading } = useQuery({
     queryKey: ['markets'],
@@ -216,6 +223,37 @@ export default function AdminMarketsPage() {
             </Button>
           )}
 
+          <div className="flex items-center gap-2 pt-2">
+            <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+              View:
+            </span>
+            <div className="inline-flex rounded-lg border text-xs" style={{ borderColor: 'var(--color-border-default)' }}>
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className="px-3 py-1.5 rounded-l-lg transition-colors duration-150"
+                style={{
+                  background: viewMode === 'list' ? 'var(--color-bg-surface-raised)' : 'transparent',
+                  color: viewMode === 'list' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                  borderRight: `1px solid var(--color-border-default)`,
+                }}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('map')}
+                className="px-3 py-1.5 rounded-r-lg transition-colors duration-150"
+                style={{
+                  background: viewMode === 'map' ? 'var(--color-bg-surface-raised)' : 'transparent',
+                  color: viewMode === 'map' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+                }}
+              >
+                Map
+              </button>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
@@ -236,17 +274,17 @@ export default function AdminMarketsPage() {
               <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>No locations match your search.</p>
               <p className="text-xs">Try a different search or state filter.</p>
             </div>
+          ) : viewMode === 'map' ? (
+            <LocationsMap locations={locations} />
           ) : (
             <div className="rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col" style={panel}>
               <div className="flex-1 overflow-y-auto">
-                {filteredLocations.map((loc, i) => (
+                {filteredLocations.map((loc) => (
                   <button
                     key={loc.id}
                     type="button"
-                    className="w-full text-left flex flex-col gap-0.5 px-4 py-3 transition-colors"
-                    style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    className="w-full text-left flex flex-col gap-0.5 px-4 py-3 border-b cursor-pointer transition-colors duration-150 hover:bg-[var(--color-bg-surface-raised)]"
+                    style={{ borderColor: 'var(--color-border-default)' }}
                     onClick={() =>
                       setSelectedStudio({
                         id: loc.id,

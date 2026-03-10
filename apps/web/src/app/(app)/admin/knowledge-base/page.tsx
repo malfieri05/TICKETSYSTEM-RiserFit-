@@ -22,6 +22,12 @@ interface DocRow {
   isActive: boolean;
   ingestionStatus: string;
   lastIndexedAt: string | null;
+  upstreamProvider: string | null;
+  upstreamId: string | null;
+  upstreamVersion: string | null;
+  reviewOn: string | null;
+  reviewDue: string | null;
+  lastSyncedAt: string | null;
   createdAt: string;
   uploadedBy: { id: string; name: string };
   _count: { chunks: number };
@@ -59,6 +65,7 @@ export default function KnowledgeBasePage() {
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,13 +81,28 @@ export default function KnowledgeBasePage() {
   });
 
   const toggleMut = useMutation({
-    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => aiApi.toggleDocument(id, isActive),
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      aiApi.toggleDocument(id, isActive),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-documents'] }),
   });
 
   const reindexMut = useMutation({
     mutationFn: (id: string) => aiApi.reindexDocument(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ai-documents'] }),
+  });
+
+  const riserSyncMut = useMutation({
+    mutationFn: () => aiApi.syncRiserPolicies(),
+    onSuccess: (res) => {
+      const { synced, skipped, failed } = res.data;
+      setSyncResult(
+        `Riser sync finished — ${synced} synced, ${skipped} skipped, ${failed} failed.`,
+      );
+      qc.invalidateQueries({ queryKey: ['ai-documents'] });
+    },
+    onError: () => {
+      setSyncResult('Riser sync failed unexpectedly. Check API logs for details.');
+    },
   });
 
   const handleIngest = async (e: FormEvent) => {
@@ -266,12 +288,45 @@ export default function KnowledgeBasePage() {
 
         {/* ── Document list ── */}
         <div className="rounded-xl overflow-hidden" style={panel}>
-          <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-            <h2 className="text-base font-semibold text-gray-100 flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-teal-500" />
-              Documents
-            </h2>
-            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+          <div className="px-6 py-4 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-gray-100 flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-teal-500" />
+                Documents
+              </h2>
+              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                Riser policies are the primary knowledge source. Manual uploads are for exceptional internal docs only.
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => riserSyncMut.mutate()}
+                disabled={riserSyncMut.isPending}
+              >
+                {riserSyncMut.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Syncing…
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Sync Riser policies
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+          {syncResult && (
+            <div className="px-6 pt-2 pb-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              {syncResult}
+            </div>
+          )}
+          <div className="px-6 pt-2 pb-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+            Only documents that are <span className="font-semibold text-teal-400">indexed</span> and <span className="font-semibold text-teal-400">active</span> are used by the Assistant and Handbook chat.
           </div>
 
           {isLoading ? (
@@ -289,7 +344,7 @@ export default function KnowledgeBasePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
-                  {['Title', 'Type', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Index status', 'Active', ''].map((h) => (
+                  {['Title', 'Source', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Policy meta', 'Index status', 'Active', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
                   ))}
                 </tr>
@@ -305,7 +360,23 @@ export default function KnowledgeBasePage() {
                     <td className="px-4 py-3 font-medium text-gray-200 max-w-xs">
                       <span className="line-clamp-1">{doc.title}</span>
                     </td>
-                    <td className="px-4 py-3"><SourceTypeBadge type={doc.sourceType} /></td>
+                    <td className="px-4 py-3">
+                      {doc.upstreamProvider === 'riser' ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                          style={{
+                            background: 'rgba(56,189,248,0.16)',
+                            color: '#38bdf8',
+                            border: '1px solid rgba(56,189,248,0.45)',
+                          }}
+                        >
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-sky-400" />
+                          Riser policy
+                        </span>
+                      ) : (
+                        <SourceTypeBadge type={doc.sourceType} />
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className="text-xs" style={{ color: doc.documentType === 'handbook' ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
                         {doc.documentType === 'handbook' ? 'Handbook' : 'General'}
@@ -317,20 +388,61 @@ export default function KnowledgeBasePage() {
                     <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
                       {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
                     </td>
+                    <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {doc.upstreamProvider === 'riser' ? (
+                        <div className="space-y-0.5">
+                          <div>
+                            <span className="font-medium">Version:</span>{' '}
+                            {doc.upstreamVersion ?? '—'}
+                          </div>
+                          <div>
+                            <span className="font-medium">Review:</span>{' '}
+                            {doc.reviewOn ? formatDistanceToNow(new Date(doc.reviewOn), { addSuffix: true }) : '—'}
+                          </div>
+                          <div>
+                            <span className="font-medium">Next due:</span>{' '}
+                            {doc.reviewDue ? formatDistanceToNow(new Date(doc.reviewDue), { addSuffix: true }) : '—'}
+                          </div>
+                        </div>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                         style={
                           doc.ingestionStatus === 'indexed'
                             ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
-                            : doc.ingestionStatus === 'indexing' || doc.ingestionStatus === 'pending'
+                            : doc.ingestionStatus === 'indexing'
                               ? { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }
-                              : doc.ingestionStatus === 'failed'
-                                ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
-                                : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }
+                              : doc.ingestionStatus === 'pending'
+                                ? { background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }
+                                : doc.ingestionStatus === 'failed'
+                                  ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
+                                  : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }
+                        }
+                        title={
+                          doc.ingestionStatus === 'indexed'
+                            ? 'Indexed — ready for chat'
+                            : doc.ingestionStatus === 'indexing'
+                              ? 'Indexing — processing in progress'
+                              : doc.ingestionStatus === 'pending'
+                                ? 'Pending — queued for ingestion'
+                                : doc.ingestionStatus === 'failed'
+                                  ? 'Failed — check logs or re-index'
+                                  : undefined
                         }
                       >
-                        {doc.ingestionStatus === 'indexed' ? 'Ready' : doc.ingestionStatus === 'indexing' || doc.ingestionStatus === 'pending' ? 'Indexing' : doc.ingestionStatus === 'failed' ? 'Failed' : doc.ingestionStatus}
+                        {doc.ingestionStatus === 'indexed'
+                          ? 'Indexed'
+                          : doc.ingestionStatus === 'indexing'
+                            ? 'Indexing'
+                            : doc.ingestionStatus === 'pending'
+                              ? 'Pending'
+                              : doc.ingestionStatus === 'failed'
+                                ? 'Failed'
+                                : doc.ingestionStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3">

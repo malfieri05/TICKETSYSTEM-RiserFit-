@@ -11,7 +11,8 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{ documentId: string; title: string; excerpt: string }>;
+  sources?: Array<{ documentId: string; title: string; excerpt: string; pageNumber?: number | null }>;
+  usedContext?: boolean;
 }
 
 const WELCOME: Message = {
@@ -52,12 +53,13 @@ export default function HandbookPage() {
 
     try {
       const res = await aiApi.handbookChat(text);
-      const { answer, sources } = res.data;
+      const { answer, sources, usedContext } = res.data;
       const assistantMsg: Message = {
         id: `a-${Date.now()}`,
         role: 'assistant',
         content: answer,
         sources: sources?.length ? sources : undefined,
+        usedContext,
       };
       setMessages((prev) => [...prev, assistantMsg]);
     } catch {
@@ -110,12 +112,22 @@ export default function HandbookPage() {
                 }}
               >
                 <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                {m.role === 'assistant' && m.usedContext === false && m.id !== 'welcome' && (
+                  <p className="text-xs mt-2 italic" style={{ color: '#888' }}>
+                    I couldn’t find this in the handbook. You may need to submit a ticket or contact your manager.
+                  </p>
+                )}
                 {m.sources && m.sources.length > 0 && (
                   <div className="mt-2 pt-2" style={{ borderTop: '1px solid #333' }}>
                     <p className="text-xs mb-1" style={{ color: '#888' }}>Sources:</p>
                     <ul className="text-xs space-y-0.5" style={{ color: '#aaa' }}>
                       {m.sources.map((s, i) => (
-                        <li key={i}>{s.title}</li>
+                        <li key={i}>
+                          {s.title}
+                          {s.pageNumber != null && (
+                            <> — Page {s.pageNumber}</>
+                          )}
+                        </li>
                       ))}
                     </ul>
                   </div>

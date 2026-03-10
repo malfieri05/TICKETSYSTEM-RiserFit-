@@ -119,6 +119,63 @@ export class IngestionService {
     return { documentId: doc.id, chunksCreated: chunks.length };
   }
 
+  /** Re-ingest an existing KnowledgeDocument from raw text (idempotent). */
+  async reingestExistingDocumentFromText(
+    documentId: string,
+    title: string,
+    content: string,
+    opts: { documentType?: 'general' | 'handbook' } = {},
+  ): Promise<void> {
+    const doc = await this.prisma.knowledgeDocument.findUnique({
+      where: { id: documentId },
+    });
+    if (!doc) {
+      throw new Error(`KnowledgeDocument ${documentId} not found`);
+    }
+
+    const chunks = this.splitIntoChunks(content);
+    this.logger.log(
+      `Re-ingesting existing document ${documentId} ("${title}") → ${chunks.length} chunks`,
+    );
+
+    await this.prisma.documentChunk.deleteMany({ where: { documentId } });
+
+    const BATCH = 20;
+    let chunkIndex = 0;
+    for (let i = 0; i < chunks.length; i += BATCH) {
+      const batch = chunks.slice(i, i + BATCH);
+      const embeddings = await this.embedBatch(batch);
+
+      await Promise.all(
+        batch.map(
+          (textChunk, j) =>
+            this.prisma.$executeRaw`
+            INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt")
+            VALUES (
+              ${this.generateId()},
+              ${documentId},
+              ${chunkIndex + j},
+              ${textChunk},
+              ${`[${embeddings[j].join(',')}]`}::vector,
+              ${Math.ceil(textChunk.length / 4)},
+              NOW()
+            )
+          `,
+        ),
+      );
+      chunkIndex += batch.length;
+    }
+
+    await this.prisma.knowledgeDocument.update({
+      where: { id: documentId },
+      data: {
+        ingestionStatus: 'indexed',
+        documentType: opts.documentType ?? doc.documentType ?? 'general',
+        lastIndexedAt: new Date(),
+      },
+    });
+  }
+
   /** Enqueue a knowledge ingestion job (upload or reindex). */
   async enqueueIngestionJob(documentId: string): Promise<void> {
     await this.knowledgeIngestionQueue.add(
@@ -164,31 +221,48 @@ export class IngestionService {
 
       await this.prisma.documentChunk.deleteMany({ where: { documentId } });
 
-      const chunks = this.splitIntoChunks(text);
+      const chunksWithPos = this.splitIntoChunksWithPositions(text);
       this.logger.log(
-        `Ingesting document ${documentId} → ${chunks.length} chunks`,
+        `Ingesting document ${documentId} → ${chunksWithPos.length} chunks`,
       );
 
       const BATCH = 20;
+      const numPages: number =
+        typeof data?.numpages === 'number' && data.numpages > 0
+          ? data.numpages
+          : 0;
+      const charsPerPage =
+        numPages > 0 ? text.length / numPages : text.length || 1;
       let chunkIndex = 0;
-      for (let i = 0; i < chunks.length; i += BATCH) {
-        const batch = chunks.slice(i, i + BATCH);
-        const embeddings = await this.embedBatch(batch);
+      for (let i = 0; i < chunksWithPos.length; i += BATCH) {
+        const batch = chunksWithPos.slice(i, i + BATCH);
+        const embeddings = await this.embedBatch(batch.map((b) => b.content));
         await Promise.all(
           batch.map(
-            (content, j) =>
+            (chunk, j) => {
+              const absoluteIndex = chunkIndex + j;
+              let pageNumber: number | null = null;
+              if (numPages > 0 && charsPerPage > 0) {
+                const approxPage =
+                  Math.floor(chunk.start / charsPerPage) + 1;
+                pageNumber = Math.min(
+                  numPages,
+                  Math.max(1, approxPage),
+                );
+              }
               this.prisma.$executeRaw`
-              INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt")
+              INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt", "pageNumber")
               VALUES (
                 ${this.generateId()},
                 ${doc.id},
-                ${chunkIndex + j},
-                ${content},
+                ${absoluteIndex},
+                ${chunk.content},
                 ${`[${embeddings[j].join(',')}]`}::vector,
-                ${Math.ceil(content.length / 4)},
-                NOW()
+                ${Math.ceil(chunk.content.length / 4)},
+                NOW(),
+                ${pageNumber}
               )
-            `,
+            `},
           ),
         );
         chunkIndex += batch.length;
@@ -240,6 +314,26 @@ export class IngestionService {
     }
 
     return chunks.filter((c) => c.length > 20); // drop tiny trailing fragments
+  }
+
+  /** Split text into overlapping chunks, preserving start index (for page approximation) */
+  private splitIntoChunksWithPositions(
+    text: string,
+  ): { content: string; start: number }[] {
+    const chunks: { content: string; start: number }[] = [];
+    let start = 0;
+
+    while (start < text.length) {
+      const end = Math.min(start + CHUNK_SIZE, text.length);
+      const slice = text.slice(start, end).trim();
+      if (slice.length > 20) {
+        chunks.push({ content: slice, start });
+      }
+      if (end >= text.length) break;
+      start += CHUNK_SIZE - CHUNK_OVERLAP;
+    }
+
+    return chunks;
   }
 
   /** Embed a batch of strings using OpenAI */

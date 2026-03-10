@@ -19,6 +19,7 @@ import { memoryStorage } from 'multer';
 import { AiService } from './ai.service';
 import { IngestionService } from './ingestion.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { RiserPolicySyncService } from './riser-policy-sync.service';
 import { ChatDto, IngestTextDto } from './dto/ai.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
@@ -38,6 +39,7 @@ export class AiController {
     private readonly aiService: AiService,
     private readonly ingestionService: IngestionService,
     private readonly attachmentsService: AttachmentsService,
+    private readonly riserSync: RiserPolicySyncService,
   ) {}
 
   // ── Chat (all authenticated users) ───────────────────────────────────────
@@ -77,6 +79,27 @@ export class AiController {
   @Roles(Role.ADMIN)
   listDocuments() {
     return this.aiService.listDocuments();
+  }
+
+  /**
+   * POST /api/ai/riser/sync
+   * Admin-only. Sync policies from Riser API into the knowledge base.
+   */
+  @Post('riser/sync')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.ACCEPTED)
+  async syncRiserPolicies(@CurrentUser() user: RequestUser) {
+    try {
+      const result = await this.riserSync.syncAllPolicies(user.id);
+      return result;
+    } catch (err) {
+      this.logger.error(
+        `Riser sync failed unexpectedly for admin ${user.id}`,
+        err as Error,
+      );
+      // Preserve real server failures as 500 while avoiding 400s for config issues.
+      throw err;
+    }
   }
 
   /**

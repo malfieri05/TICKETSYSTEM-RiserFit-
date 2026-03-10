@@ -5,6 +5,7 @@ import { IngestionService } from './ingestion.service';
 import { AiController } from './ai.controller';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { QUEUES } from '../../common/queue/queue.constants';
+import { RiserPolicySyncService } from './riser-policy-sync.service';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { QUEUES } from '../../common/queue/queue.constants';
     BullModule.registerQueue({ name: QUEUES.KNOWLEDGE_INGESTION }),
   ],
   controllers: [AiController],
-  providers: [AiService, IngestionService],
-  exports: [AiService, IngestionService],
+  providers: [AiService, IngestionService, RiserPolicySyncService],
+  exports: [AiService, IngestionService, RiserPolicySyncService],
 })
 export class AiModule {}

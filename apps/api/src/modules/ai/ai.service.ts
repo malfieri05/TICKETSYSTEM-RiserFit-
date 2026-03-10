@@ -18,11 +18,17 @@ interface ChunkRow {
   document_id: string;
   document_title: string;
   distance: number;
+  page_number: number | null;
 }
 
 export interface ChatResponse {
   answer: string;
-  sources: Array<{ documentId: string; title: string; excerpt: string }>;
+  sources: Array<{
+    documentId: string;
+    title: string;
+    excerpt: string;
+    pageNumber?: number | null;
+  }>;
   usedContext: boolean;
 }
 
@@ -64,10 +70,15 @@ export class AiService {
         dc.content,
         dc."documentId"    AS document_id,
         kd.title           AS document_title,
+        dc."pageNumber"    AS page_number,
         dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector AS distance
       FROM "document_chunks" dc
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
       WHERE kd."isActive" = true
+        AND (
+          kd."documentType" != 'handbook'
+          OR coalesce(kd."upstreamProvider", '') = 'riser'
+        )
         AND dc.embedding IS NOT NULL
         AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${this.getDistanceThreshold()}
       ORDER BY distance ASC
@@ -126,7 +137,10 @@ Keep answers concise and professional.`;
       .map((c) => ({
         documentId: c.document_id,
         title: c.document_title,
-        excerpt: c.content.slice(0, 200) + (c.content.length > 200 ? '…' : ''),
+        excerpt:
+          c.content.slice(0, 200) +
+          (c.content.length > 200 ? '…' : ''),
+        pageNumber: c.page_number ?? undefined,
       }));
 
     return { answer, sources, usedContext };
@@ -135,7 +149,7 @@ Keep answers concise and professional.`;
   /** Handbook-only RAG: same as chat() but filters to documentType = 'handbook'. Studio users only. */
   async chatHandbook(userMessage: string): Promise<ChatResponse> {
     const queryEmbedding = await this.ingestion.embedOne(userMessage);
-    const threshold = this.getDistanceThreshold();
+    const threshold = Math.min(this.getDistanceThreshold(), 0.4);
     const topK = this.getTopK();
 
     const chunks = await this.prisma.$queryRaw<ChunkRow[]>`
@@ -144,11 +158,13 @@ Keep answers concise and professional.`;
         dc.content,
         dc."documentId"    AS document_id,
         kd.title           AS document_title,
+        dc."pageNumber"    AS page_number,
         dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector AS distance
       FROM "document_chunks" dc
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
       WHERE kd."isActive" = true
         AND kd."documentType" = 'handbook'
+        AND coalesce(kd."upstreamProvider", '') = 'riser'
         AND dc.embedding IS NOT NULL
         AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${threshold}
       ORDER BY distance ASC
@@ -196,7 +212,10 @@ ${contextBlocks}`;
       .map((c) => ({
         documentId: c.document_id,
         title: c.document_title,
-        excerpt: c.content.slice(0, 200) + (c.content.length > 200 ? '…' : ''),
+        excerpt:
+          c.content.slice(0, 200) +
+          (c.content.length > 200 ? '…' : ''),
+        pageNumber: c.page_number ?? undefined,
       }));
 
     return { answer, sources, usedContext };
@@ -269,6 +288,12 @@ ${contextBlocks}`;
         isActive: true,
         ingestionStatus: true,
         lastIndexedAt: true,
+        upstreamProvider: true,
+        upstreamId: true,
+        upstreamVersion: true,
+        reviewOn: true,
+        reviewDue: true,
+        lastSyncedAt: true,
         createdAt: true,
         uploadedBy: { select: { id: true, name: true } },
         _count: { select: { chunks: true } },
