@@ -23,6 +23,15 @@ export class TicketFiltersDto {
   @IsIn(['active', 'completed'])
   statusGroup?: 'active' | 'completed';
 
+  /**
+   * Public API param: ticket class filter (e.g. "SUPPORT", "MAINTENANCE" or a ticket class ID).
+   * Normalized to `ticketClassId` for internal use.
+   */
+  @IsOptional()
+  @IsString()
+  ticketClass?: string;
+
+  /** @deprecated Use `ticketClass` as the public param name. Kept for backward compatibility. */
   @IsOptional()
   @IsString()
   ticketClassId?: string;
@@ -44,6 +53,14 @@ export class TicketFiltersDto {
   @IsString()
   studioId?: string;
 
+  /**
+   * Public API param: state (market/region) filter. Normalized to `marketId` for internal use.
+   */
+  @IsOptional()
+  @IsString()
+  state?: string;
+
+  /** @deprecated Use `state` as the public param name. Kept for backward compatibility. */
   @IsOptional()
   @IsString()
   marketId?: string;
@@ -59,11 +76,6 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsString()
   requesterId?: string;
-
-  /** Optional filter by team (e.g. from frontend); accepted to avoid 400 when client sends it. */
-  @IsOptional()
-  @IsString()
-  teamId?: string;
 
   @IsOptional()
   @IsString()
@@ -109,4 +121,18 @@ export class TicketFiltersDto {
   @Min(1)
   @Max(100)
   limit?: number = 25;
+
+  /**
+   * Normalize public param names to internal DB field names.
+   * `ticketClass` → `ticketClassId`, `state` → `marketId`.
+   */
+  normalize(): TicketFiltersDto {
+    if (this.ticketClass && !this.ticketClassId) {
+      this.ticketClassId = this.ticketClass;
+    }
+    if (this.state && !this.marketId) {
+      this.marketId = this.state;
+    }
+    return this;
+  }
 }

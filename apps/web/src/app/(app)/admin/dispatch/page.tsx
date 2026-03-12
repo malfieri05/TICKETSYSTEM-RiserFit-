@@ -125,9 +125,9 @@ export default function DispatchPage() {
 
   const buildTicketsUrl = (extra: { studioId?: string; marketId?: string; maintenanceCategoryId?: string }) => {
     const search = new URLSearchParams();
-    if (maintenanceClassId) search.set('ticketClassId', maintenanceClassId);
+    if (maintenanceClassId) search.set('ticketClass', maintenanceClassId);
     if (extra.studioId) search.set('studioId', extra.studioId);
-    if (extra.marketId) search.set('marketId', extra.marketId);
+    if (extra.marketId) search.set('state', extra.marketId);
     if (extra.maintenanceCategoryId) search.set('maintenanceCategoryId', extra.maintenanceCategoryId);
     return `/tickets?${search.toString()}`;
   };
@@ -152,7 +152,7 @@ export default function DispatchPage() {
             ))}
           </Select>
           <Select value={filters.marketId ?? ''} onChange={(e) => setFilter('marketId', e.target.value)} className="w-44 shrink-0">
-            <option value="">All Markets</option>
+            <option value="">All States</option>
             {markets.map((m) => (
               <option key={m.id} value={m.id}>{m.name}</option>
             ))}

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { ticketsApi, usersApi } from '@/lib/api';
-import type { TicketFilters, TicketStatus } from '@/types';
+import { adminApi } from '@/lib/api';
+import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -31,9 +31,14 @@ const CANONICAL_HEADERS = [
   { label: 'Comments', key: 'comments' },
 ] as const;
 
+const FILTER_KEYS: (keyof TicketFilters)[] = [
+  'departmentId', 'ticketClass', 'supportTopicId', 'maintenanceCategoryId', 'studioId', 'state',
+];
+
 export default function TicketsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [filters, setFilters] = useState<TicketFilters>({ page: 1, limit: PAGE_SIZE });
   const [search, setSearch] = useState('');
@@ -45,37 +50,141 @@ export default function TicketsPage() {
   useEffect(() => {
     if (hasInitializedFromUrl.current) return;
     hasInitializedFromUrl.current = true;
-    const ticketClassId = searchParams.get('ticketClassId');
-    const studioId = searchParams.get('studioId');
-    const marketId = searchParams.get('marketId');
-    const maintenanceCategoryId = searchParams.get('maintenanceCategoryId');
-    if (ticketClassId || studioId || marketId || maintenanceCategoryId) {
-      setFilters((f) => ({
-        ...f,
-        ...(ticketClassId && { ticketClassId }),
-        ...(studioId && { studioId }),
-        ...(marketId && { marketId }),
-        ...(maintenanceCategoryId && { maintenanceCategoryId }),
-        page: 1,
-      }));
+    const init: Partial<TicketFilters> = {};
+    for (const key of FILTER_KEYS) {
+      const v = searchParams.get(key);
+      if (v) (init as Record<string, string>)[key] = v;
+    }
+    const s = searchParams.get('search');
+    if (s) setSearch(s);
+    if (Object.keys(init).length > 0) {
+      setFilters((f) => ({ ...f, ...init, page: 1 }));
     }
   }, [searchParams]);
+
+  const syncUrl = useCallback((nextFilters: TicketFilters, nextSearch: string) => {
+    const params = new URLSearchParams();
+    for (const key of FILTER_KEYS) {
+      const v = nextFilters[key];
+      if (v) params.set(key, v as string);
+    }
+    if (nextSearch) params.set('search', nextSearch);
+    const qs = params.toString();
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    router.replace(url, { scroll: false });
+  }, [pathname, router]);
+
+  const updateFilter = (key: keyof TicketFilters, value: string) => {
+    setFilters((f) => {
+      const next = { ...f, [key]: value || undefined, page: 1 };
+      syncUrl(next, search);
+      return next;
+    });
+  };
+
+  const clearAllFilters = () => {
+    setFilters({ page: 1, limit: PAGE_SIZE });
+    setSearch('');
+    syncUrl({ page: 1, limit: PAGE_SIZE }, '');
+  };
 
   useEffect(() => {
     setFilters((f) => ({ ...f, page: 1 }));
   }, [debouncedSearch]);
 
+  useEffect(() => {
+    if (hasInitializedFromUrl.current) {
+      syncUrl(filters, debouncedSearch);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  const { data: taxonomyData } = useQuery({
+    queryKey: ['ticket-taxonomy'],
+    queryFn: () => adminApi.getTicketTaxonomy(),
+  });
+  const taxonomy = taxonomyData?.data;
+
+  const { data: marketsData } = useQuery({
+    queryKey: ['markets'],
+    queryFn: () => adminApi.listMarkets(),
+  });
+  const markets = marketsData?.data ?? [];
+
+  const typeOptions = (() => {
+    if (!taxonomy) return [];
+    const opts: { value: string; label: string; params: Partial<TicketFilters> }[] = [];
+    for (const dept of taxonomy.supportTopicsByDepartment ?? []) {
+      for (const topic of dept.topics ?? []) {
+        opts.push({ value: `st-${topic.id}`, label: `Support – ${topic.name}`, params: { supportTopicId: topic.id } });
+      }
+    }
+    for (const cat of taxonomy.maintenanceCategories ?? []) {
+      opts.push({ value: `mc-${cat.id}`, label: `Maintenance – ${cat.name}`, params: { maintenanceCategoryId: cat.id } });
+    }
+    return opts;
+  })();
+
+  const currentTypeValue = filters.supportTopicId
+    ? `st-${filters.supportTopicId}`
+    : filters.maintenanceCategoryId
+      ? `mc-${filters.maintenanceCategoryId}`
+      : '';
+
+  const handleTypeChange = (val: string) => {
+    const match = typeOptions.find((o) => o.value === val);
+    setFilters((f) => {
+      const next: TicketFilters = { ...f, supportTopicId: undefined, maintenanceCategoryId: undefined, ticketClass: undefined, page: 1 };
+      if (match) Object.assign(next, match.params);
+      syncUrl(next, search);
+      return next;
+    });
+  };
+
+  const locationOptions = (() => {
+    const opts: { value: string; label: string; key: 'studioId' | 'state' }[] = [];
+    for (const m of markets) {
+      opts.push({ value: m.id, label: m.name, key: 'state' });
+      for (const s of m.studios ?? []) {
+        opts.push({ value: s.id, label: `  ${s.name}`, key: 'studioId' });
+      }
+    }
+    return opts;
+  })();
+
+  const currentLocationValue = filters.studioId
+    ? `studio-${filters.studioId}`
+    : filters.state
+      ? `state-${filters.state}`
+      : '';
+
+  const handleLocationChange = (val: string) => {
+    setFilters((f) => {
+      const next: TicketFilters = { ...f, studioId: undefined, state: undefined, page: 1 };
+      if (val.startsWith('studio-')) {
+        next.studioId = val.replace('studio-', '');
+      } else if (val.startsWith('state-')) {
+        next.state = val.replace('state-', '');
+      }
+      syncUrl(next, search);
+      return next;
+    });
+  };
+
+  const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
+
   const listParams = {
     page: filters.page ?? 1,
     limit: PAGE_SIZE,
     search: debouncedSearch || undefined,
-    teamId: filters.teamId,
+    departmentId: filters.departmentId,
     status: filters.status,
     statusGroup: viewTab as 'active' | 'completed',
-    ticketClassId: filters.ticketClassId,
-    studioId: filters.studioId,
-    marketId: filters.marketId,
+    ticketClass: filters.ticketClass,
+    supportTopicId: filters.supportTopicId,
     maintenanceCategoryId: filters.maintenanceCategoryId,
+    studioId: filters.studioId,
+    state: filters.state,
   };
 
   const {
@@ -85,23 +194,6 @@ export default function TicketsPage() {
     isInitialLoading,
     isFetching,
   } = useTicketListQuery('list', listParams);
-
-  const { data: usersRes } = useQuery({
-    queryKey: ['users'],
-    queryFn: () => usersApi.list(),
-  });
-  const users = usersRes?.data ?? [];
-  const departments = Array.from(
-    new Map(
-      users
-        .filter((u) => u.teamId && u.teamName)
-        .map((u) => [u.teamId as string, u.teamName as string]),
-    ).entries(),
-  ).map(([id, name]) => ({ id, name }));
-
-  const setFilter = (key: keyof TicketFilters, value: string) => {
-    setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
-  };
 
   const currentPage = filters.page ?? 1;
   useEffect(() => {
@@ -145,10 +237,7 @@ export default function TicketsPage() {
               {total > 0 && active && (
                 <span
                   className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{
-                    background: 'var(--color-bg-surface-raised)',
-                    color: 'var(--color-text-primary)',
-                  }}
+                  style={{ background: 'var(--color-bg-surface-raised)', color: 'var(--color-text-primary)' }}
                 >
                   {total}
                 </span>
@@ -159,6 +248,7 @@ export default function TicketsPage() {
       </div>
 
       <div ref={listContainerRef} className="flex-1 p-6 space-y-4 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>
+        {/* Filter bar */}
         <div className="flex flex-wrap gap-3 items-end">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
@@ -171,27 +261,48 @@ export default function TicketsPage() {
           </div>
 
           <Select
-            value={filters.teamId ?? ''}
-            onChange={(e) => setFilter('teamId', e.target.value)}
+            value={filters.departmentId ?? ''}
+            onChange={(e) => updateFilter('departmentId', e.target.value)}
             className="w-48"
           >
             <option value="">All departments</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
+            {(taxonomy?.departments ?? []).map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </Select>
+
+          <Select
+            value={currentTypeValue}
+            onChange={(e) => handleTypeChange(e.target.value)}
+            className="w-52"
+          >
+            <option value="">All types</option>
+            {typeOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </Select>
+
+          <Select
+            value={currentLocationValue}
+            onChange={(e) => handleLocationChange(e.target.value)}
+            className="w-48"
+          >
+            <option value="">All locations</option>
+            {locationOptions.map((o) => (
+              <option key={`${o.key}-${o.value}`} value={`${o.key === 'state' ? 'state' : 'studio'}-${o.value}`}>
+                {o.label}
               </option>
             ))}
           </Select>
 
-          {(filters.teamId || filters.ticketClassId || filters.studioId || filters.marketId || filters.maintenanceCategoryId || search) && (
-            <Button variant="ghost" size="md" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
+          {hasActiveFilters && (
+            <Button variant="ghost" size="md" onClick={clearAllFilters}>
               Clear filters
             </Button>
           )}
         </div>
 
         <div className="rounded-xl overflow-hidden relative" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}>
-          {/* Overlay refresh indicator — no layout shift */}
           {isFetching && tickets.length > 0 && !isInitialLoading && (
             <div
               style={{
@@ -220,11 +331,11 @@ export default function TicketsPage() {
             </table>
           ) : tickets.length === 0 ? (
             <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
-              {Object.keys(filters).some((k) => k !== 'page' && k !== 'limit' && filters[k as keyof TicketFilters]) || debouncedSearch ? (
+              {hasActiveFilters ? (
                 <>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current filters</p>
                   <p className="text-xs text-center">Try adjusting your filters or search.</p>
-                  <Button variant="ghost" size="sm" onClick={() => { setFilters({ page: 1, limit: PAGE_SIZE }); setSearch(''); }}>
+                  <Button variant="ghost" size="sm" onClick={clearAllFilters}>
                     Clear filters
                   </Button>
                 </>

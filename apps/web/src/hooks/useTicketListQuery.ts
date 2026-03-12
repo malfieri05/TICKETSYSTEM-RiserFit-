@@ -16,19 +16,7 @@ export function normalizeTicketListKey(
     limit = PAGE_SIZE_DEFAULT,
     search,
     viewTab,
-    status,
     statusGroup,
-    priority,
-    departmentId,
-    ticketClassId,
-    supportTopicId,
-    studioId,
-    marketId,
-    maintenanceCategoryId,
-    ownerId,
-    requesterId,
-    teamId,
-    actionableForMe,
   } = params;
 
   const key: unknown[] = ['tickets', listKey, page, limit, search ?? '', viewTab ?? '', statusGroup ?? ''];
@@ -37,14 +25,13 @@ export function normalizeTicketListKey(
     'status',
     'priority',
     'departmentId',
-    'ticketClassId',
+    'ticketClass',
     'supportTopicId',
     'studioId',
-    'marketId',
+    'state',
     'maintenanceCategoryId',
     'ownerId',
     'requesterId',
-    'teamId',
   ] as const;
 
   for (const k of filterKeys) {
@@ -72,14 +59,13 @@ export function buildListParams(
   if (rest.statusGroup != null) out.statusGroup = rest.statusGroup;
   if (rest.priority != null) out.priority = rest.priority;
   if (rest.departmentId != null) out.departmentId = rest.departmentId;
-  if (rest.ticketClassId != null) out.ticketClassId = rest.ticketClassId;
+  if (rest.ticketClass != null) out.ticketClass = rest.ticketClass;
   if (rest.supportTopicId != null) out.supportTopicId = rest.supportTopicId;
   if (rest.studioId != null) out.studioId = rest.studioId;
-  if (rest.marketId != null) out.marketId = rest.marketId;
+  if (rest.state != null) out.state = rest.state;
   if (rest.maintenanceCategoryId != null) out.maintenanceCategoryId = rest.maintenanceCategoryId;
   if (rest.ownerId != null) out.ownerId = rest.ownerId;
   if (rest.requesterId != null) out.requesterId = rest.requesterId;
-  if (rest.teamId != null) out.teamId = rest.teamId;
   if (rest.actionableForMe === true) out.actionableForMe = true;
   return out;
 }

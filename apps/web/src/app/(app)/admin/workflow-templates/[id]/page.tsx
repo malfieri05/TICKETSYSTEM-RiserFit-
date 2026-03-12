@@ -598,7 +598,7 @@ export default function WorkflowTemplateDetailPage() {
         {/* Dependencies — cycle-safe add */}
         <div className="rounded-xl p-4" style={panel}>
           <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Dependencies</h3>
-          <p className="text-xs text-[var(--color-text-muted)] mb-2">Define which subtask must complete before another can start. Cycles are blocked.</p>
+          <p className="text-xs text-[var(--color-text-muted)] mb-2">Define which subtask must complete before another can start. Cycles are not allowed.</p>
           {deps.length > 0 && (
             <ul className="space-y-1 mb-4">
               {deps.map((d) => (

@@ -528,6 +528,7 @@ export class TicketsService {
         'You do not have permission to list tickets',
       );
     }
+    filters.normalize();
     const {
       status,
       statusGroup,

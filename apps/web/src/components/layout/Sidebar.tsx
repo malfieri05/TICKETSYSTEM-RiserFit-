@@ -85,7 +85,6 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
     label: 'Content / Tools',
     items: [
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
-      { href: '/assistant', label: 'Assistant', icon: BookOpen },
       { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },
     ],
   },
@@ -277,7 +276,7 @@ export function Sidebar() {
                   </p>
                 </div>
                 {group.items.map(({ href, label, icon: Icon }) => {
-                  const active = pathname.startsWith(href) || (href === '/assistant' && pathname === '/assistant');
+                  const active = pathname.startsWith(href);
                   return (
                     <Link
                       key={href}

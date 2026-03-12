@@ -206,14 +206,15 @@ export interface TicketFilters {
   statusGroup?: 'active' | 'completed';
   priority?: TicketPriority;
   departmentId?: string;
-  ticketClassId?: string;
+  /** Public filter: ticket class (e.g. SUPPORT, MAINTENANCE or ticket class ID). Backend maps to ticketClassId. */
+  ticketClass?: string;
   supportTopicId?: string;
   studioId?: string;
-  marketId?: string;
+  /** Public filter: state (market/region). Backend maps to marketId. */
+  state?: string;
   maintenanceCategoryId?: string;
   ownerId?: string;
   requesterId?: string;
-  teamId?: string;
   search?: string;
   page?: number;
   limit?: number;

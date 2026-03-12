@@ -201,7 +201,7 @@ export default function AdminMarketsPage() {
           {showAddForm && (
             <div className="rounded-xl p-4 space-y-3" style={panel}>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Add Location</h3>
-              <Select label="State (market)" value={addFormMarketId} onChange={(e) => setAddFormMarketId(e.target.value)}>
+              <Select label="State" value={addFormMarketId} onChange={(e) => setAddFormMarketId(e.target.value)}>
                 <option value="">— Select state —</option>
                 {markets.map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
@@ -263,8 +263,8 @@ export default function AdminMarketsPage() {
             </div>
           ) : markets.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text-muted)' }}>
-              <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>No markets yet</p>
-              <p className="text-xs text-center max-w-sm">Markets (states) are configured by your system administrator.</p>
+              <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>No states yet</p>
+              <p className="text-xs text-center max-w-sm">States are configured by your system administrator.</p>
             </div>
           ) : locations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-3" style={{ color: 'var(--color-text-muted)' }}>
@@ -383,7 +383,7 @@ export default function AdminMarketsPage() {
                     {selectedStudio.formattedAddress && (
                       <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>{selectedStudio.formattedAddress}</p>
                     )}
-                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>Market: {selectedStudio.marketName}</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>State: {selectedStudio.marketName}</p>
                   </div>
                   <Button size="sm" variant="secondary" onClick={() => setEditingStudio(selectedStudio ? { id: selectedStudio.id, name: selectedStudio.name, formattedAddress: selectedStudio.formattedAddress ?? '', latitude: selectedStudio.latitude != null ? String(selectedStudio.latitude) : '', longitude: selectedStudio.longitude != null ? String(selectedStudio.longitude) : '', marketName: selectedStudio.marketName } : null)}>Edit location</Button>
                 </>
