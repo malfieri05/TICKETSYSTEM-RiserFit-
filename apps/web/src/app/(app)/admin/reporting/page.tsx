@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download } from 'lucide-react';
-import { reportingApi, api } from '@/lib/api';
+import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download, MapPin } from 'lucide-react';
+import { reportingApi, api, type WorkflowTimingEntry } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 
@@ -158,6 +158,13 @@ export default function ReportingPage() {
     queryFn: () => reportingApi.completionByOwner(),
   });
 
+  const { data: workflowTimingRes } = useQuery({
+    queryKey: ['reporting', 'workflow-timing'],
+    queryFn: () => reportingApi.workflowTiming(),
+  });
+
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');
+
   const summary = summaryRes?.data;
   const volume = volumeRes?.data ?? [];
   const byStatus = statusRes?.data ?? [];
@@ -166,6 +173,9 @@ export default function ReportingPage() {
   const byMarket = marketRes?.data ?? [];
   const resolutionTime = resolutionRes?.data ?? [];
   const completionByOwner = completionOwnerRes?.data ?? [];
+  const workflowTimingData = workflowTimingRes?.data?.workflows ?? [];
+
+  const activeWorkflow = workflowTimingData.find((w) => w.workflowId === selectedWorkflowId) ?? workflowTimingData[0];
 
   const maxStatus = Math.max(...byStatus.map((r) => r.count), 1);
   const maxPriority = Math.max(...byPriority.map((r) => r.count), 1);
@@ -364,9 +374,9 @@ export default function ReportingPage() {
             </div>
           </div>
 
-          {/* By Market */}
+          {/* By Location */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Market</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Location</h3>
             <div className="space-y-2.5">
               {byMarket.length === 0 ? (
                 <p className="text-sm text-[var(--color-text-secondary)]">No data.</p>
@@ -452,6 +462,74 @@ export default function ReportingPage() {
               </table>
             </div>
           )}
+        </div>
+
+        {/* ── Workflow / Subtask Completion Timing ──────────────────────────── */}
+        <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
+              Workflow / Subtask Completion Timing
+            </h3>
+            {workflowTimingData.length > 1 && (
+              <select
+                value={selectedWorkflowId || activeWorkflow?.workflowId || ''}
+                onChange={(e) => setSelectedWorkflowId(e.target.value)}
+                className="text-sm rounded-lg px-3 py-1.5"
+                style={{
+                  background: 'var(--color-bg-page)',
+                  border: '1px solid var(--color-border-default)',
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                {workflowTimingData.map((w) => (
+                  <option key={w.workflowId} value={w.workflowId}>
+                    {w.workflowName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="max-h-[400px] overflow-y-auto">
+            {workflowTimingData.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-secondary)] text-center py-8">
+                No workflow timing data available.
+              </p>
+            ) : activeWorkflow ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
+                  <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{activeWorkflow.workflowName}</span>
+                  <span>·</span>
+                  <span>Avg ticket completion: {formatHours(activeWorkflow.avgTicketCompletionHours)}</span>
+                </div>
+                {activeWorkflow.steps.length === 0 ? (
+                  <p className="text-sm text-[var(--color-text-secondary)] py-4">No step data available.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide">
+                        <th className="text-left py-2 pr-4">Step</th>
+                        <th className="text-right py-2 pr-4">Avg Completion</th>
+                        <th className="text-right py-2 pr-2">Avg Active Work</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeWorkflow.steps.map((step) => (
+                        <tr key={step.stepId} className="border-b border-[var(--color-border-default)]">
+                          <td className="py-2 pr-4 text-[var(--color-text-primary)]">{step.stepName}</td>
+                          <td className="py-2 pr-4 text-right text-[var(--color-text-primary)]">
+                            {formatHours(step.avgSubtaskCompletionHours)}
+                          </td>
+                          <td className="py-2 pr-2 text-right text-[var(--color-text-secondary)]">
+                            {formatHours(step.avgActiveWorkHours)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

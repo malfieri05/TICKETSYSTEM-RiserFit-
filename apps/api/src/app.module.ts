@@ -20,6 +20,7 @@ import { WorkersModule } from './workers/workers.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { TicketFormsModule } from './modules/ticket-forms/ticket-forms.module';
@@ -77,6 +78,9 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // ── Reporting ─────────────────────────────────────────────────────────────
     ReportingModule,
+
+    // ── Dashboard (Stage 5) ──────────────────────────────────────────────────
+    DashboardModule,
 
     // ── AI Assistant (RAG + pgvector) ─────────────────────────────────────────
     AiModule,

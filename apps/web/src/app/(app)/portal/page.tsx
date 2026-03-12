@@ -4,12 +4,11 @@ import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { formatDistanceToNow } from 'date-fns';
-import { Ticket, CheckCircle2, Clock, ChevronRight, Search } from 'lucide-react';
-import { ticketsApi } from '@/lib/api';
+import { Ticket, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
+import { ticketsApi, dashboardApi, type StudioDashboardSummaryResponse } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
-import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
-import type { ScopeSummaryRecentTicket, TicketListItem } from '@/types';
+import { StatusBadge } from '@/components/ui/Badge';
+import type { TicketListItem } from '@/types';
 import { InboxLayout } from '@/components/inbox/InboxLayout';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -28,11 +27,13 @@ type TabId = 'my' | 'studio' | 'dashboard';
 function StatCard({
   label,
   value,
+  sub,
   icon: Icon,
   iconStyle,
 }: {
   label: string;
-  value: number;
+  value: number | string;
+  sub?: string;
   icon: React.ElementType;
   iconStyle: React.CSSProperties;
 }) {
@@ -49,42 +50,31 @@ function StatCard({
           {label}
         </p>
         <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-0.5">{value}</p>
+        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{sub}</p>}
       </div>
     </div>
   );
 }
 
-function RecentRow({ ticket, onClick }: { ticket: ScopeSummaryRecentTicket; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors duration-150"
-      style={{ background: 'var(--color-bg-surface)', border: `1px solid ${POLISH_THEME.listBorder}` }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-        e.currentTarget.style.borderColor = 'var(--color-border-default)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'var(--color-bg-surface)';
-        e.currentTarget.style.borderColor = 'var(--color-border-default)';
-      }}
-    >
-      <span className="text-xs font-mono shrink-0" style={{ color: POLISH_THEME.metaDim }}>{ticket.id.slice(0, 8)}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">{ticket.title}</p>
-        <p className="text-xs mt-0.5" style={{ color: POLISH_THEME.theadText }}>
-          {ticket.studio?.name ?? 'No studio'} ·{' '}
-          {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
-        </p>
-      </div>
-      <StatusBadge status={ticket.status} />
-      <ChevronRight className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
-    </button>
-  );
+function formatHoursLabel(h: number | null): string {
+  if (h == null) return '—';
+  if (h < 1) return `${Math.round(h * 60)} min`;
+  if (h < 24) return `${h.toFixed(1)} h`;
+  return `${(h / 24).toFixed(1)} d`;
 }
 
-const DASHBOARD_RECENT_LIMIT = 5;
+function BreakdownBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
+  const pct = max > 0 ? Math.max(3, Math.round((count / max) * 100)) : 0;
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span className="w-36 truncate shrink-0" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+        <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color ?? 'var(--color-accent)' }} />
+      </div>
+      <span className="w-8 text-right text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{count}</span>
+    </div>
+  );
+}
 
 export default function PortalPage() {
   const router = useRouter();
@@ -416,16 +406,23 @@ export default function PortalPage() {
     </table>
   );
 
-  // ─── Dashboard tab content (reuses existing scope summary) ──────────────────
-  const openCount = scope?.openCount ?? 0;
-  const completedCount = scope?.completedCount ?? 0;
-  const recentTickets = scope?.recentTickets ?? [];
-  const [locationFilter, setLocationFilter] = useState<string>('');
+  // ─── Dashboard tab content (Stage 5: summary-only via /api/dashboard/summary)
+  const [dashboardStudioFilter, setDashboardStudioFilter] = useState<string>('');
 
-  const filteredRecentTickets = useMemo(() => {
-    if (!locationFilter) return recentTickets;
-    return recentTickets.filter((t) => t.studio?.id === locationFilter);
-  }, [recentTickets, locationFilter]);
+  const { data: dashSummaryData, isLoading: dashSummaryLoading } = useQuery({
+    queryKey: ['dashboard-summary', dashboardStudioFilter],
+    queryFn: () => dashboardApi.summary(dashboardStudioFilter || undefined),
+    enabled: activeTab === 'dashboard',
+  });
+
+  const dashSummary = dashSummaryData?.data as StudioDashboardSummaryResponse | undefined;
+
+  const selectedStudioName = useMemo(() => {
+    if (!dashboardStudioFilter) {
+      return allowedStudios.length === 1 ? allowedStudios[0]?.name : 'All locations';
+    }
+    return allowedStudios.find((s) => s.id === dashboardStudioFilter)?.name ?? 'Location';
+  }, [dashboardStudioFilter, allowedStudios]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
@@ -464,35 +461,10 @@ export default function PortalPage() {
       {activeTab === 'dashboard' && (
         <div className="flex-1 overflow-y-auto p-6">
           <div className={`max-w-5xl mx-auto ${POLISH_CLASS.sectionGap}`}>
-            {/* Stats — aligned with InboxLayout card rhythm */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {scopeLoading ? (
-                <div className="col-span-2 flex justify-center py-12">
-                  <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
-                </div>
-              ) : (
-                <>
-                  <StatCard
-                    label="Open tickets"
-                    value={openCount}
-                    icon={Clock}
-                    iconStyle={{
-                      background: 'rgba(251,191,36,0.15)',
-                      color: '#d97706',
-                    }}
-                  />
-                  <StatCard
-                    label="Completed tickets"
-                    value={completedCount}
-                    icon={CheckCircle2}
-                    iconStyle={{
-                      background: 'rgba(34,197,94,0.15)',
-                      color: '#16a34a',
-                    }}
-                  />
-                </>
-              )}
-            </div>
+            {/* Location header */}
+            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+              {selectedStudioName}
+            </h2>
 
             {/* Location filter when multiple allowed studios */}
             {allowedStudios.length > 1 && (
@@ -505,13 +477,13 @@ export default function PortalPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setLocationFilter('')}
+                  onClick={() => setDashboardStudioFilter('')}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                   style={{
-                    background: !locationFilter ? 'var(--color-accent)' : 'transparent',
-                    color: !locationFilter ? '#ffffff' : 'var(--color-text-muted)',
+                    background: !dashboardStudioFilter ? 'var(--color-accent)' : 'transparent',
+                    color: !dashboardStudioFilter ? '#ffffff' : 'var(--color-text-muted)',
                     border: `1px solid ${
-                      !locationFilter ? 'var(--color-accent)' : 'var(--color-border-default)'
+                      !dashboardStudioFilter ? 'var(--color-accent)' : 'var(--color-border-default)'
                     }`,
                   }}
                 >
@@ -521,13 +493,13 @@ export default function PortalPage() {
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => setLocationFilter(s.id)}
+                    onClick={() => setDashboardStudioFilter(s.id)}
                     className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                     style={{
-                      background: locationFilter === s.id ? 'var(--color-accent)' : 'transparent',
-                      color: locationFilter === s.id ? '#ffffff' : 'var(--color-text-muted)',
+                      background: dashboardStudioFilter === s.id ? 'var(--color-accent)' : 'transparent',
+                      color: dashboardStudioFilter === s.id ? '#ffffff' : 'var(--color-text-muted)',
                       border: `1px solid ${
-                        locationFilter === s.id ? 'var(--color-accent)' : 'var(--color-border-default)'
+                        dashboardStudioFilter === s.id ? 'var(--color-accent)' : 'var(--color-border-default)'
                       }`,
                     }}
                   >
@@ -537,52 +509,64 @@ export default function PortalPage() {
               </div>
             )}
 
-            {/* Recent activity — capped preview with link to full feed */}
-            <div className="rounded-xl p-5 space-y-4" style={panel}>
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
-                  <Ticket className="h-4 w-4" style={{ color: POLISH_THEME.accent }} />
-                  Recent activity
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => router.push('/portal?tab=my')}
-                  className="text-xs font-medium transition-colors"
-                  style={{ color: 'var(--color-accent)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-                >
-                  View all tickets →
-                </button>
+            {/* Summary cards */}
+            {dashSummaryLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
               </div>
-              {scopeLoading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+            ) : !dashSummary ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+                <Ticket className="h-10 w-10" />
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>No data available</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <StatCard
+                    label="Open Tickets"
+                    value={dashSummary.openTickets}
+                    icon={Clock}
+                    iconStyle={{ background: 'rgba(251,191,36,0.15)', color: '#d97706' }}
+                  />
+                  <StatCard
+                    label="Completed"
+                    value={dashSummary.completedTickets}
+                    icon={CheckCircle2}
+                    iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                  />
+                  <StatCard
+                    label="Avg Completion"
+                    value={formatHoursLabel(dashSummary.avgCompletionHours)}
+                    sub="Last 30 days"
+                    icon={Clock}
+                    iconStyle={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
+                  />
                 </div>
-              ) : filteredRecentTickets.length === 0 ? (
-                <p
-                  className="text-sm text-center py-8"
-                  style={{ color: POLISH_THEME.theadText }}
-                >
-                  No recent tickets.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {filteredRecentTickets.slice(0, DASHBOARD_RECENT_LIMIT).map((t) => (
-                    <RecentRow
-                      key={t.id}
-                      ticket={t}
-                      onClick={() => router.push(`/tickets/${t.id}`)}
-                    />
-                  ))}
-                  {filteredRecentTickets.length > DASHBOARD_RECENT_LIMIT && (
-                    <p className="text-xs text-center pt-1" style={{ color: POLISH_THEME.metaMuted }}>
-                      Showing {DASHBOARD_RECENT_LIMIT} of {filteredRecentTickets.length} recent tickets
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+
+                {/* By Location breakdown */}
+                {dashSummary.byLocation.length > 0 && (
+                  <div className="rounded-xl p-5" style={panel}>
+                    <div className="flex items-center gap-2 mb-4">
+                      <MapPin className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
+                      <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                        Tickets by Location
+                      </h3>
+                    </div>
+                    <div className="space-y-3">
+                      {dashSummary.byLocation.map((row) => (
+                        <BreakdownBar
+                          key={row.locationId}
+                          label={row.locationName}
+                          count={row.count}
+                          max={Math.max(...dashSummary.byLocation.map((r) => r.count), 1)}
+                          color="#0ea5e9"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

@@ -35,7 +35,7 @@ type NavItem = {
 
 const navItemsDefault: NavItem[] = [
   { href: '/tickets', label: 'Home', icon: Home },
-  { href: '/dashboard', label: 'My Dashboard', icon: LayoutGrid },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
@@ -51,7 +51,7 @@ const navItemsStudioUser: NavItem[] = [
 const navItemsDepartmentUser: NavItem[] = [
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/tickets', label: 'Tickets', icon: Home },
-  { href: '/dashboard', label: 'My Dashboard', icon: LayoutGrid },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 

@@ -413,6 +413,100 @@ export class ReportingService {
     }));
   }
 
+  // ── Workflow / subtask completion timing ────────────────────────────────────
+  async getWorkflowTiming() {
+    const templates = await this.prisma.subtaskWorkflowTemplate.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        subtaskTemplates: {
+          select: { id: true, title: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+    });
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const workflows = await Promise.all(
+      templates.map(async (tpl) => {
+        const subtaskTemplateIds = tpl.subtaskTemplates.map((st) => st.id);
+
+        const ticketAvg = await this.prisma.$queryRaw<
+          [{ avg_hours: number | null }]
+        >`
+          SELECT ROUND(
+            AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+            1
+          )::float AS avg_hours
+          FROM tickets t
+          WHERE t.status IN ('RESOLVED', 'CLOSED')
+            AND t.resolved_at IS NOT NULL
+            AND t.resolved_at >= ${thirtyDaysAgo}
+            AND EXISTS (
+              SELECT 1 FROM subtasks s
+              WHERE s.ticket_id = t.id
+                AND s.subtask_template_id = ANY(${subtaskTemplateIds})
+            )
+        `;
+
+        const stepTimings = await Promise.all(
+          tpl.subtaskTemplates.map(async (st) => {
+            const rows = await this.prisma.$queryRaw<
+              [
+                {
+                  avg_completion_hours: number | null;
+                  avg_active_hours: number | null;
+                },
+              ]
+            >`
+              SELECT
+                ROUND(
+                  AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
+                  1
+                )::float AS avg_completion_hours,
+                ROUND(
+                  AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
+                  1
+                )::float AS avg_active_hours
+              FROM subtasks s
+              WHERE s.subtask_template_id = ${st.id}
+                AND s.completed_at IS NOT NULL
+                AND s.available_at IS NOT NULL
+                AND s.completed_at >= ${thirtyDaysAgo}
+            `;
+            return {
+              stepId: st.id,
+              stepName: st.title,
+              avgSubtaskCompletionHours:
+                rows?.[0]?.avg_completion_hours != null
+                  ? Number(rows[0].avg_completion_hours)
+                  : null,
+              avgActiveWorkHours:
+                rows?.[0]?.avg_active_hours != null
+                  ? Number(rows[0].avg_active_hours)
+                  : null,
+            };
+          }),
+        );
+
+        return {
+          workflowId: tpl.id,
+          workflowName: tpl.name ?? tpl.id,
+          avgTicketCompletionHours:
+            ticketAvg?.[0]?.avg_hours != null
+              ? Number(ticketAvg[0].avg_hours)
+              : null,
+          steps: stepTimings,
+        };
+      }),
+    );
+
+    return { workflows };
+  }
+
   // ── CSV export of all tickets ─────────────────────────────────────────────
   async exportTicketsCsv(): Promise<string> {
     const tickets = await this.prisma.ticket.findMany({

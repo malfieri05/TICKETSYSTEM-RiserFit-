@@ -223,7 +223,47 @@ export const attachmentsApi = {
     api.delete<{ deleted: boolean }>(`/attachments/${attachmentId}`),
 };
 
+// ─── Dashboard (Stage 5) ───────────────────────────────────────────────────
+
+export interface DashboardSummaryResponse {
+  newTickets: number;
+  inProgressTickets: number;
+  resolvedTickets: number;
+  avgCompletionHours: number | null;
+  supportByType: { typeId: string; typeName: string; count: number }[];
+  maintenanceByLocation: { locationId: string; locationName: string; count: number }[];
+}
+
+export interface StudioDashboardSummaryResponse {
+  openTickets: number;
+  completedTickets: number;
+  avgCompletionHours: number | null;
+  byLocation: { locationId: string; locationName: string; count: number }[];
+}
+
+export const dashboardApi = {
+  summary: (studioId?: string) =>
+    api.get<DashboardSummaryResponse | StudioDashboardSummaryResponse>(
+      '/dashboard/summary',
+      { params: studioId ? { studioId } : undefined },
+    ),
+};
+
 // ─── Reporting ─────────────────────────────────────────────────────────────
+
+export interface WorkflowTimingStep {
+  stepId: string;
+  stepName: string;
+  avgSubtaskCompletionHours: number | null;
+  avgActiveWorkHours: number | null;
+}
+
+export interface WorkflowTimingEntry {
+  workflowId: string;
+  workflowName: string;
+  avgTicketCompletionHours: number | null;
+  steps: WorkflowTimingStep[];
+}
 
 export const reportingApi = {
   summary: () =>
@@ -261,6 +301,14 @@ export const reportingApi = {
   completionByOwner: () =>
     api.get<{ userId: string; userName: string; avgHours: number | null; closedCount: number }[]>(
       '/reporting/completion-time/owners',
+    ),
+
+  workflowTiming: () =>
+    api.get<{ workflows: WorkflowTimingEntry[] }>('/reporting/workflow-timing'),
+
+  byLocation: () =>
+    api.get<{ marketId: string | null; marketName: string; count: number }[]>(
+      '/reporting/by-location',
     ),
 
   // Dispatch: open maintenance only (Stage 13, ADMIN only)

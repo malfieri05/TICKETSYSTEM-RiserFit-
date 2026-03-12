@@ -62,6 +62,18 @@ export class ReportingController {
     return this.reportingService.getCompletionTimeByOwner();
   }
 
+  // GET /api/reporting/workflow-timing
+  @Get('workflow-timing')
+  getWorkflowTiming() {
+    return this.reportingService.getWorkflowTiming();
+  }
+
+  // GET /api/reporting/by-location (alias for by-market)
+  @Get('by-location')
+  getByLocation() {
+    return this.reportingService.getByMarket();
+  }
+
   // GET /api/reporting/export
   // Download all tickets as a CSV file
   @Get('export')
