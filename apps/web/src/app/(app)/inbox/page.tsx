@@ -20,11 +20,12 @@ const PAGE_SIZE = 20;
 const CANONICAL_HEADERS = [
   { label: 'ID', key: 'id' },
   { label: 'Title', key: 'title' },
+  { label: 'Created', key: 'created' },
   { label: 'Status', key: 'status' },
   { label: 'Priority', key: 'priority' },
-  { label: 'Created', key: 'created' },
   { label: 'Progress', key: 'progress' },
   { label: 'Requester', key: 'requester' },
+  { label: 'Comments', key: 'comments' },
 ] as const;
 
 export default function InboxPage() {
@@ -123,7 +124,6 @@ export default function InboxPage() {
               status={ticket.status}
               priority={ticket.priority}
               createdAt={ticket.createdAt}
-              updatedAt={ticket.updatedAt}
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}

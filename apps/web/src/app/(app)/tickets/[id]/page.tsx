@@ -6,12 +6,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
-  Plus, User,
+  Plus, User, CheckCircle2,
 } from 'lucide-react';
 import { ticketsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { SubtaskStatusBadge } from '@/components/ui/Badge';
+import { SubtaskStatusBadge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Select, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
@@ -43,7 +43,15 @@ export default function TicketDetailPage() {
 
   const [newSubtask, setNewSubtask] = useState('');
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
+  const [completionToast, setCompletionToast] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
 
   const { data: ticketRes, isLoading } = useQuery({
     queryKey: ['ticket', id],
@@ -146,6 +154,15 @@ export default function TicketDetailPage() {
     onError: (_err, _v, context) => {
       if (context?.prev) qc.setQueryData(['ticket', id], context.prev);
     },
+    onSuccess: () => {
+      const cached = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', id]);
+      const all = cached?.data?.subtasks;
+      if (all && all.length > 0 && all.every((s) => s.status === 'DONE' || s.status === 'SKIPPED')) {
+        if (toastTimer.current) clearTimeout(toastTimer.current);
+        setCompletionToast(true);
+        toastTimer.current = setTimeout(() => setCompletionToast(false), 4000);
+      }
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       qc.invalidateQueries({ queryKey: ['ticket', id, 'subtasks'] });
@@ -186,7 +203,7 @@ export default function TicketDetailPage() {
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] }).formResponses ?? [];
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
+    <div className="flex flex-col h-full relative" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Ticket" />
 
       <div className="flex-1 overflow-y-auto">
@@ -196,35 +213,65 @@ export default function TicketDetailPage() {
             {isStudioUser ? 'Back to My Tickets' : 'Back to tickets'}
           </Button>
 
-          {/* Stage 22: header — title, created, requester, location, progress; ticket ID demoted */}
-          <div className="rounded-xl p-5 space-y-2" style={panel}>
-            <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">{ticket.title}</h1>
-            <p className="text-sm" style={{ color: POLISH_THEME.metaDim }}>
-              Created {format(new Date(ticket.createdAt), 'MMM d')} • Requested by {ticket.requester.displayName}
-            </p>
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              {(ticket as { studio?: { name: string } }).studio?.name && (
-                <span style={{ color: POLISH_THEME.metaMuted }}>{(ticket as { studio: { name: string } }).studio.name}</span>
-              )}
-              <span className="text-xs font-medium tabular-nums" style={{ color: POLISH_THEME.accent }}>
-                Progress {subtaskDone} / {subtaskTotal}
-              </span>
+          {/* Panel header — title primary, ID + status secondary, metadata tertiary, progress inline */}
+          <div className="rounded-xl p-5" style={{ ...panel, boxShadow: 'var(--shadow-panel)' }}>
+            {/* Primary: title */}
+            <h1 className="text-xl font-semibold leading-snug" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>
+              {ticket.title}
+            </h1>
+
+            {/* Secondary: ticket ID (prominent) + status badge */}
+            <div className="flex flex-wrap items-center gap-2 mt-2.5">
+              <button
+                type="button"
+                className="flex items-center gap-1 group"
+                title="Copy ticket ID to clipboard"
+                onClick={() => { navigator.clipboard.writeText(ticket.id).catch(() => {}); }}
+              >
+                <span
+                  className="text-xs font-mono px-1.5 py-0.5 rounded"
+                  style={{
+                    color: POLISH_THEME.accent,
+                    background: 'rgba(52,120,196,0.1)',
+                    border: '1px solid rgba(52,120,196,0.2)',
+                  }}
+                >
+                  #{ticket.id.slice(0, 8)}
+                </span>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity" style={{ color: POLISH_THEME.metaDim }}>
+                  <path d="M10.5 2.5h-6A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5h6A1.5 1.5 0 0 0 12 12V4a1.5 1.5 0 0 0-1.5-1.5Z"/>
+                  <path d="M12.5 1h-6A1.5 1.5 0 0 0 5 2.5V3h5.5A1.5 1.5 0 0 1 12 4.5V11h.5A1.5 1.5 0 0 0 14 9.5v-7A1.5 1.5 0 0 0 12.5 1Z"/>
+                </svg>
+              </button>
+              <StatusBadge status={ticket.status} />
             </div>
-            <button
-              type="button"
-              className="text-xs flex items-center gap-1 group cursor-pointer"
-              style={{ color: POLISH_THEME.theadText }}
-              title="Copy ticket ID to clipboard"
-              onClick={() => {
-                navigator.clipboard.writeText(ticket.id).catch(() => {});
-              }}
-            >
-              <span>Ticket #{ticket.id.slice(0, 8)}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-0 group-hover:opacity-70 transition-opacity">
-                <path d="M10.5 2.5h-6A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5h6A1.5 1.5 0 0 0 12 12V4a1.5 1.5 0 0 0-1.5-1.5Z"/>
-                <path d="M12.5 1h-6A1.5 1.5 0 0 0 5 2.5V3h5.5A1.5 1.5 0 0 1 12 4.5V11h.5A1.5 1.5 0 0 0 14 9.5v-7A1.5 1.5 0 0 0 12.5 1Z"/>
-              </svg>
-            </button>
+
+            {/* Tertiary: created, requester, location */}
+            <p className="text-xs mt-2" style={{ color: POLISH_THEME.metaSecondary }}>
+              Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+              {` · Requested by ${ticket.requester.displayName}`}
+              {(ticket as { studio?: { name: string } }).studio?.name
+                ? ` · ${(ticket as { studio: { name: string } }).studio.name}`
+                : ''}
+            </p>
+
+            {/* Progress inline bar */}
+            {subtaskTotal > 0 && (
+              <div className="flex items-center gap-2 mt-2.5">
+                <div className="w-28 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${subtaskTotal === 0 ? 0 : Math.round((subtaskDone / subtaskTotal) * 100)}%`,
+                      background: POLISH_THEME.progressGreen,
+                    }}
+                  />
+                </div>
+                <span className="text-xs tabular-nums" style={{ color: POLISH_THEME.metaDim }}>
+                  {subtaskDone}/{subtaskTotal} subtasks
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Tabs: Subtasks, Comments, Ticket Submission, History — sticky on scroll */}
@@ -263,6 +310,9 @@ export default function TicketDetailPage() {
             </nav>
           </div>
 
+            {/* Tab content with slide-in animation; key forces remount on tab change */}
+            <div key={activeTab} style={{ animation: 'tabSlideIn 220ms ease-out' }}>
+
             {/* ── Conversation (Updates & Replies) ─── */}
             {activeTab === 'comments' && (
               <div className={POLISH_CLASS.sectionGap}>
@@ -300,10 +350,7 @@ export default function TicketDetailPage() {
                               className="h-full rounded-full transition-all"
                               style={{
                                 width: `${percent}%`,
-                                background:
-                                  percent === 100
-                                    ? 'linear-gradient(90deg,#16a34a,#059669)'
-                                    : 'linear-gradient(90deg,#10b981,#059669)',
+                                background: POLISH_THEME.progressGreen,
                               }}
                             />
                           </div>
@@ -424,8 +471,31 @@ export default function TicketDetailPage() {
                 ))}
               </div>
             )}
+
+            </div>{/* end key={activeTab} animation wrapper */}
         </div>
       </div>
+
+      {/* Completion toast */}
+      {completionToast && (
+        <div
+          className="pointer-events-none z-20 flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(22,163,74,0.95)',
+            color: '#ffffff',
+            boxShadow: '0 4px 16px rgba(22,163,74,0.35)',
+            backdropFilter: 'blur(4px)',
+            animation: 'fadeIn 200ms ease-out',
+          }}
+        >
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          <span>All subtasks complete</span>
+        </div>
+      )}
     </div>
   );
 }

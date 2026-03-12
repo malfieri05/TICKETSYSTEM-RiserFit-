@@ -82,3 +82,31 @@ body {
   background: var(--color-bg-surface-raised);
   color: var(--color-text-secondary);
 }
+
+/* Stage 4: Tab content slide-in animation (used by ticket detail page tabs) */
+@keyframes tabSlideIn {
+  from { opacity: 0; transform: translateX(10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Stage 4: Completion toast fade-in (used by panel and detail page completion toast) */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Stage 4: Shimmer animation for the overlay refresh indicator */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Stage 4: Premium polish — subtle row hover/focus elevation on ticket feed rows */
+[data-theme="dark"] {
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+[data-theme="light"] {
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
+}

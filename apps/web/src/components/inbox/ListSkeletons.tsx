@@ -72,7 +72,12 @@ export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
   );
 }
 
-/** Skeleton rows for /tickets table (4 columns). */
+/**
+ * Skeleton rows for the canonical 8-column feed table
+ * (ID | Title | Created | Status | Priority | Progress | Requester | Comments).
+ * Column count matches CANONICAL_FEED_HEADERS so there is no horizontal shift
+ * when the real data replaces the skeleton.
+ */
 export function TicketsTableSkeletonRows({ count = 5 }: { count?: number }) {
   return (
     <>
@@ -80,17 +85,40 @@ export function TicketsTableSkeletonRows({ count = 5 }: { count?: number }) {
       <tbody>
         {Array.from({ length: count }).map((_, i) => (
           <tr key={i} style={{ borderBottom: `1px solid ${POLISH_THEME.rowBorder}` }}>
+            {/* ID */}
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="h-3 rounded w-16" style={skeletonRow} />
+            </td>
+            {/* Title */}
             <td className={POLISH_CLASS.cellPadding}>
               <div className="h-4 rounded w-3/4 max-w-xs" style={skeletonRow} />
             </td>
+            {/* Created */}
             <td className={POLISH_CLASS.cellPadding}>
               <div className="h-3 rounded w-24" style={skeletonRow} />
             </td>
+            {/* Status */}
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-20" style={skeletonRow} />
+              <div className="h-5 rounded w-20" style={skeletonRow} />
             </td>
+            {/* Priority */}
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-28" style={skeletonRow} />
+              <div className="h-5 rounded w-16" style={skeletonRow} />
+            </td>
+            {/* Progress */}
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-3 rounded w-12" style={skeletonRow} />
+                <div className="h-1.5 rounded w-16" style={skeletonRow} />
+              </div>
+            </td>
+            {/* Requester */}
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="h-3 rounded w-24" style={skeletonRow} />
+            </td>
+            {/* Comments */}
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="h-3 rounded w-8" style={skeletonRow} />
             </td>
           </tr>
         ))}

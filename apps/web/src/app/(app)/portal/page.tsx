@@ -4,7 +4,7 @@ import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { Ticket, CheckCircle2, Clock, ChevronRight, Search } from 'lucide-react';
 import { ticketsApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
@@ -16,8 +16,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { PortalTicketTableRow } from '@/components/tickets/TicketRow';
-import { PortalTableSkeletonRows } from '@/components/inbox/ListSkeletons';
+import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
@@ -197,7 +197,8 @@ export default function PortalPage() {
     </div>
   );
 
-  const portalHeaders = ['ID', 'Topic / Category', 'Created', 'Title', 'Location', 'Status', 'Priority', 'Updated'];
+  // Canonical feed headers — same order as all other ticket list surfaces
+  const portalHeaders = ['ID', 'Title', 'Created', 'Status', 'Priority', 'Progress', 'Requester', 'Comments'];
 
   const myTicketList = (
     <table className="w-full text-sm">
@@ -210,22 +211,25 @@ export default function PortalPage() {
       </thead>
       <tbody>
         {myTickets.map((ticket) => {
-          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '—';
+          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
+          const studioName = ticket.studio?.name ?? '';
+          const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
           const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
+          const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+          const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
           return (
-            <PortalTicketTableRow
+            <TicketTableRow
               key={ticket.id}
               id={ticket.id}
               title={ticket.title}
-              topicLabel={topicLabel}
-              createdAt={ticket.createdAt}
-              requesterDisplayName={requesterDisplayName}
-              studioName={ticket.studio?.name ?? '—'}
+              subLabel={subLabel}
               status={ticket.status}
               priority={ticket.priority}
-              updatedAt={formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
+              createdAt={ticket.createdAt}
               commentCount={ticket._count?.comments ?? 0}
-              isResolvedOrClosed={['RESOLVED', 'CLOSED'].includes(ticket.status)}
+              completedSubtasks={completedSubtasks}
+              totalSubtasks={totalSubtasks}
+              requesterDisplayName={requesterDisplayName}
               onSelect={() => router.push(`/tickets/${ticket.id}`)}
             />
           );
@@ -243,7 +247,7 @@ export default function PortalPage() {
           ))}
         </tr>
       </thead>
-      <PortalTableSkeletonRows count={6} />
+      <TicketsTableSkeletonRows count={6} />
     </table>
   );
 
@@ -372,22 +376,25 @@ export default function PortalPage() {
       </thead>
       <tbody>
         {studioTickets.map((ticket) => {
-          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '—';
+          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
+          const studioName = ticket.studio?.name ?? '';
+          const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
           const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
+          const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+          const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
           return (
-            <PortalTicketTableRow
+            <TicketTableRow
               key={ticket.id}
               id={ticket.id}
               title={ticket.title}
-              topicLabel={topicLabel}
-              createdAt={ticket.createdAt}
-              requesterDisplayName={requesterDisplayName}
-              studioName={ticket.studio?.name ?? '—'}
+              subLabel={subLabel}
               status={ticket.status}
               priority={ticket.priority}
-              updatedAt={formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
+              createdAt={ticket.createdAt}
               commentCount={ticket._count?.comments ?? 0}
-              isResolvedOrClosed={['RESOLVED', 'CLOSED'].includes(ticket.status)}
+              completedSubtasks={completedSubtasks}
+              totalSubtasks={totalSubtasks}
+              requesterDisplayName={requesterDisplayName}
               onSelect={() => router.push(`/tickets/${ticket.id}`)}
             />
           );
@@ -405,7 +412,7 @@ export default function PortalPage() {
           ))}
         </tr>
       </thead>
-      <PortalTableSkeletonRows count={6} />
+      <TicketsTableSkeletonRows count={6} />
     </table>
   );
 

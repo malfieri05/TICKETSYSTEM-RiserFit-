@@ -42,6 +42,12 @@ export const POLISH_THEME = {
   theadText: 'var(--color-text-muted)',
   accent: 'var(--color-accent)',
   listContainerShadow: 'var(--shadow-panel)',
+  /** Always-green color used for progress bars across feed and panel. */
+  progressGreen: '#16a34a',
+  /** Elevated card shadow — used on panel shell and ticket detail header. */
+  shadowElevated: 'var(--shadow-elevated)',
+  /** Subtle card shadow for list containers. */
+  shadowCard: 'var(--shadow-card)',
 } as const;
 
 /** Tailwind-compatible class names for consistent layout */

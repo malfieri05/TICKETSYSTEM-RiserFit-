@@ -23,11 +23,12 @@ type ViewTab = 'active' | 'completed';
 const CANONICAL_HEADERS = [
   { label: 'ID', key: 'id' },
   { label: 'Title', key: 'title' },
+  { label: 'Created', key: 'created' },
   { label: 'Status', key: 'status' },
   { label: 'Priority', key: 'priority' },
-  { label: 'Created', key: 'created' },
   { label: 'Progress', key: 'progress' },
   { label: 'Requester', key: 'requester' },
+  { label: 'Comments', key: 'comments' },
 ] as const;
 
 export default function TicketsPage() {
@@ -189,17 +190,22 @@ export default function TicketsPage() {
           )}
         </div>
 
-        <div className="rounded-xl overflow-hidden" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}>
-          {isFetching && tickets.length > 0 && (
+        <div className="rounded-xl overflow-hidden relative" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}>
+          {/* Overlay refresh indicator — no layout shift */}
+          {isFetching && tickets.length > 0 && !isInitialLoading && (
             <div
-              className="px-4 py-1.5 flex items-center gap-2 border-b"
-              style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBgHeader }}
-            >
-              <div className="animate-spin h-3 w-3 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              <span className="text-xs" style={{ color: POLISH_THEME.metaMuted }}>
-                Fetching…
-              </span>
-            </div>
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 2,
+                zIndex: 5,
+                background: `linear-gradient(90deg, transparent, var(--color-accent), transparent)`,
+                backgroundSize: '200% 100%',
+                animation: 'shimmer 1.4s ease-in-out infinite',
+              }}
+            />
           )}
           {isInitialLoading ? (
             <table className="w-full text-sm">
@@ -260,7 +266,6 @@ export default function TicketsPage() {
                       status={ticket.status}
                       priority={ticket.priority}
                       createdAt={ticket.createdAt}
-                      updatedAt={ticket.updatedAt}
                       commentCount={ticket._count?.comments ?? 0}
                       completedSubtasks={completedSubtasks}
                       totalSubtasks={totalSubtasks}

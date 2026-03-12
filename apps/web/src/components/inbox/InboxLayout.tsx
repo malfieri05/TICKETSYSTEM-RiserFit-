@@ -148,11 +148,30 @@ export function InboxLayout({
           {/* Filters */}
           {filters && <div>{filters}</div>}
 
-          {/* List container */}
+          {/* List container — position:relative anchors the overlay refresh indicator */}
           <div
-            className="rounded-xl overflow-hidden"
+            className="rounded-xl overflow-hidden relative"
             style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}
           >
+            {/*
+              Refresh indicator: an absolutely-positioned 2px bar at the very top of the
+              container so it never shifts the table content below it.
+            */}
+            {isFetching && hasTickets && !isInitialLoading && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  zIndex: 5,
+                  background: `linear-gradient(90deg, transparent, var(--color-accent), transparent)`,
+                  backgroundSize: '200% 100%',
+                  animation: 'shimmer 1.4s ease-in-out infinite',
+                }}
+              />
+            )}
             {isInitialLoading ? (
               initialSkeleton ?? (
                 <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-2`}>
@@ -166,17 +185,6 @@ export function InboxLayout({
               emptyState
             ) : (
               <>
-                {isFetching && (
-                  <div
-                    className="px-4 py-1.5 flex items-center gap-2 border-b"
-                    style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBgHeader }}
-                  >
-                    <div className="animate-spin h-3 w-3 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-                    <span className="text-xs" style={{ color: POLISH_THEME.metaMuted }}>
-                      Fetching…
-                    </span>
-                  </div>
-                )}
                 {ticketList}
                 {pagination}
               </>
