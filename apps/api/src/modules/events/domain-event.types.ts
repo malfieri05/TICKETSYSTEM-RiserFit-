@@ -58,8 +58,10 @@ export interface CommentAddedPayload {
   authorName: string;
   requesterId: string;
   ownerId?: string;
-  bodyPreview: string; // first 120 chars
+  bodyPreview: string;
   isInternal: boolean;
+  mentionedUserIds?: string[];
+  parentCommentId?: string;
 }
 
 export interface MentionInCommentPayload {
@@ -68,6 +70,7 @@ export interface MentionInCommentPayload {
   authorId: string;
   authorName: string;
   bodyPreview: string;
+  parentCommentId?: string;
 }
 
 export interface SubtaskAssignedPayload {

@@ -16,6 +16,7 @@ type LocationForMap = {
 
 interface LocationsMapProps {
   locations: LocationForMap[];
+  onLocationClick?: (locationId: string) => void;
 }
 
 let leafletIconsConfigured = false;
@@ -43,7 +44,7 @@ function FitBounds({ positions }: { positions: LatLngExpression[] }) {
   return null;
 }
 
-export function LocationsMap({ locations }: LocationsMapProps) {
+export function LocationsMap({ locations, onLocationClick }: LocationsMapProps) {
   useEffect(() => {
     ensureLeafletIconsConfigured();
   }, []);
@@ -79,7 +80,7 @@ export function LocationsMap({ locations }: LocationsMapProps) {
   if (!hasMarkers) {
     return (
       <div
-        className="rounded-lg border flex items-center justify-center h-[520px]"
+        className="rounded-lg border flex items-center justify-center h-[620px]"
         style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)' }}
       >
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -91,13 +92,13 @@ export function LocationsMap({ locations }: LocationsMapProps) {
 
   return (
     <div
-      className="rounded-lg border overflow-hidden"
+      className="rounded-lg border overflow-hidden w-full h-[620px]"
       style={{ borderColor: 'var(--color-border-default)' }}
     >
       <MapContainer
         center={defaultCenter}
         zoom={5}
-        style={{ height: 520, width: '100%' }}
+        style={{ height: '100%', width: '100%' }}
         scrollWheelZoom
       >
         <TileLayer
@@ -109,6 +110,11 @@ export function LocationsMap({ locations }: LocationsMapProps) {
           <Marker
             key={loc.id}
             position={[loc.latitude as number, loc.longitude as number]}
+            eventHandlers={{
+              click: () => {
+                onLocationClick?.(loc.id);
+              },
+            }}
           >
             <Popup>
               <div className="text-sm font-medium">{loc.name}</div>

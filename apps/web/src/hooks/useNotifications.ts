@@ -16,7 +16,7 @@ export function useNotificationCount() {
     refetchInterval: 30_000,
   });
 
-  return { unreadCount: data?.data.total ?? 0 };
+  return { unreadCount: data?.data.unreadCount ?? 0 };
 }
 
 export function useNotifications(params?: { page?: number; limit?: number; unreadOnly?: boolean }) {

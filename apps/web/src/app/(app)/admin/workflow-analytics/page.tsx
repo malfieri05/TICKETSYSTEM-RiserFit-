@@ -52,7 +52,6 @@ export default function AdminWorkflowAnalyticsPage() {
   const departments = (departmentsQuery.data ?? []) as WorkflowDepartmentMetricsRow[];
   const bottlenecks = (bottlenecksQuery.data ?? {
     longestSubtasks: [],
-    mostBlockedSubtasks: [],
   }) as WorkflowBottlenecksResponse;
 
   const loading = templatesQuery.isLoading || departmentsQuery.isLoading || bottlenecksQuery.isLoading;
@@ -70,41 +69,41 @@ export default function AdminWorkflowAnalyticsPage() {
 
         {/* Workflow Template Analytics */}
         <section>
-          <h2 className="text-lg font-semibold text-gray-200 mb-3">Workflow Template Analytics</h2>
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Workflow Template Analytics</h2>
           <div className="rounded-xl overflow-hidden" style={panel}>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-                <span className="text-sm text-gray-500">Loading…</span>
+                <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+                <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-300">Template</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Total</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Active</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Completed</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Avg completion</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Last run</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Template</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Total</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Active</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Completed</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Avg completion</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Last run</th>
                   </tr>
                 </thead>
                 <tbody>
                   {templates.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-gray-500">
+                      <td colSpan={6} className="py-8 text-center text-[var(--color-text-muted)]">
                         No workflow templates with executions yet.
                       </td>
                     </tr>
                   ) : (
                     templates.map((row) => (
                       <tr key={row.templateId} className="hover:bg-[var(--color-bg-surface)]" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-                        <td className="py-3 px-4 text-gray-200">{row.templateName ?? row.templateId}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.totalExecutions}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.activeExecutions}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.completedExecutions}</td>
-                        <td className="py-3 px-4 text-right text-gray-400">{formatHours(row.avgCompletionTimeHours)}</td>
-                        <td className="py-3 px-4 text-right text-gray-400">{formatDate(row.mostRecentExecutionAt)}</td>
+                        <td className="py-3 px-4 text-[var(--color-text-primary)]">{row.templateName ?? row.templateId}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.totalExecutions}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.activeExecutions}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.completedExecutions}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-secondary)]">{formatHours(row.avgCompletionTimeHours)}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-secondary)]">{formatDate(row.mostRecentExecutionAt)}</td>
                       </tr>
                     ))
                   )}
@@ -116,39 +115,39 @@ export default function AdminWorkflowAnalyticsPage() {
 
         {/* Department Workflow Metrics */}
         <section>
-          <h2 className="text-lg font-semibold text-gray-200 mb-3">Department Workflow Metrics</h2>
+          <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Department Workflow Metrics</h2>
           <div className="rounded-xl overflow-hidden" style={panel}>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
-                <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-                <span className="text-sm text-gray-500">Loading…</span>
+                <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+                <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-300">Department</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Tickets created</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Workflows started</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Workflows completed</th>
-                    <th className="text-right py-3 px-4 font-semibold text-gray-300">Avg duration</th>
+                    <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Department</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Tickets created</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Workflows started</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Workflows completed</th>
+                    <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Avg duration</th>
                   </tr>
                 </thead>
                 <tbody>
                   {departments.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-gray-500">
+                      <td colSpan={5} className="py-8 text-center text-[var(--color-text-muted)]">
                         No departments with ticket data.
                       </td>
                     </tr>
                   ) : (
                     departments.map((row) => (
                       <tr key={row.departmentId} className="hover:bg-[var(--color-bg-surface)]" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-                        <td className="py-3 px-4 text-gray-200">{row.departmentName}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.ticketsCreated}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.workflowsStarted}</td>
-                        <td className="py-3 px-4 text-right text-gray-300">{row.workflowsCompleted}</td>
-                        <td className="py-3 px-4 text-right text-gray-400">{formatHours(row.avgWorkflowDurationHours)}</td>
+                        <td className="py-3 px-4 text-[var(--color-text-primary)]">{row.departmentName}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.ticketsCreated}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.workflowsStarted}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-primary)]">{row.workflowsCompleted}</td>
+                        <td className="py-3 px-4 text-right text-[var(--color-text-secondary)]">{formatHours(row.avgWorkflowDurationHours)}</td>
                       </tr>
                     ))
                   )}
@@ -161,43 +160,21 @@ export default function AdminWorkflowAnalyticsPage() {
         {/* Workflow Bottlenecks */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h2 className="text-lg font-semibold text-gray-200 mb-3">Longest-running subtask types</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Longest-running subtask types</h2>
             <div className="rounded-xl overflow-hidden" style={panel}>
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2">
-                  <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-                  <span className="text-sm text-gray-500">Loading…</span>
+                  <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+                  <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
                 </div>
               ) : bottlenecks.longestSubtasks.length === 0 ? (
-                <div className="py-8 text-center text-gray-500 text-sm">No completed subtasks to rank.</div>
+                <div className="py-8 text-center text-[var(--color-text-muted)] text-sm">No completed subtasks to rank.</div>
               ) : (
                 <ul className="divide-y">
                   {bottlenecks.longestSubtasks.map((item) => (
                     <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[var(--color-bg-surface)]">
-                      <span className="text-gray-300 truncate pr-2">{item.title || item.subtaskTemplateId}</span>
-                      <span className="text-teal-400 shrink-0 font-medium">{formatHours(item.avgDurationHours)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-200 mb-3">Most blocked subtask types</h2>
-            <div className="rounded-xl overflow-hidden" style={panel}>
-              {loading ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2">
-                  <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-                  <span className="text-sm text-gray-500">Loading…</span>
-                </div>
-              ) : bottlenecks.mostBlockedSubtasks.length === 0 ? (
-                <div className="py-8 text-center text-gray-500 text-sm">No blocked subtasks.</div>
-              ) : (
-                <ul className="divide-y">
-                  {bottlenecks.mostBlockedSubtasks.map((item) => (
-                    <li key={item.subtaskTemplateId} className="flex justify-between items-center py-3 px-4 hover:bg-[var(--color-bg-surface)]">
-                      <span className="text-gray-300 truncate pr-2">{item.title || item.subtaskTemplateId}</span>
-                      <span className="text-amber-400 shrink-0 font-medium">{item.blockedCount}</span>
+                      <span className="text-[var(--color-text-primary)] truncate pr-2">{item.title || item.subtaskTemplateId}</span>
+                      <span className="text-[var(--color-accent)] shrink-0 font-medium">{formatHours(item.avgDurationHours)}</span>
                     </li>
                   ))}
                 </ul>

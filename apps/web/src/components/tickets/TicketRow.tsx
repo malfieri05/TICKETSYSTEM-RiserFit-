@@ -11,10 +11,18 @@ const rowBorder = `1px solid ${POLISH_THEME.rowBorder}`;
 const cellMuted = { color: POLISH_THEME.metaSecondary } as const;
 const cellDim = { color: POLISH_THEME.metaDim } as const;
 
+/** Canonical ticket ID display: first 8 chars of internal CUID. */
+export function formatTicketId(id: string): string {
+  return id.slice(0, 8);
+}
+
 export interface TicketTableRowProps {
   id: string;
   title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
   createdAt: string;
+  updatedAt: string;
   commentCount: number;
   completedSubtasks: number;
   totalSubtasks: number;
@@ -24,7 +32,10 @@ export interface TicketTableRowProps {
 }
 
 function TicketTableRowComponent({
+  id,
   title,
+  status,
+  priority,
   createdAt,
   commentCount,
   completedSubtasks,
@@ -41,7 +52,7 @@ function TicketTableRowComponent({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}
-      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-teal-500`}
+      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)]`}
       style={{
         borderBottom: rowBorder,
         background: isSelected ? POLISH_THEME.rowSelected : 'transparent',
@@ -53,8 +64,17 @@ function TicketTableRowComponent({
         e.currentTarget.style.background = isSelected ? POLISH_THEME.rowSelected : 'transparent';
       }}
     >
+      <td className={`${POLISH_CLASS.cellPadding} text-xs font-mono whitespace-nowrap`} style={cellDim}>
+        {formatTicketId(id)}
+      </td>
       <td className={POLISH_CLASS.cellPadding}>
         <span className="font-medium line-clamp-1" style={{ color: 'var(--color-text-primary)' }}>{title}</span>
+      </td>
+      <td className={POLISH_CLASS.cellPadding}>
+        <StatusBadge status={status} />
+      </td>
+      <td className={POLISH_CLASS.cellPadding}>
+        <PriorityBadge priority={priority} />
       </td>
       <td className={`${POLISH_CLASS.cellPadding} text-xs whitespace-nowrap`} style={cellMuted}>
         {format(new Date(createdAt), 'MMM d, yyyy')}
@@ -80,7 +100,7 @@ function TicketTableRowComponent({
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${pct}%`,
-                    background: pct === 100 ? '#22c55e' : POLISH_THEME.accent,
+                    background: pct === 100 ? '#16a34a' : POLISH_THEME.accent,
                   }}
                 />
               </div>
@@ -114,6 +134,7 @@ export interface PortalTicketTableRowProps {
 }
 
 function PortalTicketTableRowComponent({
+  id,
   title,
   topicLabel,
   createdAt,
@@ -132,11 +153,14 @@ function PortalTicketTableRowComponent({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}
-      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-teal-500`}
+      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)]`}
       style={{ borderBottom: rowBorder }}
       onMouseEnter={(e) => (e.currentTarget.style.background = POLISH_THEME.rowHover)}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
     >
+      <td className={`${POLISH_CLASS.cellPadding} text-xs font-mono whitespace-nowrap`} style={cellDim}>
+        {formatTicketId(id)}
+      </td>
       <td className={`${POLISH_CLASS.cellPadding} text-sm`} style={cellMuted}>
         {topicLabel}
       </td>

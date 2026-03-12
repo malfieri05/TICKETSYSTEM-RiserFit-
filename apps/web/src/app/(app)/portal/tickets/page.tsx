@@ -160,14 +160,14 @@ export default function PortalTicketsPage() {
           <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-48 gap-2">
-                <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
-                <span className="text-sm text-gray-500">Loading…</span>
+                <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+                <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
               </div>
             ) : tickets.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 gap-3" style={{ color: 'var(--color-text-muted)' }}>
                 {hasActiveFilters ? (
                   <>
-                    <p className="text-sm font-medium text-gray-300">No tickets found</p>
+                    <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets found</p>
                     <p className="text-xs text-center">Try adjusting your filters.</p>
                     <Button variant="ghost" size="sm" onClick={clearFilters}>
                       Clear filters
@@ -175,7 +175,7 @@ export default function PortalTicketsPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-sm font-medium text-gray-300">No tickets yet</p>
+                    <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets yet</p>
                     <p className="text-xs text-center max-w-sm">Tickets you've requested will appear here.</p>
                   </>
                 )}
@@ -215,7 +215,7 @@ export default function PortalTicketsPage() {
                           {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-medium text-gray-100 line-clamp-1">{ticket.title}</span>
+                          <span className="font-medium text-[var(--color-text-primary)] line-clamp-1">{ticket.title}</span>
                           <div className="flex items-center gap-3 mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
                             <span>{requesterName}</span>
                             {commentCount > 0 && (

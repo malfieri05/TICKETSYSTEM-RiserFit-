@@ -46,27 +46,27 @@ function statusColor(status: SystemService['status']): { bg: string; text: strin
   switch (status) {
     case 'healthy':
       return {
-        bg: 'rgba(34,197,94,0.15)',
-        text: '#4ade80',
+        bg: 'rgba(34,197,94,0.12)',
+        text: '#16a34a',
         label: 'Healthy',
       };
     case 'degraded':
       return {
-        bg: 'rgba(251,191,36,0.15)',
-        text: '#fbbf24',
+        bg: 'rgba(245,158,11,0.12)',
+        text: '#d97706',
         label: 'Degraded',
       };
     case 'unknown':
       return {
-        bg: 'rgba(148,163,184,0.15)',
-        text: '#94a3b8',
+        bg: 'rgba(100,116,139,0.12)',
+        text: '#64748b',
         label: 'Unknown',
       };
     case 'not_configured':
     default:
       return {
-        bg: 'rgba(148,163,184,0.08)',
-        text: '#e5e7eb',
+        bg: 'rgba(100,116,139,0.08)',
+        text: 'var(--color-text-muted)',
         label: 'Not configured',
       };
   }
@@ -74,12 +74,12 @@ function statusColor(status: SystemService['status']): { bg: string; text: strin
 
 function criticalityColor(crit: SystemService['criticality']): { bg: string; text: string } {
   if (crit === 'critical') {
-    return { bg: 'rgba(239,68,68,0.1)', text: '#fca5a5' };
+    return { bg: 'rgba(239,68,68,0.1)', text: '#dc2626' };
   }
   if (crit === 'important') {
-    return { bg: 'rgba(59,130,246,0.1)', text: '#93c5fd' };
+    return { bg: 'rgba(59,130,246,0.1)', text: '#2563eb' };
   }
-  return { bg: 'rgba(148,163,184,0.1)', text: '#e5e7eb' };
+  return { bg: 'rgba(100,116,139,0.1)', text: '#64748b' };
 }
 
 function categoryIcon(category: SystemService['category']) {
@@ -161,7 +161,7 @@ export default function SystemMonitoringPage() {
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2">
             <div
-              className="h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent animate-spin"
+              className="h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent animate-spin"
             />
             <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
               Loading system services…
@@ -173,7 +173,7 @@ export default function SystemMonitoringPage() {
             style={{
               background: 'rgba(239,68,68,0.12)',
               border: '1px solid rgba(239,68,68,0.3)',
-              color: '#fca5a5',
+              color: '#dc2626',
             }}
           >
             <AlertCircle className="h-4 w-4 shrink-0" />
@@ -328,8 +328,8 @@ export default function SystemMonitoringPage() {
                     )}
                     {svc.lastError && (
                       <div className="flex items-start gap-1.5">
-                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" style={{ color: '#fca5a5' }} />
-                        <span className="text-[11px]" style={{ color: '#fca5a5' }}>
+                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" style={{ color: '#dc2626' }} />
+                        <span className="text-[11px]" style={{ color: '#dc2626' }}>
                           {svc.lastError}
                         </span>
                       </div>

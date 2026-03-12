@@ -11,7 +11,7 @@ export type TicketStatus =
 
 export type TicketPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
-export type SubtaskStatus = 'LOCKED' | 'READY' | 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'DONE' | 'SKIPPED';
+export type SubtaskStatus = 'LOCKED' | 'READY' | 'IN_PROGRESS' | 'DONE' | 'SKIPPED';
 
 export type UserRole = 'ADMIN' | 'DEPARTMENT_USER' | 'STUDIO_USER';
 
@@ -96,8 +96,11 @@ export interface TicketListItem {
   market?: { id: string; name: string };
   _count?: { comments: number; subtasks: number; attachments: number };
   sla?: SlaStatus;
-  /** When actionableForMe=true, backend returns READY subtasks for list; avoids N+1. */
+  /** When actionableForMe=true, backend returns incomplete subtasks for list; avoids N+1. */
   readySubtasksSummary?: { id: string; title: string }[];
+  completedSubtasks?: number;
+  totalSubtasks?: number;
+  progressPercent?: number;
 }
 
 /** Studio Portal scope-summary: counts + recent tickets (minimal fields). */
@@ -150,8 +153,10 @@ export interface Subtask {
   id: string;
   title: string;
   status: SubtaskStatus;
-  isRequired: boolean;
   createdAt: string;
+  availableAt?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
   departmentId?: string | null;
   subtaskTemplateId?: string | null;
   owner?: { id: string; name: string; email?: string; avatarUrl?: string };
@@ -197,6 +202,8 @@ export interface PaginatedResponse<T> {
 
 export interface TicketFilters {
   status?: TicketStatus;
+  /** Convenience filter: 'active' = not RESOLVED/CLOSED; 'completed' = RESOLVED/CLOSED. Overrides status. */
+  statusGroup?: 'active' | 'completed';
   priority?: TicketPriority;
   departmentId?: string;
   ticketClassId?: string;
@@ -210,7 +217,7 @@ export interface TicketFilters {
   search?: string;
   page?: number;
   limit?: number;
-  /** When true, list only tickets with READY subtasks for current user (dept/owner). */
+  /** When true, list only tickets with incomplete subtasks for current user's dept/assignment. */
   actionableForMe?: boolean;
 }
 
@@ -329,7 +336,6 @@ export interface WorkflowTemplateSubtaskDto {
   description: string | null;
   departmentId: string;
   assignedUserId: string | null;
-  isRequired: boolean;
   sortOrder: number;
   department?: { id: string; code: string; name: string };
   assignedUser?: { id: string; name: string; email: string } | null;

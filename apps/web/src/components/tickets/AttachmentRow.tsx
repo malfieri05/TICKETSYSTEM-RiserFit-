@@ -93,7 +93,7 @@ export function AttachmentRow({
           }}
           className="p-1.5 rounded transition-colors duration-150"
           style={{ color: 'var(--color-text-muted)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#dc2626')}
           onMouseLeave={(e) =>
             (e.currentTarget.style.color = 'var(--color-text-muted)')
           }

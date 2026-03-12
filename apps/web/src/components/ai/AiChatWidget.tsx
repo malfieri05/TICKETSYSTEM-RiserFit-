@@ -182,7 +182,7 @@ export function AiChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)' }}>
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]">
                 <Bot className="h-4 w-4 text-white" />
               </div>
               <div>
@@ -218,8 +218,8 @@ export function AiChatWidget() {
             {messages.map((msg) => (
               <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}>
                 <div className={cn(
-                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-xs',
-                  msg.role === 'assistant' ? 'bg-teal-600' : 'bg-neutral-700',
+                  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs',
+                  msg.role === 'assistant' ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-bg-surface-raised)] text-[var(--color-text-primary)]',
                 )}>
                   {msg.role === 'assistant' ? <Bot className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />}
                 </div>
@@ -229,11 +229,11 @@ export function AiChatWidget() {
                   <div
                     className={cn(
                       'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-                      msg.role === 'user' ? 'bg-teal-600 text-white rounded-tr-sm' : 'rounded-tl-sm',
+                      msg.role === 'user' ? 'bg-[var(--color-accent)] text-white rounded-tr-sm' : 'rounded-tl-sm',
                     )}
                     style={msg.role !== 'user'
                       ? msg.isError
-                        ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }
+                        ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626' }
                         : { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
                       : undefined}
                   >
@@ -267,7 +267,7 @@ export function AiChatWidget() {
                           <button
                             onClick={() => handleConfirm(msg)}
                             disabled={isLoading}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-50"
                           >
                             <CheckCircle2 className="h-3 w-3" /> Confirm
                           </button>
@@ -290,8 +290,8 @@ export function AiChatWidget() {
                         <div
                           key={i}
                           title={src.text}
-                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-teal-300"
-                          style={{ background: 'rgba(20,184,166,0.15)', border: '1px solid rgba(20,184,166,0.3)' }}
+                          className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                          style={{ background: 'rgba(52,120,196,0.15)', border: '1px solid rgba(52,120,196,0.3)', color: 'var(--color-text-primary)' }}
                         >
                           <BookOpen className="h-2.5 w-2.5 shrink-0" />
                           {src.title}
@@ -319,7 +319,7 @@ export function AiChatWidget() {
                 <div
                   className={cn(
                     'relative h-4 w-7 rounded-full transition-colors duration-150',
-                    allowWebSearch ? 'bg-teal-500' : 'bg-neutral-700',
+                    allowWebSearch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-bg-surface-raised)]',
                   )}
                 >
                   <span
@@ -349,14 +349,14 @@ export function AiChatWidget() {
                 onKeyDown={handleKeyDown}
                 placeholder="Ask anything or request an action…"
                 rows={1}
-                className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 overflow-hidden"
+                className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] overflow-hidden placeholder-[var(--color-text-muted)]"
                 style={{ minHeight: '42px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
                 disabled={isLoading}
               />
               <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
-                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </button>
@@ -371,12 +371,12 @@ export function AiChatWidget() {
         className={cn(
           'fixed bottom-6 right-6 z-50 flex h-[76px] w-[76px] items-center justify-center rounded-full shadow-lg transition-all duration-200',
           open
-            ? 'bg-neutral-800 hover:bg-neutral-700 rotate-0'
-            : 'bg-teal-600 hover:bg-teal-700 hover:scale-110',
+            ? 'bg-[var(--color-bg-surface)] hover:bg-[var(--color-bg-surface-raised)] rotate-0'
+            : 'bg-[var(--color-accent)] hover:opacity-90 hover:scale-110',
         )}
         aria-label={open ? 'Close AI Agent' : 'Open AI Agent'}
       >
-        {open ? <X className="h-7 w-7 text-white" /> : <Bot className="h-8 w-8 text-white" />}
+        {open ? <X className="h-7 w-7 text-[var(--color-text-primary)]" /> : <Bot className="h-8 w-8 text-white" />}
       </button>
     </>
   );

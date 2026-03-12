@@ -29,6 +29,7 @@ import {
   TICKET_UPDATE_CORE_FIELDS,
   TICKET_VIEW,
 } from '../../policy/capabilities/capability-keys';
+import { mapCommentToResponse } from '../../common/serializers/comment-response';
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -115,7 +116,7 @@ const TICKET_DETAIL_SELECT = {
   },
   description: true,
   comments: {
-    orderBy: { createdAt: 'asc' as const },
+    orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
     include: {
       author: {
         select: { id: true, name: true, email: true, avatarUrl: true },
@@ -529,6 +530,7 @@ export class TicketsService {
     }
     const {
       status,
+      statusGroup,
       ticketClassId,
       departmentId,
       supportTopicId,
@@ -540,8 +542,6 @@ export class TicketsService {
       requesterId,
       search,
       searchInTitleOnly,
-      // Stage 30: includeCounts=false for SSE-driven list refresh, high-frequency refresh, or when
-      // comment/subtask/attachment counts are not needed; avoids Prisma _count subqueries per row.
       includeCounts = true,
       actionableForMe = false,
       createdAfter,
@@ -568,8 +568,37 @@ export class TicketsService {
       }
     }
 
+    // statusGroup takes precedence over individual status
+    const resolvedStatusFilter: Prisma.TicketWhereInput =
+      statusGroup === 'active'
+        ? { status: { notIn: ['RESOLVED', 'CLOSED'] as TicketStatus[] } }
+        : statusGroup === 'completed'
+          ? { status: { in: ['RESOLVED', 'CLOSED'] as TicketStatus[] } }
+          : status
+            ? { status }
+            : {};
+
+    // Search: support ID lookup alongside title/description
+    const searchFilter: Prisma.TicketWhereInput | undefined = search
+      ? (() => {
+          const searchConditions: Prisma.TicketWhereInput[] =
+            searchInTitleOnly === true
+              ? [{ title: { contains: search, mode: 'insensitive' } }]
+              : [
+                  { title: { contains: search, mode: 'insensitive' } },
+                  { description: { contains: search, mode: 'insensitive' } },
+                ];
+          // Search by ticket ID: exact match or prefix (startsWith)
+          searchConditions.push({ id: { equals: search } });
+          if (search.length >= 4) {
+            searchConditions.push({ id: { startsWith: search } });
+          }
+          return { OR: searchConditions };
+        })()
+      : undefined;
+
     const filterWhere: Prisma.TicketWhereInput = {
-      ...(status && { status }),
+      ...resolvedStatusFilter,
       ...(ticketClassId && { ticketClassId }),
       ...(departmentId && { departmentId }),
       ...(supportTopicId && { supportTopicId }),
@@ -587,19 +616,11 @@ export class TicketsService {
             },
           }
         : {}),
-      // Stage 30: searchInTitleOnly reduces query cost by searching only title; false = title + description.
-    ...(search && {
-        OR:
-          searchInTitleOnly === true
-            ? [{ title: { contains: search, mode: 'insensitive' } }]
-            : [
-                { title: { contains: search, mode: 'insensitive' } },
-                { description: { contains: search, mode: 'insensitive' } },
-              ],
-      }),
+      ...(searchFilter && searchFilter),
     };
 
-    // Stage 4: department actionable queue — tickets with at least one READY subtask for my department or assigned to me
+    // Actionable filter (spec §9.1): tickets with at least one incomplete subtask
+    // (status not DONE/SKIPPED) assigned to the user OR for a department the user is responsible for.
     if (
       actionableForMe &&
       (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN')
@@ -611,7 +632,7 @@ export class TicketsService {
       (filterWhere.AND as Prisma.TicketWhereInput[]).push({
         subtasks: {
           some: {
-            status: 'READY',
+            status: { notIn: ['DONE', 'SKIPPED'] },
             OR: [
               ...(departmentCodes.length > 0
                 ? [{ department: { code: { in: departmentCodes } } }]
@@ -637,7 +658,7 @@ export class TicketsService {
       this.prisma.ticket.findMany({
         where,
         select,
-        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limitClamped,
       }),
@@ -650,9 +671,10 @@ export class TicketsService {
       readySubtasksSummary?: { id: string; title: string }[];
       completedSubtasks?: number;
       totalSubtasks?: number;
+      progressPercent?: number;
     })[] = tickets.map((t) => ({ ...t, sla: this.sla.compute(t) }));
 
-    // Stage 22: subtask progress for feed (completed / total) — two groupBy calls, no _count dependency
+    // Subtask progress for feed (completed / total / progressPercent) — two groupBy calls, no _count dependency
     if (annotated.length > 0) {
       const ticketIds = annotated.map((t) => t.id);
       const [completedByTicket, totalByTicket] = await Promise.all([
@@ -676,14 +698,20 @@ export class TicketsService {
       const totalMap = new Map(
         totalByTicket.map((r) => [r.ticketId, r._count.id]),
       );
-      annotated = annotated.map((t) => ({
-        ...t,
-        totalSubtasks: totalMap.get(t.id) ?? 0,
-        completedSubtasks: completedMap.get(t.id) ?? 0,
-      }));
+      annotated = annotated.map((t) => {
+        const total = totalMap.get(t.id) ?? 0;
+        const completed = completedMap.get(t.id) ?? 0;
+        return {
+          ...t,
+          totalSubtasks: total,
+          completedSubtasks: completed,
+          progressPercent:
+            total === 0 ? 0 : Math.floor((completed / total) * 100),
+        };
+      });
     }
 
-    // Stage 6: when actionableForMe=true, attach READY subtask summary per ticket (same dept/owner filter) to avoid N+1
+    // Attach incomplete subtask summary per ticket when actionableForMe=true (avoids N+1)
     if (
       actionableForMe &&
       (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN') &&
@@ -695,7 +723,7 @@ export class TicketsService {
       const readySubtasks = await this.prisma.subtask.findMany({
         where: {
           ticketId: { in: annotated.map((t) => t.id) },
-          status: 'READY',
+          status: { notIn: ['DONE', 'SKIPPED'] },
           OR: [
             ...(departmentCodes.length > 0
               ? [{ department: { code: { in: departmentCodes } } }]
@@ -740,7 +768,45 @@ export class TicketsService {
       throw new ForbiddenException('You do not have access to this ticket');
     }
 
-    return { ...ticket, sla: this.sla.compute(ticket) };
+    // Server-side progress calculation (Stage 2 §8)
+    const subtaskArray = ticket.subtasks ?? [];
+    const totalSubtasks = subtaskArray.length;
+    const completedSubtasks = subtaskArray.filter(
+      (s: { status: string }) =>
+        s.status === 'DONE' || s.status === 'SKIPPED',
+    ).length;
+    const progressPercent =
+      totalSubtasks === 0
+        ? 0
+        : Math.floor((completedSubtasks / totalSubtasks) * 100);
+
+    // Build thread shape: top-level comments with nested replies
+    const mappedComments = ticket.comments.map((c) => ({
+      ...mapCommentToResponse(c),
+      parentCommentId: (c as any).parentCommentId as string | null,
+    }));
+    const topLevel = mappedComments.filter((c) => c.parentCommentId === null);
+    const repliesByParent = new Map<string, typeof mappedComments>();
+    for (const c of mappedComments) {
+      if (c.parentCommentId) {
+        const arr = repliesByParent.get(c.parentCommentId) ?? [];
+        arr.push(c);
+        repliesByParent.set(c.parentCommentId, arr);
+      }
+    }
+    const threadedComments = topLevel.map((c) => ({
+      ...c,
+      replies: repliesByParent.get(c.id) ?? [],
+    }));
+
+    return {
+      ...ticket,
+      comments: threadedComments,
+      sla: this.sla.compute(ticket),
+      completedSubtasks,
+      totalSubtasks,
+      progressPercent,
+    };
   }
 
   // ─── UPDATE ──────────────────────────────────────────────────────────────────
@@ -913,19 +979,18 @@ export class TicketsService {
     // Validate the transition is legal
     assertValidTransition(ticket.status, newStatus);
 
-    // Resolution gate: cannot RESOLVE if any required subtask is not DONE or SKIPPED (Stage 4)
+    // Resolution gate: cannot RESOLVE if any subtask is not DONE or SKIPPED (Stage 2: all subtasks, not just "required")
     if (newStatus === 'RESOLVED') {
-      const blockedSubtasks = await this.prisma.subtask.count({
+      const incompleteSubtasks = await this.prisma.subtask.count({
         where: {
           ticketId,
-          isRequired: true,
           status: { notIn: ['DONE', 'SKIPPED'] },
         },
       });
 
-      if (blockedSubtasks > 0) {
+      if (incompleteSubtasks > 0) {
         throw new BadRequestException(
-          `Cannot resolve ticket: ${blockedSubtasks} required subtask(s) are not yet complete.`,
+          `Cannot resolve ticket: ${incompleteSubtasks} subtask(s) are not yet complete.`,
         );
       }
     }

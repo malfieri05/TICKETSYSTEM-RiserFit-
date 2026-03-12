@@ -29,6 +29,11 @@ class GetNotificationsDto {
   @IsOptional()
   @Type(() => Number)
   limit?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  unreadOnly?: boolean;
 }
 
 class SetPreferenceDto {
@@ -90,7 +95,7 @@ export class NotificationsController {
    */
   @Get()
   findAll(@Query() dto: GetNotificationsDto, @CurrentUser() user: RequestUser) {
-    return this.notificationsService.findForUser(user.id, dto.page, dto.limit);
+    return this.notificationsService.findForUser(user.id, dto.page, dto.limit, dto.unreadOnly);
   }
 
   /**

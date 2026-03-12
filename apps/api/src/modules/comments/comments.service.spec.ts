@@ -89,6 +89,43 @@ describe('CommentsService', () => {
       expect(policy.evaluate).toHaveBeenCalledTimes(1);
       expect(prisma.ticketComment.create).not.toHaveBeenCalled();
     });
+
+    it('returns comment with canonical author shape (displayName from name)', async () => {
+      const ticketId = 'ticket-1';
+      (prisma.ticket.findUnique as jest.Mock).mockResolvedValue(
+        makeTicketForVisibility({ id: ticketId }),
+      );
+      const createdComment = {
+        id: 'comment-1',
+        body: 'Hello',
+        authorId: 'user-1',
+        author: {
+          id: 'user-1',
+          name: 'Jane Doe',
+          email: 'jane@test.com',
+          avatarUrl: null,
+        },
+        createdAt: new Date(),
+        ticketId,
+        isInternal: false,
+        editedAt: null,
+        mentions: [],
+      };
+      (prisma.$transaction as jest.Mock).mockImplementation(async (fn) => {
+        const tx = {
+          ...prisma,
+          ticketComment: { create: jest.fn().mockResolvedValue(createdComment) },
+          ticket: { update: jest.fn().mockResolvedValue({}) },
+        };
+        return fn(tx);
+      });
+
+      const result = await service.create(ticketId, { body: 'Hello' }, makeActor());
+
+      expect(result.author).toBeDefined();
+      expect(result.author?.displayName).toBe('Jane Doe');
+      expect(result.author?.name).toBe('Jane Doe');
+    });
   });
 
   describe('findByTicket', () => {

@@ -42,12 +42,12 @@ export default function AdminWorkflowTemplatesListPage() {
         <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-              <span className="text-sm text-gray-500">Loading…</span>
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+              <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : templates.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 gap-3" style={{ color: 'var(--color-text-muted)' }}>
-              <p className="text-sm font-medium text-gray-300">No workflow templates yet</p>
+              <p className="text-sm font-medium text-[var(--color-text-primary)]">No workflow templates yet</p>
               <p className="text-xs text-center max-w-sm">Create a template to define subtask workflows for ticket types and categories.</p>
               <Button size="sm" onClick={() => router.push('/admin/workflow-templates/new')}>
                 <Plus className="h-4 w-4" />
@@ -58,10 +58,10 @@ export default function AdminWorkflowTemplatesListPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-300">Context</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-300">Subtasks</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-300">Status</th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-300">Actions</th>
+                  <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Context</th>
+                  <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Subtasks</th>
+                  <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Status</th>
+                  <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -71,17 +71,17 @@ export default function AdminWorkflowTemplatesListPage() {
                     className="hover:bg-[var(--color-bg-surface)]"
                     style={{ borderBottom: '1px solid var(--color-border-default)' }}
                   >
-                    <td className="py-3 px-4 text-gray-200">{contextLabel(t)}</td>
-                    <td className="py-3 px-4 text-gray-400">{t._count?.subtaskTemplates ?? 0}</td>
+                    <td className="py-3 px-4 text-[var(--color-text-primary)]">{contextLabel(t)}</td>
+                    <td className="py-3 px-4 text-[var(--color-text-secondary)]">{t._count?.subtaskTemplates ?? 0}</td>
                     <td className="py-3 px-4">
-                      <span className={t.isActive ? 'text-teal-400' : 'text-gray-500'}>
+                      <span className={t.isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}>
                         {t.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
                       <Link
                         href={`/admin/workflow-templates/${t.id}`}
-                        className="text-teal-400 hover:text-teal-300 text-sm font-medium"
+                        className="text-[var(--color-accent)] hover:text-[var(--color-accent)] text-sm font-medium"
                       >
                         View / Edit
                       </Link>

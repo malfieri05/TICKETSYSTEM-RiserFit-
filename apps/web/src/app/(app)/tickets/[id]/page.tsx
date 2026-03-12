@@ -3,21 +3,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { formatDistanceToNow, format } from 'date-fns';
+import { format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
-  Send, Plus, User,
+  Plus, User,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select, Textarea, Input } from '@/components/ui/Input';
+import { Select, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
+import { CommentThread } from '@/components/tickets/CommentThread';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -40,7 +41,6 @@ export default function TicketDetailPage() {
   const { user } = useAuth();
   const qc = useQueryClient();
 
-  const [commentBody, setCommentBody] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,40 +106,6 @@ export default function TicketDetailPage() {
     },
   });
 
-  const commentMut = useMutation({
-    mutationFn: () => commentsApi.create(id, { body: commentBody }),
-    onMutate: async () => {
-      await qc.cancelQueries({ queryKey: ['ticket', id] });
-      const prev = qc.getQueryData<{ data: { comments: unknown[] } }>(['ticket', id]);
-      const body = commentBody;
-      setCommentBody('');
-      const optimisticComment = {
-        id: `opt-${Date.now()}`,
-        body,
-        author: { id: user?.id ?? '', displayName: user?.displayName ?? '', name: user?.email ?? '' },
-        createdAt: new Date().toISOString(),
-      };
-      qc.setQueryData(['ticket', id], (old: typeof prev) => {
-        if (!old?.data) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            comments: [...(old.data.comments ?? []), optimisticComment],
-          },
-        };
-      });
-      return { prev };
-    },
-    onError: (_err, _v, context) => {
-      if (context?.prev) qc.setQueryData(['ticket', id], context.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', id] });
-      invalidateTicketLists(qc);
-    },
-  });
-
   const subtaskMut = useMutation({
     mutationFn: () => subtasksApi.create(id, { title: newSubtask }),
     onSuccess: () => {
@@ -200,7 +166,7 @@ export default function TicketDetailPage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full" style={{ background: 'var(--color-bg-page)' }}>
-        <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+        <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
       </div>
     );
   }
@@ -213,7 +179,7 @@ export default function TicketDetailPage() {
   const isStudioUser = user?.role === 'STUDIO_USER';
   const validTransitions = VALID_TRANSITIONS[ticket.status];
   const isWatching = ticket.watchers.some((w) => w.userId === user?.id);
-  const visibleComments = ticket.comments ?? [];
+  const threadedComments = ticket.comments ?? [];
 
   const subtaskDone = (ticket.subtasks ?? []).filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length;
   const subtaskTotal = (ticket.subtasks ?? []).length;
@@ -232,7 +198,7 @@ export default function TicketDetailPage() {
 
           {/* Stage 22: header — title, created, requester, location, progress; ticket ID demoted */}
           <div className="rounded-xl p-5 space-y-2" style={panel}>
-            <h1 className="text-xl font-semibold text-gray-100">{ticket.title}</h1>
+            <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">{ticket.title}</h1>
             <p className="text-sm" style={{ color: POLISH_THEME.metaDim }}>
               Created {format(new Date(ticket.createdAt), 'MMM d')} • Requested by {ticket.requester.displayName}
             </p>
@@ -244,9 +210,21 @@ export default function TicketDetailPage() {
                 Progress {subtaskDone} / {subtaskTotal}
               </span>
             </div>
-            <p className="text-xs" style={{ color: POLISH_THEME.theadText }}>
-              Ticket #{ticket.id.slice(0, 8)}
-            </p>
+            <button
+              type="button"
+              className="text-xs flex items-center gap-1 group cursor-pointer"
+              style={{ color: POLISH_THEME.theadText }}
+              title="Copy ticket ID to clipboard"
+              onClick={() => {
+                navigator.clipboard.writeText(ticket.id).catch(() => {});
+              }}
+            >
+              <span>Ticket #{ticket.id.slice(0, 8)}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-0 group-hover:opacity-70 transition-opacity">
+                <path d="M10.5 2.5h-6A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5h6A1.5 1.5 0 0 0 12 12V4a1.5 1.5 0 0 0-1.5-1.5Z"/>
+                <path d="M12.5 1h-6A1.5 1.5 0 0 0 5 2.5V3h5.5A1.5 1.5 0 0 1 12 4.5V11h.5A1.5 1.5 0 0 0 14 9.5v-7A1.5 1.5 0 0 0 12.5 1Z"/>
+              </svg>
+            </button>
           </div>
 
           {/* Tabs: Subtasks, Comments, Ticket Submission, History — sticky on scroll */}
@@ -261,7 +239,7 @@ export default function TicketDetailPage() {
                 };
                 const labels = {
                   subtasks: `Subtasks (${ticket.subtasks?.length ?? 0})`,
-                  comments: `Comments (${visibleComments.length})`,
+                  comments: `Comments (${threadedComments.reduce((n: number, c: any) => n + 1 + (c.replies?.length ?? 0), 0)})`,
                   submission: 'Ticket Submission',
                   history: 'History',
                 };
@@ -288,53 +266,11 @@ export default function TicketDetailPage() {
             {/* ── Conversation (Updates & Replies) ─── */}
             {activeTab === 'comments' && (
               <div className={POLISH_CLASS.sectionGap}>
-                {visibleComments.length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>
-                    {isStudioUser ? 'No updates yet.' : 'No replies yet.'}
-                  </p>
-                )}
-                {visibleComments.map((comment) => (
-                  <div
-                    key={comment.id}
-                    className="rounded-xl p-4 space-y-2"
-                    style={panel}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-semibold">
-                        {((comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '?')[0].toUpperCase()}
-                      </div>
-                      <span className="text-sm font-medium text-gray-200">
-                        {(comment.author as { displayName?: string; name?: string }).displayName ?? (comment.author as { displayName?: string; name?: string }).name ?? '—'}
-                      </span>
-                      <span className="ml-auto text-xs" style={{ color: POLISH_THEME.theadText }}>
-                        {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                      </span>
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--color-text-primary)' }}>{comment.body}</p>
-                  </div>
-                ))}
-
-                <div className="rounded-xl p-4 space-y-3" style={panel}>
-                  <Textarea
-                    placeholder={isStudioUser ? 'Add an update...' : 'Reply...'}
-                    value={commentBody}
-                    onChange={(e) => setCommentBody(e.target.value)}
-                    rows={3}
-                  />
-                  <div className="flex items-center justify-between">
-                    <div />
-                    <Button
-                      size="sm"
-                      onClick={() => commentMut.mutate()}
-                      disabled={!commentBody.trim()}
-                      loading={commentMut.isPending}
-                      className="ml-auto"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      {canManage ? 'Reply' : 'Add update'}
-                    </Button>
-                  </div>
-                </div>
+                <CommentThread
+                  ticketId={id}
+                  comments={threadedComments}
+                  isStudioUser={isStudioUser}
+                />
               </div>
             )}
 
@@ -366,8 +302,8 @@ export default function TicketDetailPage() {
                                 width: `${percent}%`,
                                 background:
                                   percent === 100
-                                    ? 'linear-gradient(90deg,#22c55e,#16a34a)'
-                                    : 'linear-gradient(90deg,#22c55e,#4ade80)',
+                                    ? 'linear-gradient(90deg,#16a34a,#059669)'
+                                    : 'linear-gradient(90deg,#10b981,#059669)',
                               }}
                             />
                           </div>
@@ -386,7 +322,7 @@ export default function TicketDetailPage() {
                 {(subtasksList ?? ticket.subtasks).map((subtask) => (
                   <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
                     <div className="flex-1 min-w-0">
-                      <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-gray-200')}
+                      <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-[var(--color-text-primary)]')}
                         style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: 'var(--color-text-muted)', textDecoration: 'line-through' } : undefined}>
                         {subtask.title}
                       </p>
@@ -402,9 +338,6 @@ export default function TicketDetailPage() {
                         )}
                       </div>
                     </div>
-                    {subtask.isRequired && (
-                      <span className="text-xs font-medium shrink-0" style={{ color: '#f87171' }}>Required</span>
-                    )}
                     <SubtaskStatusBadge status={subtask.status} />
                     {canManage && !['LOCKED'].includes(subtask.status) && (
                       <Select
@@ -416,7 +349,6 @@ export default function TicketDetailPage() {
                       >
                         <option value="READY">Ready</option>
                         <option value="IN_PROGRESS">In Progress</option>
-                        <option value="BLOCKED">Blocked</option>
                         <option value="DONE">Done</option>
                         <option value="SKIPPED">Skipped</option>
                       </Select>
@@ -481,7 +413,7 @@ export default function TicketDetailPage() {
                   <div key={entry.id} className="flex gap-3 text-sm">
                     <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: 'var(--color-border-default)' }} />
                     <div>
-                      <span className="font-medium text-gray-300">{entry.actor?.displayName ?? 'System'}</span>
+                      <span className="font-medium text-[var(--color-text-primary)]">{entry.actor?.displayName ?? 'System'}</span>
                       {' '}
                       <span style={{ color: POLISH_THEME.metaMuted }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
                       <span className="block text-xs" style={{ color: POLISH_THEME.theadText }}>

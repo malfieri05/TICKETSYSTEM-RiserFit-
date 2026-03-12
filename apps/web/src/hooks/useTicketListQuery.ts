@@ -17,6 +17,7 @@ export function normalizeTicketListKey(
     search,
     viewTab,
     status,
+    statusGroup,
     priority,
     departmentId,
     ticketClassId,
@@ -30,7 +31,7 @@ export function normalizeTicketListKey(
     actionableForMe,
   } = params;
 
-  const key: unknown[] = ['tickets', listKey, page, limit, search ?? '', viewTab ?? ''];
+  const key: unknown[] = ['tickets', listKey, page, limit, search ?? '', viewTab ?? '', statusGroup ?? ''];
 
   const filterKeys = [
     'status',
@@ -68,6 +69,7 @@ export function buildListParams(
     ...(rest.search && { search: rest.search }),
   };
   if (rest.status != null) out.status = rest.status;
+  if (rest.statusGroup != null) out.statusGroup = rest.statusGroup;
   if (rest.priority != null) out.priority = rest.priority;
   if (rest.departmentId != null) out.departmentId = rest.departmentId;
   if (rest.ticketClassId != null) out.ticketClassId = rest.ticketClassId;

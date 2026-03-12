@@ -62,9 +62,9 @@ export function InboxLayout({
         onClick={() => onFolderChange?.(folder.id)}
         className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
         style={{
-          background: isActive ? 'rgba(20,184,166,0.15)' : 'transparent',
+          background: isActive ? 'rgba(52,120,196,0.15)' : 'transparent',
           color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
-          border: isActive ? '1px solid rgba(20,184,166,0.4)' : '1px solid transparent',
+          border: isActive ? '1px solid rgba(52,120,196,0.4)' : '1px solid transparent',
         }}
       >
         <span className="truncate">{folder.label}</span>
@@ -125,12 +125,12 @@ export function InboxLayout({
                   style={{
                     background:
                       folder.id === selectedFolderId
-                        ? 'rgba(20,184,166,0.15)'
+                        ? 'rgba(52,120,196,0.15)'
                         : 'transparent',
                     color: folder.id === selectedFolderId ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     border:
                       folder.id === selectedFolderId
-                        ? '1px solid rgba(20,184,166,0.4)'
+                        ? '1px solid rgba(52,120,196,0.4)'
                         : '1px solid var(--color-border-default)',
                   }}
                 >
@@ -156,7 +156,7 @@ export function InboxLayout({
             {isInitialLoading ? (
               initialSkeleton ?? (
                 <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-2`}>
-                  <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+                  <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
                   <span className="text-xs" style={{ color: POLISH_THEME.metaMuted }}>
                     Loading…
                   </span>
@@ -171,7 +171,7 @@ export function InboxLayout({
                     className="px-4 py-1.5 flex items-center gap-2 border-b"
                     style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBgHeader }}
                   >
-                    <div className="animate-spin h-3 w-3 rounded-full border-2 border-teal-500 border-t-transparent" />
+                    <div className="animate-spin h-3 w-3 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
                     <span className="text-xs" style={{ color: POLISH_THEME.metaMuted }}>
                       Fetching…
                     </span>

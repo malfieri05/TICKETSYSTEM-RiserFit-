@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Ticket } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
@@ -82,22 +81,27 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-500">
-            <Ticket className="h-6 w-6 text-white" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden">
+            <img
+              src="/Logo.png"
+              alt="Riser Fitness"
+              className="h-full w-full object-contain"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Riser Fitness</h1>
-            <p className="text-sm text-gray-500 mt-1">Internal support ticketing system</p>
+            <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Riser Fitness</h1>
+            <p className="text-sm text-[var(--color-text-muted)] mt-1">Internal support ticketing system</p>
           </div>
         </div>
 
         {/* Card */}
         <div className="rounded-xl p-8 space-y-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <div>
-            <h2 className="text-lg font-semibold text-gray-100">
+            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-[var(--color-text-muted)] mt-1">
               {mode === 'login'
                 ? 'Welcome back. Enter your credentials to continue.'
                 : 'Fill in your details to get started.'}
@@ -163,12 +167,12 @@ export default function LoginPage() {
           </form>
 
           {/* Mode toggle */}
-          <p className="text-center text-sm text-gray-500">
+          <p className="text-center text-sm text-[var(--color-text-muted)]">
             {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
             <button
               type="button"
               onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-              className="font-medium text-teal-600 hover:text-teal-500 transition-colors"
+              className="font-medium text-[var(--color-accent)] hover:opacity-90 transition-colors"
             >
               {mode === 'login' ? 'Create one' : 'Sign in'}
             </button>
@@ -188,7 +192,7 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => setSsoMessage(true)}
-            className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-gray-300 transition-colors"
+            className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors"
             style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
             onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface-raised)')}
@@ -222,7 +226,7 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p className="text-center text-xs text-gray-600">
+        <p className="text-center text-xs text-[var(--color-text-muted)]">
           New accounts are created with Requester access. Contact an admin to request Agent or Admin privileges.
         </p>
       </div>

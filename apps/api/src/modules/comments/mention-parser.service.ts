@@ -1,17 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 
-/**
- * MentionParserService
- * ====================
- * Extracts @mention references from comment bodies and resolves them to user IDs.
- *
- * Mention format: @[UserName](userId)  — structured mention
- *   OR            @username            — plain text mention (fuzzy matched against DB)
- *
- * We store mention records so the notification system knows exactly
- * which users were mentioned without re-parsing the comment body later.
- */
 @Injectable()
 export class MentionParserService {
   constructor(private prisma: PrismaService) {}
@@ -21,7 +10,6 @@ export class MentionParserService {
    * Returns array of unique user IDs found in the body.
    */
   parseStructuredMentions(body: string): string[] {
-    // Matches @[Any Name](cuid_or_uuid_here)
     const mentionRegex = /@\[.+?\]\(([a-zA-Z0-9_-]+)\)/g;
     const userIds: string[] = [];
     let match: RegExpExecArray | null;
@@ -38,8 +26,6 @@ export class MentionParserService {
 
   /**
    * Validate that all mentioned user IDs exist and are active.
-   * Returns only the IDs that are valid — silently drops invalid ones
-   * (user may have been deactivated since the mention was typed).
    */
   async resolveValidMentions(userIds: string[]): Promise<string[]> {
     if (userIds.length === 0) return [];
@@ -62,5 +48,45 @@ export class MentionParserService {
   async extractMentions(body: string): Promise<string[]> {
     const parsed = this.parseStructuredMentions(body);
     return this.resolveValidMentions(parsed);
+  }
+
+  /**
+   * Stage 3: ticket-scoped mention extraction with strict validation.
+   * - Rejects 400 if any mentioned userId does not exist or is inactive.
+   * - Rejects 400 if any mentioned user exists but is not mentionable for this ticket.
+   * - Does not silently strip invalid mentions.
+   */
+  async extractMentionsForTicket(
+    body: string,
+    allowedUserIds: string[],
+  ): Promise<string[]> {
+    const parsed = this.parseStructuredMentions(body);
+    if (parsed.length === 0) return [];
+
+    const existingActive = await this.prisma.user.findMany({
+      where: {
+        id: { in: parsed },
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingActive.map((u) => u.id));
+
+    const nonExistentOrInactive = parsed.filter((id) => !existingIds.has(id));
+    if (nonExistentOrInactive.length > 0) {
+      throw new BadRequestException(
+        `One or more mentioned users do not exist or are inactive: ${nonExistentOrInactive.join(', ')}`,
+      );
+    }
+
+    const allowedSet = new Set(allowedUserIds);
+    const notMentionable = parsed.filter((id) => !allowedSet.has(id));
+    if (notMentionable.length > 0) {
+      throw new BadRequestException(
+        `Cannot mention users without ticket access: ${notMentionable.join(', ')}`,
+      );
+    }
+
+    return parsed;
   }
 }

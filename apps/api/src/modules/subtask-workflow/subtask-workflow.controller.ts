@@ -98,7 +98,6 @@ export class SubtaskWorkflowController {
       description: dto.description ?? undefined,
       departmentId: dto.departmentId,
       assignedUserId: dto.assignedUserId ?? undefined,
-      isRequired: dto.isRequired ?? true,
       sortOrder: dto.sortOrder ?? 0,
     });
   }
@@ -114,7 +113,6 @@ export class SubtaskWorkflowController {
       description: dto.description,
       departmentId: dto.departmentId,
       assignedUserId: dto.assignedUserId,
-      isRequired: dto.isRequired,
       sortOrder: dto.sortOrder,
     });
   }

@@ -20,7 +20,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           id={id}
           className={cn(
             'block w-full rounded-lg px-3 py-2 text-sm placeholder:opacity-70',
-            'focus:outline-none focus:ring-1 focus:ring-teal-500',
+            'focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             error && 'ring-1 ring-red-500',
             className,
@@ -54,7 +54,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           id={id}
           className={cn(
             'block w-full rounded-lg px-3 py-2 text-sm',
-            'focus:outline-none focus:ring-1 focus:ring-teal-500',
+            'focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             error && 'ring-1 ring-red-500',
             className,
@@ -90,7 +90,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           id={id}
           className={cn(
             'block w-full rounded-lg px-3 py-2 text-sm placeholder:opacity-70 resize-y',
-            'focus:outline-none focus:ring-1 focus:ring-teal-500',
+            'focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]',
             'disabled:opacity-50 disabled:cursor-not-allowed',
             error && 'ring-1 ring-red-500',
             className,

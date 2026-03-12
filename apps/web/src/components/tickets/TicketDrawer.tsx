@@ -2,19 +2,20 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare,
-  Clock, Send, Plus, User,
+  Clock, Plus, User,
 } from 'lucide-react';
-import { ticketsApi, commentsApi, subtasksApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, subtasksApi, invalidateTicketLists } from '@/lib/api';
 import type { SubtaskStatus } from '@/types';
 import { SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Select, Textarea, Input } from '@/components/ui/Input';
+import { Select, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
+import { CommentThread } from '@/components/tickets/CommentThread';
 
 interface Props {
   ticketId: string | null;
@@ -27,13 +28,11 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const open = !!ticketId;
 
   const [activeTab, setActiveTab] = useState<'subtasks' | 'comments' | 'submission' | 'history'>('subtasks');
-  const [commentBody, setCommentBody] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setActiveTab('subtasks');
-    setCommentBody('');
     setNewSubtask('');
   }, [ticketId]);
 
@@ -57,39 +56,6 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   });
 
 
-  const commentMut = useMutation({
-    mutationFn: () => commentsApi.create(ticketId!, { body: commentBody }),
-    onMutate: async () => {
-      await qc.cancelQueries({ queryKey: ['ticket', ticketId] });
-      const prev = qc.getQueryData<{ data: { comments: unknown[] } }>(['ticket', ticketId]);
-      const body = commentBody;
-      setCommentBody('');
-      const optimisticComment = {
-        id: `opt-${Date.now()}`,
-        body,
-        author: { id: user?.id ?? '', displayName: user?.displayName ?? '' },
-        createdAt: new Date().toISOString(),
-      };
-      qc.setQueryData(['ticket', ticketId], (old: typeof prev) => {
-        if (!old?.data) return old;
-        return {
-          ...old,
-          data: {
-            ...old.data,
-            comments: [...(old.data.comments ?? []), optimisticComment],
-          },
-        };
-      });
-      return { prev };
-    },
-    onError: (_err, _v, context) => {
-      if (context?.prev) qc.setQueryData(['ticket', ticketId], context.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
-      invalidateTicketLists(qc);
-    },
-  });
   const subtaskMut    = useMutation({
     mutationFn: () => subtasksApi.create(ticketId!, { title: newSubtask }),
     onSuccess: () => {
@@ -131,7 +97,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const TABS = [
     { key: 'subtasks' as const,   label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`, icon: CheckSquare },
-    { key: 'comments' as const,  label: `Comments${ticket ? ` (${ticket.comments.length})` : ''}`,  icon: MessageSquare },
+    { key: 'comments' as const,  label: `Comments${ticket ? ` (${(ticket.comments ?? []).reduce((n: number, c: any) => n + 1 + (c.replies?.length ?? 0), 0)})` : ''}`,  icon: MessageSquare },
     { key: 'submission' as const, label: 'Ticket Submission', icon: User },
     { key: 'history' as const,    label: 'History',         icon: Clock },
   ];
@@ -167,7 +133,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
         {/* ── Loading ─────────────────────────────────────────────────────── */}
         {isLoading && (
           <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-surface-raised)' }}>
-            <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+            <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
           </div>
         )}
 
@@ -200,9 +166,22 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                     </p>
                   );
                 })()}
-                <p className="text-xs mt-2" style={{ color: POLISH_THEME.metaMuted }}>
-                  Ticket #{ticket.id?.slice(0, 8) ?? ticketId?.slice(0, 8)}
-                </p>
+                <button
+                  type="button"
+                  className="text-xs mt-2 flex items-center gap-1 group cursor-pointer"
+                  style={{ color: POLISH_THEME.metaMuted }}
+                  title="Copy ticket ID to clipboard"
+                  onClick={() => {
+                    const id = ticket.id ?? ticketId ?? '';
+                    navigator.clipboard.writeText(id).catch(() => {});
+                  }}
+                >
+                  <span>Ticket #{ticket.id?.slice(0, 8) ?? ticketId?.slice(0, 8)}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3 opacity-0 group-hover:opacity-70 transition-opacity">
+                    <path d="M10.5 2.5h-6A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5h6A1.5 1.5 0 0 0 12 12V4a1.5 1.5 0 0 0-1.5-1.5Z"/>
+                    <path d="M12.5 1h-6A1.5 1.5 0 0 0 5 2.5V3h5.5A1.5 1.5 0 0 1 12 4.5V11h.5A1.5 1.5 0 0 0 14 9.5v-7A1.5 1.5 0 0 0 12.5 1Z"/>
+                  </svg>
+                </button>
               </div>
 
               {/* Tab bar — pill-style, sticky on scroll */}
@@ -236,55 +215,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
                 {/* ── Comments ── */}
                 {activeTab === 'comments' && (
-                  <>
-                    {ticket.comments.length === 0 && (
-                      <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No comments yet.</p>
-                    )}
-
-                    {ticket.comments.map((c) => (
-                      <div
-                        key={c.id}
-                        className="rounded-xl p-4 space-y-2.5"
-                        style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-7 w-7 rounded-full bg-teal-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                            {(c.author.displayName?.[0] ?? '?').toUpperCase()}
-                          </div>
-                          <span className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>{c.author.displayName}</span>
-                          <span className="ml-auto text-xs shrink-0" style={{ color: POLISH_THEME.metaDim }}>
-                            {formatDistanceToNow(new Date(c.createdAt), { addSuffix: true })}
-                          </span>
-                        </div>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap pl-9" style={{ color: 'var(--color-text-primary)' }}>
-                          {c.body}
-                        </p>
-                      </div>
-                    ))}
-
-                    {/* Comment compose box */}
-                    <div
-                      className="rounded-xl overflow-hidden"
-                      style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, borderLeft: `3px solid ${POLISH_THEME.accent}` }}
-                    >
-                      <Textarea
-                        placeholder="Write a comment…"
-                        value={commentBody}
-                        onChange={(e) => setCommentBody(e.target.value)}
-                        rows={3}
-                        style={{ background: 'transparent', border: 'none', borderRadius: 0 } as React.CSSProperties}
-                      />
-                      <div
-                        className="flex items-center justify-between px-3 py-2"
-                        style={{ borderTop: `1px solid ${POLISH_THEME.innerBorder}`, background: 'var(--color-bg-surface)' }}
-                      >
-                        <div />
-                        <Button size="sm" onClick={() => commentMut.mutate()} disabled={!commentBody.trim()} loading={commentMut.isPending}>
-                          <Send className="h-3.5 w-3.5" /> Add Comment
-                        </Button>
-                      </div>
-                    </div>
-                  </>
+                  <CommentThread
+                    ticketId={ticketId!}
+                    comments={ticket.comments ?? []}
+                  />
                 )}
 
                 {/* ── Subtasks ── */}
@@ -314,8 +248,8 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                                     width: `${percent}%`,
                                     background:
                                       percent === 100
-                                        ? 'linear-gradient(90deg,#22c55e,#16a34a)'
-                                        : 'linear-gradient(90deg,#22c55e,#4ade80)',
+                                        ? 'linear-gradient(90deg,#16a34a,#15803d)'
+                                        : 'linear-gradient(90deg,#16a34a,#22c55e)',
                                   }}
                                 />
                               </div>
@@ -345,14 +279,13 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                             </p>
                           )}
                         </div>
-                        {s.isRequired && <span className="text-xs font-semibold shrink-0" style={{ color: '#f87171' }}>Required</span>}
                         <SubtaskStatusBadge status={s.status} />
                         {canManage && (
                           <Select value={s.status} onChange={(e) => subtaskStMut.mutate({ subtaskId: s.id, status: e.target.value as SubtaskStatus })} className="w-32 text-xs">
-                            <option value="TODO">TODO</option>
+                            <option value="READY">Ready</option>
                             <option value="IN_PROGRESS">In Progress</option>
-                            <option value="BLOCKED">Blocked</option>
                             <option value="DONE">Done</option>
+                            <option value="SKIPPED">Skipped</option>
                           </Select>
                         )}
                       </div>

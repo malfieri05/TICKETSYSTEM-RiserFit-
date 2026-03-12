@@ -189,11 +189,6 @@ export const AGENT_TOOLS: ToolDef[] = [
           ticket_id: { type: 'string' },
           title: { type: 'string' },
           owner_user_id: { type: 'string', description: 'Assign to this user' },
-          is_required: {
-            type: 'boolean',
-            description:
-              'Whether ticket resolution requires this subtask to be done (default true)',
-          },
         },
         required: ['ticket_id', 'title'],
       },
@@ -216,7 +211,6 @@ export const AGENT_TOOLS: ToolDef[] = [
               'LOCKED',
               'READY',
               'IN_PROGRESS',
-              'BLOCKED',
               'DONE',
               'SKIPPED',
             ],

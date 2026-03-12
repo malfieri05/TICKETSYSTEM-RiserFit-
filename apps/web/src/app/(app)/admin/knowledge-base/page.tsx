@@ -42,9 +42,9 @@ function formatBytes(bytes: number | null): string {
 
 function SourceTypeBadge({ type }: { type: string }) {
   const map: Record<string, { label: string; style: React.CSSProperties }> = {
-    manual: { label: 'Text',  style: { background: 'rgba(59,130,246,0.15)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.3)' } },
-    file:   { label: 'File',  style: { background: 'rgba(168,85,247,0.15)', color: '#c084fc', border: '1px solid rgba(168,85,247,0.3)' } },
-    url:    { label: 'URL',   style: { background: 'rgba(34,197,94,0.15)',  color: '#4ade80', border: '1px solid rgba(34,197,94,0.3)'  } },
+    manual: { label: 'Text',  style: { background: 'rgba(59,130,246,0.15)', color: '#2563eb', border: '1px solid rgba(59,130,246,0.3)' } },
+    file:   { label: 'File',  style: { background: 'rgba(168,85,247,0.15)', color: '#9333ea', border: '1px solid rgba(168,85,247,0.3)' } },
+    url:    { label: 'URL',   style: { background: 'rgba(34,197,94,0.15)',  color: '#16a34a', border: '1px solid rgba(34,197,94,0.3)'  } },
   };
   const cfg = map[type] ?? { label: type, style: { background: 'var(--color-bg-surface-raised)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-default)' } };
   return (
@@ -94,9 +94,17 @@ export default function KnowledgeBasePage() {
   const riserSyncMut = useMutation({
     mutationFn: () => aiApi.syncRiserPolicies(),
     onSuccess: (res) => {
-      const { synced, skipped, failed } = res.data;
+      const { synced, skipped, failed, configMissing, details } = res.data;
+      if (configMissing) {
+        setSyncResult(
+          'Riser sync not configured. Set RISER_API_BASE_URL, RISER_API_KEY, and RISER_POLICY_IDS (comma-separated policy IDs) in apps/api/.env.',
+        );
+        return;
+      }
+      const detailReasons = details?.filter((d) => d.reason).map((d) => `${d.id}: ${d.reason}`);
+      const reasonSuffix = detailReasons?.length ? ` — ${detailReasons.slice(0, 3).join('; ')}${(detailReasons.length > 3 ? '…' : '')}` : '';
       setSyncResult(
-        `Riser sync finished — ${synced} synced, ${skipped} skipped, ${failed} failed.`,
+        `Riser sync finished — ${synced} synced, ${skipped} skipped, ${failed} failed.${reasonSuffix}`,
       );
       qc.invalidateQueries({ queryKey: ['ai-documents'] });
     },
@@ -147,8 +155,8 @@ export default function KnowledgeBasePage() {
 
         {/* ── Ingest panel ── */}
         <div className="rounded-xl p-6" style={panel}>
-          <h2 className="text-base font-semibold text-gray-100 mb-4 flex items-center gap-2">
-            <Plus className="h-4 w-4 text-teal-500" />
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4 text-[var(--color-accent)]" />
             Add Knowledge Document
           </h2>
 
@@ -170,7 +178,7 @@ export default function KnowledgeBasePage() {
 
           <form onSubmit={handleIngest} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Document Title</label>
+              <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Document Title</label>
               <Input
                 placeholder="e.g. HVAC Maintenance Procedure"
                 value={title}
@@ -182,13 +190,13 @@ export default function KnowledgeBasePage() {
 
             {mode === 'text' ? (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Content</label>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Content</label>
                 <textarea
                   value={textContent}
                   onChange={(e) => setTextContent(e.target.value)}
                   placeholder="Paste your document text here…"
                   rows={8}
-                  className="w-full rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-teal-500 font-mono resize-y"
+                  className="w-full rounded-lg px-3 py-2 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] font-mono resize-y"
                   style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
                   required
                 />
@@ -196,21 +204,21 @@ export default function KnowledgeBasePage() {
               </div>
             ) : mode === 'pdf' ? (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Handbook PDF (max 15 MB)</label>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Handbook PDF (max 15 MB)</label>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
                 <div
                   onClick={() => pdfInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
                   style={pdfFile
-                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed var(--color-accent)' }
+                    ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
                     : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
                   onMouseEnter={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
                   onMouseLeave={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {pdfFile ? (
                     <>
-                      <FileText className="h-8 w-8 text-teal-400" />
-                      <p className="text-sm font-medium text-teal-300">{pdfFile.name}</p>
+                      <FileText className="h-8 w-8 text-[var(--color-accent)]" />
+                      <p className="text-sm font-medium text-[var(--color-accent)]">{pdfFile.name}</p>
                       <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(pdfFile.size)}</p>
                       <button
                         type="button"
@@ -231,20 +239,20 @@ export default function KnowledgeBasePage() {
               </div>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">File (.txt or .md, max 10 MB)</label>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">File (.txt or .md, max 10 MB)</label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
                   className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
                   style={file
-                    ? { background: 'rgba(20,184,166,0.08)', border: '2px dashed var(--color-accent)' }
+                    ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
                     : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
                   onMouseEnter={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
                   onMouseLeave={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {file ? (
                     <>
-                      <FileText className="h-8 w-8 text-teal-400" />
-                      <p className="text-sm font-medium text-teal-300">{file.name}</p>
+                      <FileText className="h-8 w-8 text-[var(--color-accent)]" />
+                      <p className="text-sm font-medium text-[var(--color-accent)]">{file.name}</p>
                       <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{formatBytes(file.size)}</p>
                       <button
                         type="button"
@@ -256,8 +264,8 @@ export default function KnowledgeBasePage() {
                     </>
                   ) : (
                     <>
-                      <Upload className="h-8 w-8" style={{ color: '#444444' }} />
-                      <p className="text-sm" style={{ color: '#888888' }}>Click to select a .txt or .md file</p>
+                      <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Click to select a .txt or .md file</p>
                     </>
                   )}
                   <input ref={fileInputRef} type="file" accept=".txt,.md,text/plain,text/markdown" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
@@ -269,8 +277,8 @@ export default function KnowledgeBasePage() {
               <div
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
                 style={ingestResult.ok
-                  ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#4ade80' }
-                  : { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5' }}
+                  ? { background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', color: '#16a34a' }
+                  : { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626' }}
               >
                 {ingestResult.ok ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
                 {ingestResult.message}
@@ -290,11 +298,14 @@ export default function KnowledgeBasePage() {
         <div className="rounded-xl overflow-hidden" style={panel}>
           <div className="px-6 py-4 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-gray-100 flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-teal-500" />
+              <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-[var(--color-accent)]" />
                 Documents
               </h2>
               <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }} title="Short policies produce 1 chunk; longer ones split into multiple. All are used by the Assistant.">
+                (1 chunk = short policy; normal)
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
@@ -326,18 +337,18 @@ export default function KnowledgeBasePage() {
             </div>
           )}
           <div className="px-6 pt-2 pb-1 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Only documents that are <span className="font-semibold text-teal-400">indexed</span> and <span className="font-semibold text-teal-400">active</span> are used by the Assistant and Handbook chat.
+            Only documents that are <span className="font-semibold text-[var(--color-accent)]">indexed</span> and <span className="font-semibold text-[var(--color-accent)]">active</span> are used by the Assistant and Handbook chat.
           </div>
 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2">
-              <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-              <span className="text-sm text-gray-500">Loading…</span>
+              <Loader2 className="h-6 w-6 animate-spin text-[var(--color-accent)]" />
+              <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : docs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-3" style={{ color: 'var(--color-text-muted)' }}>
               <BookOpen className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
-              <p className="text-sm font-medium text-gray-300">No documents yet</p>
+              <p className="text-sm font-medium text-[var(--color-text-primary)]">No documents yet</p>
               <p className="text-xs text-center max-w-sm">Add your first document above to power the Assistant and Handbook.</p>
             </div>
           ) : (
@@ -357,7 +368,7 @@ export default function KnowledgeBasePage() {
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <td className="px-4 py-3 font-medium text-gray-200 max-w-xs">
+                    <td className="px-4 py-3 font-medium text-[var(--color-text-primary)] max-w-xs">
                       <span className="line-clamp-1">{doc.title}</span>
                     </td>
                     <td className="px-4 py-3">
@@ -366,7 +377,7 @@ export default function KnowledgeBasePage() {
                           className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
                           style={{
                             background: 'rgba(56,189,248,0.16)',
-                            color: '#38bdf8',
+                            color: '#0284c7',
                             border: '1px solid rgba(56,189,248,0.45)',
                           }}
                         >
@@ -413,13 +424,13 @@ export default function KnowledgeBasePage() {
                         className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                         style={
                           doc.ingestionStatus === 'indexed'
-                            ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
+                            ? { background: 'rgba(34,197,94,0.15)', color: '#16a34a' }
                             : doc.ingestionStatus === 'indexing'
-                              ? { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }
+                              ? { background: 'rgba(251,191,36,0.15)', color: '#d97706' }
                               : doc.ingestionStatus === 'pending'
-                                ? { background: 'rgba(59,130,246,0.15)', color: '#60a5fa' }
+                                ? { background: 'rgba(59,130,246,0.15)', color: '#2563eb' }
                                 : doc.ingestionStatus === 'failed'
-                                  ? { background: 'rgba(239,68,68,0.15)', color: '#f87171' }
+                                  ? { background: 'rgba(239,68,68,0.15)', color: '#dc2626' }
                                   : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }
                         }
                         title={
@@ -449,7 +460,7 @@ export default function KnowledgeBasePage() {
                       <span
                         className="inline-block rounded-full px-2 py-0.5 text-xs font-medium"
                         style={doc.isActive
-                          ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
+                          ? { background: 'rgba(34,197,94,0.15)', color: '#16a34a' }
                           : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                       >
                         {doc.isActive ? 'On' : 'Off'}
@@ -472,9 +483,9 @@ export default function KnowledgeBasePage() {
                           title={doc.isActive ? 'Disable' : 'Enable'}
                           onClick={() => toggleMut.mutate({ id: doc.id, isActive: !doc.isActive })}
                           className="p-1.5 rounded-md transition-colors"
-                          style={{ color: '#555555' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#cccccc')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                          style={{ color: 'var(--color-text-muted)' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           {doc.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -486,9 +497,9 @@ export default function KnowledgeBasePage() {
                             }
                           }}
                           className="p-1.5 rounded-md transition-colors"
-                          style={{ color: '#555555' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = '#555555')}
+                          style={{ color: 'var(--color-text-muted)' }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = '#dc2626')}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

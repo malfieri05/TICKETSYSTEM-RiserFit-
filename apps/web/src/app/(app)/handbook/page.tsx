@@ -78,14 +78,14 @@ export default function HandbookPage() {
 
   if (authLoading || (user && user.studioId == null)) {
     return (
-      <div className="flex h-screen items-center justify-center" style={{ background: '#000000' }}>
-        <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+      <div className="flex h-screen items-center justify-center" style={{ background: 'var(--color-bg-page)' }}>
+        <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Handbook" />
 
       <div className="flex-1 flex flex-col p-6 max-w-3xl mx-auto w-full">
@@ -98,7 +98,7 @@ export default function HandbookPage() {
               {m.role === 'assistant' && (
                 <div
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: '#14b8a6' }}
+                  style={{ background: 'var(--color-accent)' }}
                 >
                   <BookMarked className="h-4 w-4 text-white" />
                 </div>
@@ -106,21 +106,21 @@ export default function HandbookPage() {
               <div
                 className="rounded-xl px-4 py-3 max-w-[85%]"
                 style={{
-                  background: m.role === 'user' ? '#14b8a6' : '#1a1a1a',
-                  border: m.role === 'assistant' ? '1px solid #2a2a2a' : 'none',
-                  color: m.role === 'user' ? '#ffffff' : '#e5e5e5',
+                  background: m.role === 'user' ? 'var(--color-accent)' : 'var(--color-bg-surface-raised)',
+                  border: m.role === 'assistant' ? '1px solid var(--color-border-default)' : 'none',
+                  color: m.role === 'user' ? '#ffffff' : 'var(--color-text-primary)',
                 }}
               >
                 <p className="text-sm whitespace-pre-wrap">{m.content}</p>
                 {m.role === 'assistant' && m.usedContext === false && m.id !== 'welcome' && (
-                  <p className="text-xs mt-2 italic" style={{ color: '#888' }}>
-                    I couldn’t find this in the handbook. You may need to submit a ticket or contact your manager.
+                  <p className="text-xs mt-2 italic" style={{ color: 'var(--color-text-muted)' }}>
+                    I couldn’t find this in the handbook. You may need to contact your manager or team.
                   </p>
                 )}
                 {m.sources && m.sources.length > 0 && (
-                  <div className="mt-2 pt-2" style={{ borderTop: '1px solid #333' }}>
-                    <p className="text-xs mb-1" style={{ color: '#888' }}>Sources:</p>
-                    <ul className="text-xs space-y-0.5" style={{ color: '#aaa' }}>
+                  <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+                    <p className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Sources:</p>
+                    <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-text-muted)' }}>
                       {m.sources.map((s, i) => (
                         <li key={i}>
                           {s.title}
@@ -135,7 +135,7 @@ export default function HandbookPage() {
               </div>
               {m.role === 'user' && (
                 <div
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-600 text-white text-sm font-semibold"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-accent)] text-white text-sm font-semibold"
                 >
                   <User className="h-4 w-4" />
                 </div>
@@ -146,15 +146,15 @@ export default function HandbookPage() {
             <div className="flex gap-3">
               <div
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                style={{ background: '#14b8a6' }}
+                style={{ background: 'var(--color-accent)' }}
               >
                 <BookMarked className="h-4 w-4 text-white" />
               </div>
               <div
                 className="rounded-xl px-4 py-3"
-                style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}
+                style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
               >
-                <Loader2 className="h-5 w-5 animate-spin" style={{ color: '#14b8a6' }} />
+                <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--color-accent)' }} />
               </div>
             </div>
           )}
@@ -166,11 +166,11 @@ export default function HandbookPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask about the handbook..."
-            className="flex-1 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+            className="flex-1 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
             style={{
-              background: '#1a1a1a',
-              border: '1px solid #2a2a2a',
-              color: '#e5e5e5',
+              background: 'var(--color-bg-surface-raised)',
+              border: '1px solid var(--color-border-default)',
+              color: 'var(--color-text-primary)',
             }}
             disabled={isLoading}
           />
@@ -178,7 +178,7 @@ export default function HandbookPage() {
             type="submit"
             disabled={!input.trim() || isLoading}
             className="flex items-center justify-center rounded-lg px-4 py-3 text-sm font-medium disabled:opacity-50 transition-opacity"
-            style={{ background: '#14b8a6', color: '#ffffff' }}
+            style={{ background: 'var(--color-accent)', color: '#ffffff' }}
           >
             <Send className="h-4 w-4" />
           </button>

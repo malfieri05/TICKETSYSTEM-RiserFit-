@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { usersApi, adminApi } from '@/lib/api';
 import type { UserRole, Department, User } from '@/types';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
 
 // Backend enum: HR | OPERATIONS | MARKETING. Display labels for dropdown.
 const DEPARTMENT_OPTIONS: { value: Department; label: string }[] = [
@@ -123,7 +123,7 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Users" />
       <div className="p-6">
         <div className="mb-4">
@@ -137,22 +137,22 @@ export default function AdminUsersPage() {
         <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex justify-center py-12">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
             </div>
           ) : filteredUsers.length === 0 && users.length > 0 ? (
-            <div className="px-4 py-8 text-center text-sm" style={{ color: '#888888' }}>
+            <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
               No users match your search.
             </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid #2a2a2a', background: '#141414' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Visibility</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: '#666666' }}>Actions</th>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface)' }}>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Email</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Role</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Visibility</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Status</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -169,15 +169,16 @@ export default function AdminUsersPage() {
                   return (
                   <tr
                     key={u.id}
-                    style={{ borderTop: i > 0 ? '1px solid #222222' : undefined }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = '#222222')}
+                    className="transition-colors duration-150"
+                    style={{ borderTop: i > 0 ? '1px solid var(--color-border-default)' : undefined }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <td className="px-4 py-3 font-medium text-gray-200">{u.displayName}</td>
-                    <td className="px-4 py-3" style={{ color: '#666666' }}>{u.email}</td>
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{u.displayName}</td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{u.email}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
-                        <span className="text-[11px]" style={{ color: '#888888' }}>
+                        <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
                           {roleDisplayLabel(draftRole, departmentLabel)}
                         </span>
                         <div className="flex items-center gap-2">
@@ -247,7 +248,7 @@ export default function AdminUsersPage() {
                         {rowMessage && (
                           <span
                             className="text-[11px]"
-                            style={{ color: rowMessage === 'Saved' ? '#4ade80' : '#f87171' }}
+                            style={{ color: rowMessage === 'Saved' ? '#16a34a' : '#dc2626' }}
                           >
                             {rowMessage}
                           </span>
@@ -266,14 +267,14 @@ export default function AdminUsersPage() {
                           Locations ({visibilityLocationCount(u)})
                         </Button>
                       ) : (
-                        <span className="text-gray-500">—</span>
+                        <span style={{ color: 'var(--color-text-muted)' }}>—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium"
                         style={u.isActive
-                          ? { background: 'rgba(34,197,94,0.15)', color: '#4ade80' }
-                          : { background: '#222222', color: '#666666' }}>
+                          ? { background: 'rgba(34,197,94,0.12)', color: '#16a34a' }
+                          : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}>
                         {u.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -282,7 +283,7 @@ export default function AdminUsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          style={{ color: '#f87171' } as React.CSSProperties}
+                          style={{ color: '#dc2626' } as React.CSSProperties}
                           onClick={() => setDeactivateConfirmUserId(u.id)}
                           loading={deactivateMut.isPending && deactivateConfirmUserId === u.id}
                         >
@@ -316,11 +317,11 @@ export default function AdminUsersPage() {
           >
             <div
               className="rounded-xl max-w-md w-full p-6"
-              style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}
+              style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-semibold text-gray-100 mb-2">Deactivate user?</h3>
-              <p className="text-sm text-gray-400 mb-6">
+              <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>Deactivate user?</h3>
+              <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>
                 This user will no longer be able to sign in or access the system. Their ticket history will remain in the system.
               </p>
               <div className="flex justify-end gap-2">
@@ -328,8 +329,8 @@ export default function AdminUsersPage() {
                   Cancel
                 </Button>
                 <Button
+                  variant="danger"
                   size="sm"
-                  style={{ background: '#dc2626', color: '#fff' } as React.CSSProperties}
                   onClick={() => {
                     const id = deactivateConfirmUserId;
                     setDeactivateConfirmUserId(null);
@@ -413,17 +414,20 @@ function ManageLocationsModal({
     >
       <div
         className="rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6"
-        style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}
+        style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-100">
+          <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
             Manage locations — {user.displayName}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded text-gray-500 hover:text-white"
+            className="p-1.5 rounded transition-colors"
+            style={{ color: 'var(--color-text-muted)' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -431,7 +435,7 @@ function ManageLocationsModal({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#888888' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
               Default location
             </label>
             <Select
@@ -448,20 +452,20 @@ function ManageLocationsModal({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: '#888888' }}>
+            <label className="block text-xs font-semibold uppercase tracking-wide mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
               Additional locations
             </label>
             {scopes.length === 0 ? (
-              <p className="text-sm" style={{ color: '#666666' }}>No additional locations.</p>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>No additional locations.</p>
             ) : (
               <ul className="space-y-2">
                 {scopes.map((s) => (
-                  <li key={s.studioId} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: '#111111', border: '1px solid #252525' }}>
-                    <span className="text-sm text-gray-200">{s.studio?.name ?? s.studioId}</span>
+                  <li key={s.studioId} className="flex items-center justify-between py-2 px-3 rounded-lg" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-subtle)' }}>
+                    <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{s.studio?.name ?? s.studioId}</span>
                     <Button
                       variant="ghost"
                       size="sm"
-                      style={{ color: '#f87171' } as React.CSSProperties}
+                      style={{ color: '#dc2626' } as React.CSSProperties}
                       onClick={() => removeScopeMut.mutate(s.studioId)}
                       disabled={removeScopeMut.isPending}
                     >

@@ -13,6 +13,8 @@ type SubtaskLike = {
     requesterId: string;
     ownerId: string | null;
     studioId: string | null;
+    department?: { code: string } | null;
+    owner?: { teamId?: string | null; team?: { name: string } | null } | null;
   };
 };
 
@@ -38,6 +40,8 @@ function canViewSubtask(
         requesterId: ticket.requesterId,
         ownerId: ticket.ownerId,
         studioId: ticket.studioId,
+        department: ticket.department,
+        owner: ticket.owner,
       },
       subject,
     );

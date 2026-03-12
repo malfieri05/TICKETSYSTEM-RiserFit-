@@ -8,7 +8,7 @@ import { BadRequestException } from '@nestjs/common';
  * All status changes MUST go through assertValidTransition() before persisting.
  *
  * Transition map:
- *   NEW              → TRIAGED, CLOSED
+ *   NEW              → TRIAGED, IN_PROGRESS, CLOSED  (Stage 2: auto NEW→IN_PROGRESS on subtask activity)
  *   TRIAGED          → IN_PROGRESS, CLOSED
  *   IN_PROGRESS      → WAITING_ON_REQUESTER, WAITING_ON_VENDOR, RESOLVED
  *   WAITING_ON_*     → IN_PROGRESS, RESOLVED, CLOSED
@@ -16,7 +16,7 @@ import { BadRequestException } from '@nestjs/common';
  *   CLOSED           → (terminal — no transitions)
  */
 export const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
-  NEW: ['TRIAGED', 'CLOSED'],
+  NEW: ['TRIAGED', 'IN_PROGRESS', 'CLOSED'],
   TRIAGED: ['IN_PROGRESS', 'CLOSED'],
   IN_PROGRESS: ['WAITING_ON_REQUESTER', 'WAITING_ON_VENDOR', 'RESOLVED'],
   WAITING_ON_REQUESTER: ['IN_PROGRESS', 'RESOLVED', 'CLOSED'],

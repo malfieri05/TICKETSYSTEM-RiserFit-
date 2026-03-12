@@ -36,10 +36,17 @@ export class DomainEventsService {
         occurredAt: event.occurredAt.toISOString(),
       };
 
+      // Idempotency: anchor to persisted entity where available (e.g. one comment → one fan-out job)
+      const payload = event.payload as { commentId?: string } | undefined;
+      const jobId =
+        (event.type === 'COMMENT_ADDED' || event.type === 'MENTION_IN_COMMENT') &&
+        payload?.commentId
+          ? `${event.type}_${event.ticketId}_${payload.commentId}`
+          : `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`;
+
       await this.fanoutQueue.add(event.type, jobData, {
         ...FANOUT_JOB_OPTIONS,
-        // Idempotency: if same event is enqueued twice within 5 seconds, deduplicate
-        jobId: `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`,
+        jobId,
       });
 
       this.logger.debug(

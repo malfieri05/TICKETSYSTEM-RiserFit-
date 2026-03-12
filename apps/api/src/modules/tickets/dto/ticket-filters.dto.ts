@@ -7,6 +7,7 @@ import {
   Max,
   IsDateString,
   IsBoolean,
+  IsIn,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { TicketStatus, Priority } from '@prisma/client';
@@ -15,6 +16,12 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsEnum(TicketStatus)
   status?: TicketStatus;
+
+  /** Convenience filter: 'active' = status notIn [RESOLVED, CLOSED]; 'completed' = status in [RESOLVED, CLOSED]. Overrides `status` when set. */
+  @IsOptional()
+  @IsString()
+  @IsIn(['active', 'completed'])
+  statusGroup?: 'active' | 'completed';
 
   @IsOptional()
   @IsString()
@@ -52,6 +59,11 @@ export class TicketFiltersDto {
   @IsOptional()
   @IsString()
   requesterId?: string;
+
+  /** Optional filter by team (e.g. from frontend); accepted to avoid 400 when client sends it. */
+  @IsOptional()
+  @IsString()
+  teamId?: string;
 
   @IsOptional()
   @IsString()

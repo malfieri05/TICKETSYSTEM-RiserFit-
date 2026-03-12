@@ -173,7 +173,10 @@ export default function AdminMarketsPage() {
       <Header title="Locations" />
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="p-6 space-y-4 max-w-2xl overflow-auto flex-shrink-0 flex flex-col">
+        <div
+          className="p-6 space-y-4 overflow-auto flex-shrink-0 flex flex-col"
+          style={viewMode === 'map' ? { flex: 1 } : { maxWidth: '40rem' }}
+        >
           <div className="flex flex-wrap items-end gap-3">
             <Input
               placeholder="Search locations..."
@@ -187,6 +190,12 @@ export default function AdminMarketsPage() {
               onChange={(id) => setSelectedMarketId(id === '' ? null : id)}
               className="min-w-[160px]"
             />
+            {!showAddForm && (
+              <Button size="sm" variant="secondary" onClick={openAddForm} className="w-fit shrink-0">
+                <Plus className="h-4 w-4" />
+                Add Location
+              </Button>
+            )}
           </div>
 
           {showAddForm && (
@@ -202,11 +211,11 @@ export default function AdminMarketsPage() {
               <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
               <div>
                 <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Latitude</label>
-                <input type="number" step="any" placeholder="-90 to 90" value={addForm.latitude} onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                <input type="number" step="any" placeholder="-90 to 90" value={addForm.latitude} onChange={(e) => setAddForm((f) => ({ ...f, latitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
               </div>
               <div>
                 <label className="text-sm font-medium block mb-1" style={{ color: 'var(--color-text-secondary)' }}>Longitude</label>
-                <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                <input type="number" step="any" placeholder="-180 to 180" value={addForm.longitude} onChange={(e) => setAddForm((f) => ({ ...f, longitude: e.target.value }))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
               </div>
               <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Coordinates are used to calculate nearby locations for dispatching.</p>
               <div className="flex gap-2">
@@ -214,13 +223,6 @@ export default function AdminMarketsPage() {
                 <Button size="sm" variant="secondary" onClick={() => setShowAddForm(false)}>Cancel</Button>
               </div>
             </div>
-          )}
-
-          {!showAddForm && (
-            <Button size="sm" variant="secondary" onClick={openAddForm} className="w-fit">
-              <Plus className="h-4 w-4" />
-              Add Location
-            </Button>
           )}
 
           <div className="flex items-center gap-2 pt-2">
@@ -256,7 +258,7 @@ export default function AdminMarketsPage() {
 
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
               <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
             </div>
           ) : markets.length === 0 ? (
@@ -275,7 +277,26 @@ export default function AdminMarketsPage() {
               <p className="text-xs">Try a different search or state filter.</p>
             </div>
           ) : viewMode === 'map' ? (
-            <LocationsMap locations={locations} />
+            <div
+              className="relative"
+              style={{ marginRight: '28rem' }} // leave space on the right for the details panel
+            >
+              <LocationsMap
+                locations={filteredLocations}
+                onLocationClick={(id) => {
+                  const loc = locations.find((l) => l.id === id);
+                  if (!loc) return;
+                  setSelectedStudio({
+                    id: loc.id,
+                    name: loc.name,
+                    formattedAddress: loc.formattedAddress ?? null,
+                    marketName: loc.marketName,
+                    latitude: loc.latitude ?? null,
+                    longitude: loc.longitude ?? null,
+                  });
+                }}
+              />
+            </div>
           ) : (
             <div className="rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col" style={panel}>
               <div className="flex-1 overflow-y-auto">
@@ -310,8 +331,15 @@ export default function AdminMarketsPage() {
 
         {selectedStudio && (
           <div
-            className="flex-shrink-0 w-full max-w-md border-l overflow-auto"
-            style={{ background: 'var(--color-bg-surface)', borderColor: 'var(--color-border-default)' }}
+            className={
+              viewMode === 'map'
+                ? 'fixed right-4 top-24 bottom-6 z-50 w-full max-w-md border overflow-auto rounded-xl shadow-lg pointer-events-auto'
+                : 'flex-shrink-0 w-full max-w-md border-l overflow-auto'
+            }
+            style={{
+              background: viewMode === 'map' ? 'var(--color-bg-surface)' : 'var(--color-bg-surface)',
+              borderColor: 'var(--color-border-default)',
+            }}
           >
             <div className="p-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -335,14 +363,14 @@ export default function AdminMarketsPage() {
                   <Input label="Name" value={editingStudio.name} onChange={(e) => setEditingStudio((s) => (s ? { ...s, name: e.target.value } : null))} />
                   <Input label="Formatted address" value={editingStudio.formattedAddress} onChange={(e) => setEditingStudio((s) => (s ? { ...s, formattedAddress: e.target.value } : null))} />
                   <div>
-                    <label className="text-sm font-medium text-gray-300 block mb-1">Latitude</label>
-                    <input type="number" step="any" placeholder="-90 to 90" value={editingStudio.latitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, latitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                    <label className="text-sm font-medium text-[var(--color-text-primary)] block mb-1">Latitude</label>
+                    <input type="number" step="any" placeholder="-90 to 90" value={editingStudio.latitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, latitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-300 block mb-1">Longitude</label>
-                    <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-teal-500 disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
+                    <label className="text-sm font-medium text-[var(--color-text-primary)] block mb-1">Longitude</label>
+                    <input type="number" step="any" placeholder="-180 to 180" value={editingStudio.longitude} onChange={(e) => setEditingStudio((s) => (s ? { ...s, longitude: e.target.value } : null))} className="block w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }} />
                   </div>
-                  <p className="text-xs text-gray-500">Coordinates are used to calculate nearby locations for dispatching.</p>
+                  <p className="text-xs text-[var(--color-text-muted)]">Coordinates are used to calculate nearby locations for dispatching.</p>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => updateStudioMut.mutate({ id: editingStudio.id, name: editingStudio.name, formattedAddress: editingStudio.formattedAddress, latitude: parseFloat(editingStudio.latitude), longitude: parseFloat(editingStudio.longitude) })} disabled={!editFormValid} loading={updateStudioMut.isPending}>Save</Button>
                     <Button size="sm" variant="secondary" onClick={() => setEditingStudio(null)}>Cancel</Button>
@@ -368,7 +396,7 @@ export default function AdminMarketsPage() {
                     type="checkbox"
                     checked={nearbyEnabled}
                     onChange={(e) => setNearbyEnabled(e.target.checked)}
-                    className="rounded text-teal-500 focus:ring-teal-500"
+                    className="rounded text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
                     style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)' }}
                   />
                   <span className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Enable nearby search</span>
@@ -383,13 +411,13 @@ export default function AdminMarketsPage() {
                         max={100}
                         value={radiusMiles}
                         onChange={(e) => setRadiusMiles(Number(e.target.value))}
-                        className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                        className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[var(--color-accent)]"
                         style={{ background: 'var(--color-border-default)' }}
                       />
                     </div>
                     {nearbyLoading && (
                       <div className="flex flex-col items-center justify-center py-4 gap-2">
-                        <div className="animate-spin h-5 w-5 rounded-full border-2 border-teal-500 border-t-transparent" />
+                        <div className="animate-spin h-5 w-5 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
                         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
                       </div>
                     )}

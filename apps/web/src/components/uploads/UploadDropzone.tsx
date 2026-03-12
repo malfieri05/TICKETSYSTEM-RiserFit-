@@ -41,7 +41,7 @@ export function UploadDropzone({
     [maxSizeBytes, onFilesSelected],
   );
 
-  const onDrop: React.DragEventHandler<HTMLDivElement> = (e) => {
+  const onDrop: React.DragEventHandler<HTMLElement> = (e) => {
     e.preventDefault();
     if (!e.dataTransfer.files?.length) return;
     handleFiles(multiple ? e.dataTransfer.files : [e.dataTransfer.files[0]]);
@@ -81,7 +81,7 @@ export function UploadDropzone({
         />
       </label>
       {error && (
-        <p className="text-xs" style={{ color: '#fca5a5' }}>
+        <p className="text-xs" style={{ color: '#dc2626' }}>
           {error}
         </p>
       )}

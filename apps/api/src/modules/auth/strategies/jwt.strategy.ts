@@ -38,7 +38,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private userCache: UserCacheService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        (req: { query?: { token?: string | string[] } }) => {
+          const t = req.query?.token;
+          return typeof t === 'string' ? t : Array.isArray(t) ? t[0] ?? null : null;
+        },
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.getOrThrow<string>('JWT_SECRET'),
     });

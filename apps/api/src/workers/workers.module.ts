@@ -7,6 +7,7 @@ import { SchedulerService } from './scheduler.service';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { SlaModule } from '../modules/sla/sla.module';
 import { AiModule } from '../modules/ai/ai.module';
+import { PermissionsModule } from '../common/permissions/permissions.module';
 import { QUEUES } from '../common/queue/queue.constants';
 import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.processor';
 
@@ -18,9 +19,10 @@ import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.pr
       { name: QUEUES.SCHEDULED },
       { name: QUEUES.KNOWLEDGE_INGESTION },
     ),
-    NotificationsModule, // provides NotificationsService + channel adapters
-    SlaModule, // provides SlaService for breach computation
-    AiModule, // provides IngestionService for knowledge-ingestion processor
+    NotificationsModule,
+    SlaModule,
+    AiModule,
+    PermissionsModule,
   ],
   providers: [
     NotificationFanoutProcessor,

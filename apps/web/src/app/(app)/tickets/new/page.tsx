@@ -16,7 +16,7 @@ import { Input, Select, Textarea } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { UploadDropzone } from '@/components/uploads/UploadDropzone';
 
-const panel = { background: '#1a1a1a', border: '1px solid #2a2a2a' };
+const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
 
 export default function NewTicketPage() {
   const router = useRouter();
@@ -320,7 +320,7 @@ export default function NewTicketPage() {
       <div className="flex flex-col h-full">
         <Header title="New Ticket" />
         <div className="flex-1 p-6 flex items-center justify-center">
-          <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
       </div>
     );
@@ -336,7 +336,7 @@ export default function NewTicketPage() {
         </Button>
 
         <form onSubmit={handleSubmit} className="rounded-xl p-6 space-y-5" style={panel}>
-          <h2 className="text-base font-semibold text-gray-100">Create a new ticket</h2>
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Create a new ticket</h2>
 
           {/* 1. Ticket class */}
           <Select
@@ -413,7 +413,7 @@ export default function NewTicketPage() {
 
           {/* Schema loading / error */}
           {schemaParams && schemaLoading && (
-            <p className="text-sm text-gray-400">Loading form...</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">Loading form...</p>
           )}
           {schemaParams && schemaError && !schemaRes && (
             <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)' }}>
@@ -424,8 +424,8 @@ export default function NewTicketPage() {
           {/* When context ready: standard top + taxonomy already above; then schema-driven or fallback */}
           {contextReady && (
             <>
-              <div className="space-y-4 pt-2" style={{ borderTop: '1px solid #2a2a2a' }}>
-                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>Your information</p>
+              <div className="space-y-4 pt-2" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Your information</p>
                 <Input
                   id="submitterName"
                   label="Submitter full name"
@@ -456,16 +456,16 @@ export default function NewTicketPage() {
 
               {hasSchemaFields && (
                 <>
-                  <div className="space-y-4" style={{ borderTop: '1px solid #2a2a2a' }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide pt-4" style={{ color: '#555555' }}>{topicLabel} — form</p>
-                    <p className="text-xs" style={{ color: '#666666' }}>* required fields</p>
+                  <div className="space-y-4" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+                    <p className="text-xs font-semibold uppercase tracking-wide pt-4" style={{ color: 'var(--color-text-muted)' }}>{topicLabel} — form</p>
+                    <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>* required fields</p>
                     {visibleFields.map((field, index) => {
                       const prevSection = index > 0 ? visibleFields[index - 1].section : undefined;
                       const showSectionHeader = field.section && field.section !== prevSection;
                       return (
                         <div key={field.id} className="space-y-2">
                           {showSectionHeader && (
-                            <p className="text-sm font-semibold text-gray-300 pt-2 first:pt-0" style={{ borderTop: index > 0 ? '1px solid #2a2a2a' : undefined, paddingTop: index > 0 ? 8 : 0 }}>
+                            <p className="text-sm font-semibold text-[var(--color-text-primary)] pt-2 first:pt-0" style={{ borderTop: index > 0 ? '1px solid var(--color-border-default)' : undefined, paddingTop: index > 0 ? 8 : 0 }}>
                               {field.section}
                             </p>
                           )}
@@ -478,9 +478,9 @@ export default function NewTicketPage() {
                       );
                     })}
                   </div>
-                  <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(20,20,20,0.6)', border: '1px solid #2a2a2a' }}>
-                    <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: '#666666' }}>Ticket title preview</p>
-                    <p className="text-sm text-gray-300" style={{ minHeight: '1.25rem' }}>{titlePreview || '—'}</p>
+                  <div className="rounded-lg px-3 py-2" style={{ background: 'var(--color-bg-surface-inset)', border: '1px solid var(--color-border-default)' }}>
+                    <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--color-text-muted)' }}>Ticket title preview</p>
+                    <p className="text-sm text-[var(--color-text-primary)]" style={{ minHeight: '1.25rem' }}>{titlePreview || '—'}</p>
                   </div>
                 </>
               )}
@@ -507,8 +507,8 @@ export default function NewTicketPage() {
               )}
 
               {allowAttachmentsOnCreate && (
-                <div className="space-y-3 pt-2" style={{ borderTop: '1px solid #2a2a2a' }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#555555' }}>
+                <div className="space-y-3 pt-2" style={{ borderTop: '1px solid var(--color-border-default)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
                     Attachments (optional)
                   </p>
                   <UploadDropzone
@@ -521,14 +521,14 @@ export default function NewTicketPage() {
                     Attachments are uploaded after the ticket is created. If an upload fails you can retry from the ticket page.
                   </p>
                   {stagedFiles.length > 0 && (
-                    <div className="rounded-lg border border-dashed border-gray-700 divide-y divide-gray-800">
+                    <div className="rounded-lg border border-dashed border-[var(--color-border-default)] divide-y divide-gray-800">
                       {stagedFiles.map(({ id, file }) => {
                         const isImage = file.type.startsWith('image/');
                         const isPdf = file.type === 'application/pdf';
                         return (
                           <div key={id} className="flex items-center gap-3 px-3 py-2">
                             {isImage && (
-                              <div className="h-10 w-10 rounded-md overflow-hidden border border-gray-700 shrink-0">
+                              <div className="h-10 w-10 rounded-md overflow-hidden border border-[var(--color-border-default)] shrink-0">
                                 <img
                                   src={URL.createObjectURL(file)}
                                   alt={file.name}
@@ -537,22 +537,22 @@ export default function NewTicketPage() {
                               </div>
                             )}
                             {!isImage && (
-                              <div className="h-8 w-8 rounded-md flex items-center justify-center border border-gray-700 text-xs shrink-0" style={{ color: '#a3a3a3' }}>
+                              <div className="h-8 w-8 rounded-md flex items-center justify-center border border-[var(--color-border-default)] text-xs shrink-0" style={{ color: 'var(--color-text-muted)' }}>
                                 {isPdf ? 'PDF' : 'FILE'}
                               </div>
                             )}
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate text-gray-100">
+                              <p className="text-sm font-medium truncate text-[var(--color-text-primary)]">
                                 {file.name}
                               </p>
-                              <p className="text-xs text-gray-400">
+                              <p className="text-xs text-[var(--color-text-secondary)]">
                                 {formatBytes(file.size)}
                               </p>
                             </div>
                             <Button
                               type="button"
                               variant="secondary"
-                              size="xs"
+                              size="sm"
                               onClick={() =>
                                 setStagedFiles((prev) => prev.filter((f) => f.id !== id))
                               }
@@ -565,7 +565,7 @@ export default function NewTicketPage() {
                     </div>
                   )}
                   {uploadingAttachments && (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-[var(--color-text-secondary)]">
                       Uploading attachments after ticket creation…
                     </p>
                   )}
@@ -597,7 +597,7 @@ export default function NewTicketPage() {
           )}
 
           {!contextReady && ticketClassId && (
-            <p className="text-sm text-gray-500">Select all options above to continue.</p>
+            <p className="text-sm text-[var(--color-text-muted)]">Select all options above to continue.</p>
           )}
         </form>
       </div>
@@ -651,16 +651,16 @@ function DynamicField({
   if (field.type === 'checkbox') {
     return (
       <div className="flex flex-col gap-1">
-        <label className="text-sm font-medium text-gray-300">{displayLabel}</label>
+        <label className="text-sm font-medium text-[var(--color-text-primary)]">{displayLabel}</label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
             checked={value === 'true' || value === 'yes'}
             onChange={(e) => onChange(e.target.checked ? 'true' : '')}
-            className="rounded border-gray-500 text-teal-500 focus:ring-teal-500"
-            style={{ background: '#111111' }}
+            className="rounded border-gray-500 text-[var(--color-accent)] focus:ring-[var(--color-accent)]"
+            style={{ background: 'var(--color-bg-surface)' }}
           />
-          <span className="text-sm text-gray-400">Yes</span>
+          <span className="text-sm text-[var(--color-text-secondary)]">Yes</span>
         </label>
       </div>
     );

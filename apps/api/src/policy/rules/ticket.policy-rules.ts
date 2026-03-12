@@ -12,6 +12,8 @@ type TicketLike = {
   requesterId: string;
   ownerId: string | null;
   studioId: string | null;
+  departmentId?: string | null;
+  department?: { code: string } | null;
   owner?: { teamId?: string | null; team?: { name: string } | null } | null;
 };
 

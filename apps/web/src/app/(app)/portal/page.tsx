@@ -18,9 +18,9 @@ import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { PortalTicketTableRow } from '@/components/tickets/TicketRow';
 import { PortalTableSkeletonRows } from '@/components/inbox/ListSkeletons';
-import { POLISH, POLISH_CLASS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
-const panel = { background: POLISH.listBg, border: `1px solid ${POLISH.listBorder}` };
+const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
 const PAGE_SIZE = 20;
 
 type TabId = 'my' | 'studio' | 'dashboard';
@@ -44,11 +44,11 @@ function StatCard({
       <div>
         <p
           className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: POLISH.theadText }}
+          style={{ color: POLISH_THEME.theadText }}
         >
           {label}
         </p>
-        <p className="text-2xl font-bold text-gray-100 mt-0.5">{value}</p>
+        <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-0.5">{value}</p>
       </div>
     </div>
   );
@@ -60,28 +60,31 @@ function RecentRow({ ticket, onClick }: { ticket: ScopeSummaryRecentTicket; onCl
       type="button"
       onClick={onClick}
       className="w-full flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors duration-150"
-      style={{ background: '#111111', border: `1px solid ${POLISH.listBorder}` }}
+      style={{ background: 'var(--color-bg-surface)', border: `1px solid ${POLISH_THEME.listBorder}` }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = POLISH.listBg;
-        e.currentTarget.style.borderColor = '#333333';
+        e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
+        e.currentTarget.style.borderColor = 'var(--color-border-default)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.background = '#111111';
-        e.currentTarget.style.borderColor = POLISH.listBorder;
+        e.currentTarget.style.background = 'var(--color-bg-surface)';
+        e.currentTarget.style.borderColor = 'var(--color-border-default)';
       }}
     >
+      <span className="text-xs font-mono shrink-0" style={{ color: POLISH_THEME.metaDim }}>{ticket.id.slice(0, 8)}</span>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-100 truncate">{ticket.title}</p>
-        <p className="text-xs mt-0.5" style={{ color: POLISH.theadText }}>
+        <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">{ticket.title}</p>
+        <p className="text-xs mt-0.5" style={{ color: POLISH_THEME.theadText }}>
           {ticket.studio?.name ?? 'No studio'} ·{' '}
           {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
         </p>
       </div>
       <StatusBadge status={ticket.status} />
-      <ChevronRight className="h-4 w-4 shrink-0" style={{ color: '#555555' }} />
+      <ChevronRight className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
     </button>
   );
 }
+
+const DASHBOARD_RECENT_LIMIT = 5;
 
 export default function PortalPage() {
   const router = useRouter();
@@ -130,9 +133,9 @@ export default function PortalPage() {
     myTotalPages > 1 ? (
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ borderTop: '1px solid #2a2a2a' }}
+        style={{ borderTop: '1px solid var(--color-border-default)' }}
       >
-        <p className="text-xs" style={{ color: '#777777' }}>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Showing {(myPage - 1) * PAGE_SIZE + 1}–
           {Math.min(myPage * PAGE_SIZE, myTotal)} of {myTotal}
         </p>
@@ -162,7 +165,7 @@ export default function PortalPage() {
       <div className="relative">
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
-          style={{ color: '#555555' }}
+          style={{ color: 'var(--color-text-muted)' }}
         />
         <Input
           placeholder="Search tickets..."
@@ -175,18 +178,18 @@ export default function PortalPage() {
   );
 
   const myEmptyState = (
-    <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH.theadText }}>
+    <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
       {myHasFilters ? (
         <>
-          <p className="text-sm font-medium text-gray-300">No tickets match your current search</p>
-          <p className="text-xs text-center max-w-sm" style={{ color: POLISH.metaMuted }}>
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current search</p>
+          <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
             Try clearing your search or using different keywords.
           </p>
         </>
       ) : (
         <>
-          <p className="text-sm font-medium text-gray-300">No tickets yet</p>
-          <p className="text-xs text-center max-w-sm" style={{ color: POLISH.metaMuted }}>
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets yet</p>
+          <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
             Tickets you have requested across all locations will appear here.
           </p>
         </>
@@ -194,17 +197,15 @@ export default function PortalPage() {
     </div>
   );
 
+  const portalHeaders = ['ID', 'Topic / Category', 'Created', 'Title', 'Location', 'Status', 'Priority', 'Updated'];
+
   const myTicketList = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH.listBorder}`, background: POLISH.listBgHeader }}>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Topic / Category</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Created</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Title</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Location</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Status</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Priority</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Updated</th>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+          {portalHeaders.map((h) => (
+            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          ))}
         </tr>
       </thead>
       <tbody>
@@ -236,14 +237,10 @@ export default function PortalPage() {
   const myTableSkeleton = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH.listBorder}`, background: POLISH.listBgHeader }}>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Topic / Category</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Created</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Title</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Location</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Status</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Priority</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Updated</th>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+          {portalHeaders.map((h) => (
+            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          ))}
         </tr>
       </thead>
       <PortalTableSkeletonRows count={6} />
@@ -285,9 +282,9 @@ export default function PortalPage() {
     studioTotalPages > 1 ? (
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ borderTop: '1px solid #2a2a2a' }}
+        style={{ borderTop: '1px solid var(--color-border-default)' }}
       >
-        <p className="text-xs" style={{ color: '#777777' }}>
+        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           Showing {(studioPage - 1) * PAGE_SIZE + 1}–
           {Math.min(studioPage * PAGE_SIZE, studioTotal)} of {studioTotal}
         </p>
@@ -332,7 +329,7 @@ export default function PortalPage() {
       <div className="relative">
         <Search
           className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
-          style={{ color: '#555555' }}
+          style={{ color: 'var(--color-text-muted)' }}
         />
         <Input
           placeholder="Search tickets..."
@@ -345,18 +342,18 @@ export default function PortalPage() {
   );
 
   const studioEmptyState = (
-    <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH.theadText }}>
+    <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
       {studioHasFilters ? (
         <>
-          <p className="text-sm font-medium text-gray-300">No tickets match your current filters</p>
-          <p className="text-xs text-center max-w-sm" style={{ color: POLISH.metaMuted }}>
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current filters</p>
+          <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
             Try clearing the studio or search filters to see more tickets you have requested.
           </p>
         </>
       ) : (
         <>
-          <p className="text-sm font-medium text-gray-300">No tickets for your locations yet</p>
-          <p className="text-xs text-center max-w-sm" style={{ color: POLISH.metaMuted }}>
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets for your locations yet</p>
+          <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
             Tickets you have requested for your allowed studios will appear here.
           </p>
         </>
@@ -367,14 +364,10 @@ export default function PortalPage() {
   const studioTicketList = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH.listBorder}`, background: POLISH.listBgHeader }}>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Topic / Category</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Created</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Title</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Location</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Status</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Priority</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Updated</th>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+          {portalHeaders.map((h) => (
+            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          ))}
         </tr>
       </thead>
       <tbody>
@@ -406,14 +399,10 @@ export default function PortalPage() {
   const studioTableSkeleton = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH.listBorder}`, background: POLISH.listBgHeader }}>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Topic / Category</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Created</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Title</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Location</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Status</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Priority</th>
-          <th className={POLISH_CLASS.tableHeader} style={{ color: POLISH.theadText }}>Updated</th>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+          {portalHeaders.map((h) => (
+            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          ))}
         </tr>
       </thead>
       <PortalTableSkeletonRows count={6} />
@@ -432,7 +421,7 @@ export default function PortalPage() {
   }, [recentTickets, locationFilter]);
 
   return (
-    <div className="flex flex-col h-full" style={{ background: '#000000' }}>
+    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="My Tickets" />
       {/* Tab bodies controlled by ?tab=… from sidebar navigation */}
       {activeTab === 'my' && (
@@ -472,7 +461,7 @@ export default function PortalPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {scopeLoading ? (
                 <div className="col-span-2 flex justify-center py-12">
-                  <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+                  <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
                 </div>
               ) : (
                 <>
@@ -482,7 +471,7 @@ export default function PortalPage() {
                     icon={Clock}
                     iconStyle={{
                       background: 'rgba(251,191,36,0.15)',
-                      color: '#fbbf24',
+                      color: '#d97706',
                     }}
                   />
                   <StatCard
@@ -491,7 +480,7 @@ export default function PortalPage() {
                     icon={CheckCircle2}
                     iconStyle={{
                       background: 'rgba(34,197,94,0.15)',
-                      color: '#4ade80',
+                      color: '#16a34a',
                     }}
                   />
                 </>
@@ -503,7 +492,7 @@ export default function PortalPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className="text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: POLISH.metaMuted }}
+                  style={{ color: POLISH_THEME.metaMuted }}
                 >
                   Location:
                 </span>
@@ -512,10 +501,10 @@ export default function PortalPage() {
                   onClick={() => setLocationFilter('')}
                   className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                   style={{
-                    background: !locationFilter ? '#14b8a6' : 'transparent',
-                    color: !locationFilter ? '#fff' : '#888888',
+                    background: !locationFilter ? 'var(--color-accent)' : 'transparent',
+                    color: !locationFilter ? '#ffffff' : 'var(--color-text-muted)',
                     border: `1px solid ${
-                      !locationFilter ? '#14b8a6' : '#333333'
+                      !locationFilter ? 'var(--color-accent)' : 'var(--color-border-default)'
                     }`,
                   }}
                 >
@@ -528,10 +517,10 @@ export default function PortalPage() {
                     onClick={() => setLocationFilter(s.id)}
                     className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                     style={{
-                      background: locationFilter === s.id ? '#14b8a6' : 'transparent',
-                      color: locationFilter === s.id ? '#fff' : '#888888',
+                      background: locationFilter === s.id ? 'var(--color-accent)' : 'transparent',
+                      color: locationFilter === s.id ? '#ffffff' : 'var(--color-text-muted)',
                       border: `1px solid ${
-                        locationFilter === s.id ? '#14b8a6' : '#333333'
+                        locationFilter === s.id ? 'var(--color-accent)' : 'var(--color-border-default)'
                       }`,
                     }}
                   >
@@ -541,34 +530,49 @@ export default function PortalPage() {
               </div>
             )}
 
-            {/* Recent activity — title aligned with InboxLayout */}
+            {/* Recent activity — capped preview with link to full feed */}
             <div className="rounded-xl p-5 space-y-4" style={panel}>
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-100 flex items-center gap-2">
-                  <Ticket className="h-4 w-4" style={{ color: POLISH.accent }} />
+                <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
+                  <Ticket className="h-4 w-4" style={{ color: POLISH_THEME.accent }} />
                   Recent activity
                 </h2>
+                <button
+                  type="button"
+                  onClick={() => router.push('/portal?tab=my')}
+                  className="text-xs font-medium transition-colors"
+                  style={{ color: 'var(--color-accent)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                >
+                  View all tickets →
+                </button>
               </div>
               {scopeLoading ? (
                 <div className="flex justify-center py-8">
-                  <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
+                  <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
                 </div>
               ) : filteredRecentTickets.length === 0 ? (
                 <p
                   className="text-sm text-center py-8"
-                  style={{ color: POLISH.theadText }}
+                  style={{ color: POLISH_THEME.theadText }}
                 >
                   No recent tickets.
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {filteredRecentTickets.map((t) => (
+                  {filteredRecentTickets.slice(0, DASHBOARD_RECENT_LIMIT).map((t) => (
                     <RecentRow
                       key={t.id}
                       ticket={t}
                       onClick={() => router.push(`/tickets/${t.id}`)}
                     />
                   ))}
+                  {filteredRecentTickets.length > DASHBOARD_RECENT_LIMIT && (
+                    <p className="text-xs text-center pt-1" style={{ color: POLISH_THEME.metaMuted }}>
+                      Showing {DASHBOARD_RECENT_LIMIT} of {filteredRecentTickets.length} recent tickets
+                    </p>
+                  )}
                 </div>
               )}
             </div>

@@ -2,7 +2,6 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsBoolean,
   IsDateString,
   MaxLength,
 } from 'class-validator';
@@ -32,12 +31,4 @@ export class CreateSubtaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string;
-
-  /**
-   * If true, this subtask must be DONE before the parent ticket can be RESOLVED.
-   * Defaults to true — most subtasks are required.
-   */
-  @IsOptional()
-  @IsBoolean()
-  isRequired?: boolean;
 }

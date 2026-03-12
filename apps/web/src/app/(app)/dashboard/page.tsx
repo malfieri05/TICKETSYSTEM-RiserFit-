@@ -1,52 +1,24 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Ticket, CheckCircle2, Clock, BarChart2,
-  Eye, EyeOff, CheckCheck, ChevronRight,
+  CheckCheck, ChevronRight,
 } from 'lucide-react';
 import { ticketsApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
-import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
+import { StatusBadge } from '@/components/ui/Badge';
 import { useAuth } from '@/hooks/useAuth';
+import { formatTicketId } from '@/components/tickets/TicketRow';
+import { POLISH_THEME } from '@/lib/polish';
 
-// ── Palette (theme tokens) ──────────────────────────────────────────────────
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
+const RECENT_PREVIEW_LIMIT = 5;
+const DONE_STATUSES = new Set(['RESOLVED', 'CLOSED']);
 
-// ── Local-storage key for hidden ticket IDs ─────────────────────────────────
-const LS_KEY = 'dashboard_hidden_tickets';
-
-function useHiddenTickets() {
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LS_KEY);
-      if (raw) setHidden(new Set(JSON.parse(raw)));
-    } catch {}
-  }, []);
-
-  const toggle = (id: string) => {
-    setHidden((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      localStorage.setItem(LS_KEY, JSON.stringify([...next]));
-      return next;
-    });
-  };
-
-  const clearAll = () => {
-    setHidden(new Set());
-    localStorage.removeItem(LS_KEY);
-  };
-
-  return { hidden, toggle, clearAll };
-}
-
-// ── Stat card ──────────────────────────────────────────────────────────────
 function StatCard({
   label, value, sub, icon: Icon, iconStyle,
 }: {
@@ -70,7 +42,6 @@ function StatCard({
   );
 }
 
-// ── Category bar ───────────────────────────────────────────────────────────
 function CategoryBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string | null }) {
   const pct = max > 0 ? Math.max(3, Math.round((count / max) * 100)) : 0;
   return (
@@ -84,26 +55,19 @@ function CategoryBar({ label, count, max, color }: { label: string; count: numbe
   );
 }
 
-// ── Status dot colours ────────────────────────────────────────────────────
 const STATUS_DOT: Record<string, string> = {
-  NEW: '#60a5fa',
-  TRIAGED: '#a78bfa',
-  IN_PROGRESS: '#34d399',
-  WAITING_ON_REQUESTER: '#fbbf24',
-  WAITING_ON_VENDOR: '#f97316',
-  RESOLVED: '#14b8a6',
-  CLOSED: '#555555',
+  NEW: '#3b82f6',
+  TRIAGED: '#8b5cf6',
+  IN_PROGRESS: '#10b981',
+  WAITING_ON_REQUESTER: '#d97706',
+  WAITING_ON_VENDOR: '#ea580c',
+  RESOLVED: '#0d9488',
+  CLOSED: 'var(--color-text-muted)',
 };
 
-const DONE_STATUSES = new Set(['RESOLVED', 'CLOSED']);
-
-// ── Main page ──────────────────────────────────────────────────────────────
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const { hidden, toggle, clearAll } = useHiddenTickets();
-  const [showHidden, setShowHidden] = useState(false);
-  const [hideCompleted, setHideCompleted] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['my-summary'],
@@ -115,11 +79,7 @@ export default function DashboardPage() {
   const allTickets = summary?.tickets ?? [];
   const maxCat = Math.max(...(summary?.byCategory.map((c) => c.count) ?? [1]), 1);
 
-  // Separate open vs done tickets
-  const openTickets = allTickets.filter((t) => !DONE_STATUSES.has(t.status));
   const doneTickets = allTickets.filter((t) => DONE_STATUSES.has(t.status));
-
-  // Average completion time for my tickets (resolved/closed)
   const completionDurationsHours = (doneTickets as any[])
     .filter((t) => t.resolvedAt)
     .map((t) => {
@@ -138,314 +98,169 @@ export default function DashboardPage() {
         ? `${Math.round(avgCompletionHours * 60)} min`
         : `${avgCompletionHours.toFixed(1)} h`;
 
-  // Apply hide filters
-  const visibleOpen = openTickets.filter((t) => !hidden.has(t.id));
-  const hiddenOpen  = openTickets.filter((t) =>  hidden.has(t.id));
-
-  const visibleDone = hideCompleted ? [] : doneTickets.filter((t) => !hidden.has(t.id));
-  const hiddenDone  = doneTickets.filter((t) => hidden.has(t.id));
-
-  const totalHidden = hiddenOpen.length + hiddenDone.length;
+  const recentTickets = allTickets.slice(0, RECENT_PREVIEW_LIMIT);
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={`Dashboard${user?.displayName ? ` — ${user.displayName}` : ''}`} />
 
-      <div className="flex-1 overflow-hidden flex">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl mx-auto w-full">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            label="My Tickets"
+            value={summary?.total ?? 0}
+            icon={Ticket}
+            iconStyle={{ background: 'rgba(52,120,196,0.15)', color: '#3478c4' }}
+          />
+          <StatCard
+            label="Open"
+            value={summary?.open ?? 0}
+            sub="Need attention"
+            icon={Clock}
+            iconStyle={{ background: 'rgba(245,158,11,0.12)', color: '#d97706' }}
+          />
+          <StatCard
+            label="Resolved"
+            value={summary?.resolved ?? 0}
+            sub="Completed tickets"
+            icon={CheckCircle2}
+            iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+          />
+          <StatCard
+            label="Avg Completion"
+            value={avgCompletionLabel}
+            sub="From created to resolved"
+            icon={CheckCheck}
+            iconStyle={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
+          />
+        </div>
 
-        {/* ── LEFT: My Tickets checklist ─────────────────────────────────── */}
-        <div
-          className="w-80 shrink-0 flex flex-col overflow-hidden"
-          style={{ background: 'var(--color-bg-surface)', borderRight: '1px solid var(--color-border-default)' }}
-        >
-          {/* Panel header */}
-          <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-            <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>My Tickets</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                {allTickets.length} total · {openTickets.length} open
-              </p>
+        {/* Recent activity preview */}
+        <div className="rounded-xl p-5 space-y-4" style={panel}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text-primary)' }}>
+              <Ticket className="h-4 w-4" style={{ color: POLISH_THEME.accent }} />
+              Recent tickets
+            </h3>
+            <button
+              type="button"
+              onClick={() => router.push('/tickets')}
+              className="text-xs font-medium transition-colors"
+              style={{ color: 'var(--color-accent)' }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+            >
+              View all tickets →
+            </button>
+          </div>
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
             </div>
-            <div className="flex gap-1">
-              {/* Hide completed toggle */}
-              <button
-                onClick={() => setHideCompleted((v) => !v)}
-                title={hideCompleted ? 'Show completed' : 'Hide completed'}
-                className="p-1.5 rounded transition-colors"
-                style={{ color: hideCompleted ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = hideCompleted ? 'var(--color-accent)' : 'var(--color-text-muted)')}
-              >
-                <CheckCheck className="h-4 w-4" />
-              </button>
-              {/* Show/hide manually hidden */}
-              {totalHidden > 0 && (
+          ) : recentTickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 gap-2" style={{ color: 'var(--color-text-muted)' }}>
+              <Ticket className="h-8 w-8" />
+              <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>No tickets yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentTickets.map((t) => (
                 <button
-                  onClick={() => setShowHidden((v) => !v)}
-                  title={showHidden ? 'Hide dismissed' : `Show ${totalHidden} dismissed`}
-                  className="p-1.5 rounded transition-colors"
-                  style={{ color: 'var(--color-text-muted)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+                  key={t.id}
+                  type="button"
+                  onClick={() => router.push(`/tickets/${t.id}`)}
+                  className="w-full flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors duration-150"
+                  style={{ background: 'var(--color-bg-page)', border: `1px solid var(--color-border-default)` }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface-raised)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-page)')}
                 >
-                  {showHidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  <span className="text-xs font-mono shrink-0" style={{ color: 'var(--color-text-muted)' }}>
+                    {formatTicketId(t.id)}
+                  </span>
+                  <span
+                    className="h-2 w-2 rounded-full shrink-0"
+                    style={{ background: STATUS_DOT[t.status] ?? 'var(--color-text-muted)' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate" style={{ color: 'var(--color-text-primary)' }}>{t.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                      {formatDistanceToNow(new Date(t.updatedAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <StatusBadge status={t.status} />
+                  <ChevronRight className="h-4 w-4 shrink-0" style={{ color: 'var(--color-text-muted)' }} />
                 </button>
+              ))}
+              {allTickets.length > RECENT_PREVIEW_LIMIT && (
+                <p className="text-xs text-center pt-1" style={{ color: 'var(--color-text-muted)' }}>
+                  Showing {RECENT_PREVIEW_LIMIT} of {allTickets.length} tickets
+                </p>
               )}
             </div>
-          </div>
-
-          {/* Ticket list */}
-          <div className="flex-1 overflow-y-auto py-2">
-            {isLoading ? (
-              <div className="flex justify-center pt-12">
-                <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
-              </div>
-            ) : allTickets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center pt-16 gap-2" style={{ color: 'var(--color-text-muted)' }}>
-                <Ticket className="h-8 w-8" />
-                <p className="text-sm" style={{ color: 'var(--color-text-primary)' }}>No tickets yet</p>
-              </div>
-            ) : (
-              <>
-                {/* ── Open tickets ── */}
-                {visibleOpen.length > 0 && (
-                  <div>
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
-                      Open
-                    </p>
-                    {visibleOpen.map((t) => (
-                      <TicketRow
-                        key={t.id}
-                        ticket={t}
-                        isDone={false}
-                        isHidden={false}
-                        onHide={() => toggle(t.id)}
-                        onClick={() => router.push(`/tickets/${t.id}`)}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* ── Completed tickets ── */}
-                {!hideCompleted && visibleDone.length > 0 && (
-                  <div className="mt-2">
-                    <p className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
-                      Completed
-                    </p>
-                    {visibleDone.map((t) => (
-                      <TicketRow
-                        key={t.id}
-                        ticket={t}
-                        isDone
-                        isHidden={false}
-                        onHide={() => toggle(t.id)}
-                        onClick={() => router.push(`/tickets/${t.id}`)}
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* ── Manually hidden (shown when toggled) ── */}
-                {showHidden && totalHidden > 0 && (
-                  <div className="mt-2">
-                    <div className="px-4 py-1.5 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
-                        Hidden ({totalHidden})
-                      </p>
-                      <button
-                        onClick={clearAll}
-                        className="text-[10px] underline transition-colors"
-                        style={{ color: 'var(--color-text-muted)' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-                      >
-                        Show all
-                      </button>
-                    </div>
-                    {[...hiddenOpen, ...hiddenDone].map((t) => (
-                      <TicketRow
-                        key={t.id}
-                        ticket={t}
-                        isDone={DONE_STATUSES.has(t.status)}
-                        isHidden
-                        onHide={() => toggle(t.id)}
-                        onClick={() => router.push(`/tickets/${t.id}`)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── RIGHT: Stats ───────────────────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
-
-          {/* KPI cards */}
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard
-              label="My Tickets"
-              value={summary?.total ?? 0}
-              icon={Ticket}
-              iconStyle={{ background: 'rgba(20,184,166,0.15)', color: '#14b8a6' }}
-            />
-            <StatCard
-              label="Open"
-              value={summary?.open ?? 0}
-              sub="Need attention"
-              icon={Clock}
-              iconStyle={{ background: 'rgba(251,191,36,0.15)', color: '#fbbf24' }}
-            />
-            <StatCard
-              label="Resolved"
-              value={summary?.resolved ?? 0}
-              sub="Completed tickets"
-              icon={CheckCircle2}
-              iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}
-            />
-            <StatCard
-              label="Avg Completion"
-              value={avgCompletionLabel}
-              sub="From created to resolved"
-              icon={CheckCheck}
-              iconStyle={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
-            />
-          </div>
-
-          {/* By category */}
-          {(summary?.byCategory.length ?? 0) > 0 && (
-            <div className="rounded-xl p-5" style={panel}>
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart2 className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
-                <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>My Tickets by Category</h3>
-              </div>
-              <div className="space-y-3">
-                {(summary?.byCategory ?? [])
-                  .sort((a, b) => b.count - a.count)
-                  .map((row) => (
-                    <CategoryBar
-                      key={row.categoryId ?? 'none'}
-                      label={row.categoryName}
-                      count={row.count}
-                      max={maxCat}
-                      color={row.categoryColor}
-                    />
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Status breakdown */}
-          {allTickets.length > 0 && (
-            <div className="rounded-xl p-5" style={panel}>
-              <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Breakdown by Status</h3>
-              <div className="space-y-2">
-                {Object.entries(
-                  allTickets.reduce<Record<string, number>>((acc, t) => {
-                    acc[t.status] = (acc[t.status] ?? 0) + 1;
-                    return acc;
-                  }, {}),
-                )
-                  .sort(([, a], [, b]) => b - a)
-                  .map(([status, count]) => (
-                    <div key={status} className="flex items-center gap-3">
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ background: STATUS_DOT[status] ?? 'var(--color-text-muted)' }}
-                      />
-                      <span className="flex-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                        {status.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{count}</span>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          )}
-
-          {/* Empty state */}
-          {!isLoading && allTickets.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-24 gap-3" style={{ color: 'var(--color-text-muted)' }}>
-              <Ticket className="h-12 w-12" />
-              <p className="text-base font-medium" style={{ color: 'var(--color-text-secondary)' }}>No tickets yet</p>
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Tickets you create or are assigned to will appear here.
-              </p>
-            </div>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
 
-// ── Ticket row component ────────────────────────────────────────────────────
-function TicketRow({
-  ticket,
-  isDone,
-  isHidden,
-  onHide,
-  onClick,
-}: {
-  ticket: { id: string; title: string; status: string; priority: string; updatedAt: string; category?: { name: string; color?: string } | null };
-  isDone: boolean;
-  isHidden: boolean;
-  onHide: () => void;
-  onClick: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <div
-      className="group flex items-start gap-2.5 px-4 py-2.5 cursor-pointer transition-colors"
-      style={{ background: hovered ? 'var(--color-bg-surface)' : 'transparent', opacity: isHidden ? 0.4 : 1 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onClick={onClick}
-    >
-      {/* Status dot / checkmark */}
-      <div className="mt-0.5 shrink-0 flex items-center justify-center h-4 w-4">
-        {isDone ? (
-          <CheckCircle2 className="h-4 w-4" style={{ color: 'var(--color-accent)' }} />
-        ) : (
-          <span
-            className="h-2 w-2 rounded-full"
-            style={{ background: STATUS_DOT[ticket.status] ?? 'var(--color-text-muted)' }}
-          />
+        {/* By category */}
+        {(summary?.byCategory.length ?? 0) > 0 && (
+          <div className="rounded-xl p-5" style={panel}>
+            <div className="flex items-center gap-2 mb-4">
+              <BarChart2 className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
+              <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>My Tickets by Category</h3>
+            </div>
+            <div className="space-y-3">
+              {(summary?.byCategory ?? [])
+                .sort((a, b) => b.count - a.count)
+                .map((row) => (
+                  <CategoryBar
+                    key={row.categoryId ?? 'none'}
+                    label={row.categoryName}
+                    count={row.count}
+                    max={maxCat}
+                    color={row.categoryColor}
+                  />
+                ))}
+            </div>
+          </div>
         )}
-      </div>
 
-      {/* Title + meta */}
-      <div className="flex-1 min-w-0">
-        <p
-          className="text-sm leading-snug truncate"
-          style={{
-            color: isDone ? 'var(--color-text-muted)' : 'var(--color-text-primary)',
-            textDecoration: isDone ? 'line-through' : 'none',
-          }}
-        >
-          {ticket.title}
-        </p>
-        <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-          {ticket.category?.name ?? 'No category'} ·{' '}
-          {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}
-        </p>
-      </div>
+        {/* Status breakdown */}
+        {allTickets.length > 0 && (
+          <div className="rounded-xl p-5" style={panel}>
+            <h3 className="text-sm font-semibold mb-4" style={{ color: 'var(--color-text-primary)' }}>Breakdown by Status</h3>
+            <div className="space-y-2">
+              {Object.entries(
+                allTickets.reduce<Record<string, number>>((acc, t) => {
+                  acc[t.status] = (acc[t.status] ?? 0) + 1;
+                  return acc;
+                }, {}),
+              )
+                .sort(([, a], [, b]) => b - a)
+                .map(([status, count]) => (
+                  <div key={status} className="flex items-center gap-3">
+                    <span
+                      className="h-2 w-2 rounded-full shrink-0"
+                      style={{ background: STATUS_DOT[status] ?? 'var(--color-text-muted)' }}
+                    />
+                    <span className="flex-1 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      {status.replace(/_/g, ' ')}
+                    </span>
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>{count}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
-      {/* Hide button + chevron */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-        <button
-          onClick={(e) => { e.stopPropagation(); onHide(); }}
-          title={isHidden ? 'Show' : 'Hide'}
-          className="p-0.5 rounded transition-colors"
-          style={{ color: 'var(--color-text-muted)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-        >
-          {isHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-        </button>
-        <ChevronRight className="h-3.5 w-3.5" style={{ color: 'var(--color-text-muted)' }} />
+        {!isLoading && allTickets.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 gap-3" style={{ color: 'var(--color-text-muted)' }}>
+            <Ticket className="h-12 w-12" />
+            <p className="text-base font-medium" style={{ color: 'var(--color-text-secondary)' }}>No tickets yet</p>
+            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              Tickets you create or are assigned to will appear here.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

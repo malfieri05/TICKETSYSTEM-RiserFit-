@@ -209,7 +209,6 @@ export class ToolRouterService {
             id: true,
             title: true,
             status: true,
-            isRequired: true,
             owner: { select: { id: true, name: true } },
           },
         },
@@ -391,7 +390,7 @@ export class ToolRouterService {
         title: String(args.title),
         ...(teamId && { teamId }),
         ownerId: args.owner_user_id ? String(args.owner_user_id) : null,
-        isRequired: args.is_required !== false,
+        availableAt: new Date(),
       },
       select: { id: true, title: true, status: true },
     });

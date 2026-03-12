@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import {
-  Ticket,
   LayoutDashboard,
   Bell,
   Settings,
@@ -154,8 +153,13 @@ export function Sidebar() {
         className="flex h-14 items-center gap-2.5 px-5"
         style={{ borderBottom: '1px solid var(--color-border-default)' }}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-500">
-          <Ticket className="h-4 w-4 text-white" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-transparent">
+          <img
+            src="/Logo.png"
+            alt="Riser Fitness"
+            className="h-full w-full object-contain"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
         </div>
         <span className="font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Riser Fitness</span>
       </div>
@@ -313,7 +317,7 @@ export function Sidebar() {
           </button>
         </div>
         <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-teal-600 text-white text-sm font-semibold shrink-0">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full text-white text-sm font-semibold shrink-0" style={{ background: 'var(--color-accent)' }}>
             {user?.displayName?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0 flex-1">

@@ -4,11 +4,9 @@ import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { IngestionService } from './ingestion.service';
 
-// How many chunks to retrieve for context (general chat)
-const TOP_K = 5;
-// Handbook defaults (overridden by env)
+// How many chunks to retrieve for context (general + handbook chat; overridden by RAG_TOP_K env)
 const RAG_TOP_K_DEFAULT = 10;
-const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.5;
+const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.58;
 // Model to use for chat completions
 const CHAT_MODEL = 'gpt-4o-mini';
 
@@ -82,7 +80,7 @@ export class AiService {
         AND dc.embedding IS NOT NULL
         AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${this.getDistanceThreshold()}
       ORDER BY distance ASC
-      LIMIT ${TOP_K}
+      LIMIT ${this.getTopK()}
     `;
 
     this.logger.debug(`RAG retrieved ${chunks.length} chunks for query`);
@@ -99,16 +97,16 @@ export class AiService {
 
       systemPrompt = `You are a helpful internal support assistant for the company's ticketing system.
 Answer the user's question using ONLY the context provided below.
-If the answer cannot be found in the context, say so clearly and suggest they submit a ticket.
-Keep answers concise and professional.
+If the answer cannot be found in the context, say so clearly and suggest they contact their manager or team for help.
+Keep answers concise and professional. Never suggest submitting a ticket.
 
 CONTEXT:
 ${contextBlocks}`;
     } else {
       systemPrompt = `You are a helpful internal support assistant for the company's ticketing system.
 You don't have specific documentation for this question.
-Provide a general helpful answer, and suggest the user submit a support ticket if they need further assistance.
-Keep answers concise and professional.`;
+Provide a general helpful answer, and suggest they contact their manager or team if they need further assistance.
+Keep answers concise and professional. Never suggest submitting a ticket.`;
     }
 
     // Step 4: Call GPT
@@ -185,7 +183,7 @@ Keep answers concise and professional.`;
 CONTEXT:
 ${contextBlocks}`;
     } else {
-      systemPrompt = `You are a helpful assistant for company handbook questions. You don't have relevant handbook content for this question. Say so and suggest they contact their manager or submit a ticket.`;
+      systemPrompt = `You are a helpful assistant for company handbook questions. You don't have relevant handbook content for this question. Say so and suggest they contact their manager or team. Never suggest submitting a ticket.`;
     }
 
     const completion = await this.openai.chat.completions.create({

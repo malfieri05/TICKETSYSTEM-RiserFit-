@@ -77,8 +77,16 @@ export class AiController {
    */
   @Get('documents')
   @Roles(Role.ADMIN)
-  listDocuments() {
-    return this.aiService.listDocuments();
+  async listDocuments() {
+    try {
+      return await this.aiService.listDocuments();
+    } catch (err) {
+      this.logger.error(
+        'GET /api/ai/documents failed — listDocuments',
+        err instanceof Error ? err.stack : err,
+      );
+      throw err;
+    }
   }
 
   /**

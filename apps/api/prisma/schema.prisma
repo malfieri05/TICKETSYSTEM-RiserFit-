@@ -42,12 +42,12 @@ enum Priority {
   URGENT
 }
 
-/// Stage 4: LOCKED/READY for workflow; DONE/SKIPPED satisfy dependencies. TODO removed.
+/// Stage 4: LOCKED/READY for workflow; DONE/SKIPPED satisfy dependencies.
+/// Stage 2 cleanup: BLOCKED removed — blocking is ticket-level only (WAITING_ON_*).
 enum SubtaskStatus {
   LOCKED
   READY
   IN_PROGRESS
-  BLOCKED
   DONE
   SKIPPED
 }
@@ -63,7 +63,6 @@ enum NotificationEventType {
   MENTION_IN_COMMENT
   SUBTASK_ASSIGNED
   SUBTASK_COMPLETED
-  SUBTASK_BLOCKED
   SUBTASK_BECAME_READY
   ATTACHMENT_ADDED
   TICKET_SLA_BREACHED
@@ -451,21 +450,25 @@ model Ticket {
 // ============================================================
 
 model TicketComment {
-  id         String    @id @default(cuid())
-  ticketId   String
-  authorId   String
-  body       String
-  isInternal Boolean   @default(false)
-  editedAt   DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  ticketId        String
+  authorId        String
+  body            String
+  isInternal      Boolean   @default(false)
+  parentCommentId String?
+  editedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   ticket   Ticket           @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   author   User             @relation(fields: [authorId], references: [id])
+  parent   TicketComment?   @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies  TicketComment[]  @relation("CommentReplies")
   mentions CommentMention[]
 
   @@index([ticketId])
   @@index([authorId])
+  @@index([ticketId, parentCommentId, createdAt, id])
   @@map("ticket_comments")
 }
 
@@ -543,7 +546,6 @@ model SubtaskTemplate {
   description          String?
   departmentId         String
   assignedUserId       String?
-  isRequired           Boolean  @default(true)
   sortOrder            Int      @default(0)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -599,10 +601,10 @@ model Subtask {
   title              String
   description        String?
   status             SubtaskStatus @default(READY)
-  isRequired         Boolean       @default(true)
   dueDate            DateTime?
-  completedAt       DateTime?
-  readyAt           DateTime?
+  availableAt        DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 

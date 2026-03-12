@@ -23,10 +23,10 @@ function StatCard({
   color?: 'indigo' | 'green' | 'amber' | 'red';
 }) {
   const iconStyle = {
-    indigo: { background: 'rgba(20,184,166,0.15)', color: '#14b8a6' },
-    green:  { background: 'rgba(34,197,94,0.15)',  color: '#4ade80' },
-    amber:  { background: 'rgba(251,191,36,0.15)', color: '#fbbf24' },
-    red:    { background: 'rgba(239,68,68,0.15)',  color: '#f87171' },
+    indigo: { background: 'rgba(52,120,196,0.15)', color: '#3478c4' },
+    green:  { background: 'rgba(34,197,94,0.12)',  color: '#16a34a' },
+    amber:  { background: 'rgba(245,158,11,0.12)', color: '#d97706' },
+    red:    { background: 'rgba(239,68,68,0.12)',  color: '#dc2626' },
   }[color];
 
   return (
@@ -35,9 +35,9 @@ function StatCard({
         <Icon className="h-5 w-5" />
       </div>
       <div>
-        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">{label}</p>
-        <p className="text-2xl font-bold text-gray-100 mt-0.5">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+        <p className="text-xs text-[var(--color-text-secondary)] font-medium uppercase tracking-wide">{label}</p>
+        <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-0.5">{value}</p>
+        {sub && <p className="text-xs text-[var(--color-text-secondary)] mt-0.5">{sub}</p>}
       </div>
     </div>
   );
@@ -57,14 +57,14 @@ function HorizontalBar({
   const pct = max > 0 ? Math.max(2, Math.round((count / max) * 100)) : 0;
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-36 text-gray-400 truncate shrink-0">{label}</span>
+      <span className="w-36 text-[var(--color-text-secondary)] truncate shrink-0">{label}</span>
       <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
         <div
           className="h-2 rounded-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
-      <span className="w-8 text-right text-gray-500 font-medium">{count}</span>
+      <span className="w-8 text-right text-[var(--color-text-muted)] font-medium">{count}</span>
     </div>
   );
 }
@@ -80,8 +80,8 @@ function VolumeChart({ data }: { data: { date: string; count: number }[] }) {
         return (
           <div
             key={d.date}
-            className="flex-1 bg-teal-500 rounded-t hover:bg-teal-600 transition-colors cursor-default group relative"
-            style={{ height: `${barH}px` }}
+            className="flex-1 rounded-t transition-colors cursor-default group relative"
+            style={{ height: `${barH}px`, background: 'var(--color-accent)' }}
             title={`${d.date}: ${d.count} tickets`}
           >
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-800 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10">
@@ -95,13 +95,13 @@ function VolumeChart({ data }: { data: { date: string; count: number }[] }) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  NEW: '#a78bfa',
-  TRIAGED: '#60a5fa',
-  IN_PROGRESS: '#34d399',
-  WAITING_ON_REQUESTER: '#fbbf24',
-  WAITING_ON_VENDOR: '#f97316',
-  RESOLVED: '#6ee7b7',
-  CLOSED: '#9ca3af',
+  NEW: '#8b5cf6',
+  TRIAGED: '#3b82f6',
+  IN_PROGRESS: '#10b981',
+  WAITING_ON_REQUESTER: '#d97706',
+  WAITING_ON_VENDOR: '#ea580c',
+  RESOLVED: '#059669',
+  CLOSED: '#6b7280',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -201,8 +201,8 @@ export default function ReportingPage() {
       <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
         <Header title="Reporting" />
         <div className="flex-1 flex flex-col items-center justify-center gap-2">
-          <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-600 border-t-transparent" />
-          <span className="text-sm text-gray-500">Loading…</span>
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+          <span className="text-sm text-[var(--color-text-muted)]">Loading…</span>
         </div>
       </div>
     );
@@ -256,8 +256,8 @@ export default function ReportingPage() {
         <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart2 className="h-4 w-4 text-gray-400" />
-              <h3 className="text-sm font-semibold text-gray-300">
+              <BarChart2 className="h-4 w-4 text-[var(--color-text-secondary)]" />
+              <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
                 Ticket Volume —{' '}
                 {volumeRange === '1d' && 'Last 24 Hours'}
                 {volumeRange === '7d' && 'Last 7 Days'}
@@ -265,7 +265,7 @@ export default function ReportingPage() {
                 {volumeRange === 'all' && 'All Time'}
               </h3>
             </div>
-            <div className="inline-flex rounded-full border border-neutral-700 bg-neutral-900 text-xs">
+            <div className="inline-flex rounded-full border border-[var(--color-border-default)] bg-[var(--color-bg-page)] text-xs">
               {[
                 { key: '1d', label: '1d' },
                 { key: '7d', label: '1w' },
@@ -291,11 +291,11 @@ export default function ReportingPage() {
             </div>
           </div>
           {volume.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">No data yet.</p>
+            <p className="text-sm text-[var(--color-text-secondary)] py-6 text-center">No data yet.</p>
           ) : (
             <>
               <VolumeChart data={volume} />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
+              <div className="flex justify-between text-xs text-[var(--color-text-secondary)] mt-1">
                 <span>{volume[0]?.date}</span>
                 <span>{volume[volume.length - 1]?.date}</span>
               </div>
@@ -307,10 +307,10 @@ export default function ReportingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* By Status */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Status</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Status</h3>
             <div className="space-y-2.5">
               {byStatus.length === 0 ? (
-                <p className="text-sm text-gray-400">No data.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">No data.</p>
               ) : (
                 byStatus.map((row) => (
                   <HorizontalBar
@@ -327,10 +327,10 @@ export default function ReportingPage() {
 
           {/* By Priority */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Priority</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Priority</h3>
             <div className="space-y-2.5">
               {byPriority.length === 0 ? (
-                <p className="text-sm text-gray-400">No data.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">No data.</p>
               ) : (
                 byPriority.map((row) => (
                   <HorizontalBar
@@ -347,10 +347,10 @@ export default function ReportingPage() {
 
           {/* By Category */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Category</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Category</h3>
             <div className="space-y-2.5">
               {byCategory.length === 0 ? (
-                <p className="text-sm text-gray-400">No data.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">No data.</p>
               ) : (
                 byCategory.map((row) => (
                   <HorizontalBar
@@ -366,10 +366,10 @@ export default function ReportingPage() {
 
           {/* By Market */}
           <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">By Market</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">By Market</h3>
             <div className="space-y-2.5">
               {byMarket.length === 0 ? (
-                <p className="text-sm text-gray-400">No data.</p>
+                <p className="text-sm text-[var(--color-text-secondary)]">No data.</p>
               ) : (
                 byMarket.map((row) => (
                   <HorizontalBar
@@ -387,18 +387,18 @@ export default function ReportingPage() {
 
         {/* ── Resolution time by category ────────────────────────────────────── */}
         <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">
+          <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
             Avg Resolution Time by Category
           </h3>
           {resolutionTime.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">
+            <p className="text-sm text-[var(--color-text-secondary)] text-center py-4">
               No resolved tickets yet.
             </p>
           ) : (
             <div className="space-y-2.5">
               {resolutionTime.map((row) => (
                 <div key={row.categoryName} className="flex items-center gap-3 text-sm">
-                  <span className="w-36 text-gray-400 truncate shrink-0">{row.categoryName}</span>
+                  <span className="w-36 text-[var(--color-text-secondary)] truncate shrink-0">{row.categoryName}</span>
                   <div className="flex-1 rounded-full h-2 overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                     <div
                       className="h-2 rounded-full bg-emerald-500 transition-all"
@@ -407,10 +407,10 @@ export default function ReportingPage() {
                       }}
                     />
                   </div>
-                  <span className="w-14 text-right text-gray-500 font-medium">
+                  <span className="w-14 text-right text-[var(--color-text-muted)] font-medium">
                     {formatHours(row.avgHours)}
                   </span>
-                  <span className="w-16 text-right text-gray-400 text-xs">
+                  <span className="w-16 text-right text-[var(--color-text-secondary)] text-xs">
                     {row.ticketCount} tickets
                   </span>
                 </div>
@@ -421,18 +421,18 @@ export default function ReportingPage() {
 
         {/* ── Completion time by owner ───────────────────────────────────────── */}
         <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-          <h3 className="text-sm font-semibold text-gray-300 mb-4">
+          <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
             Avg Completion Time by Owner
           </h3>
           {completionByOwner.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">
+            <p className="text-sm text-[var(--color-text-secondary)] text-center py-4">
               No completed tickets with owners yet.
             </p>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-neutral-800 text-gray-500 text-xs uppercase tracking-wide">
+                  <tr className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide">
                     <th className="text-left py-2 pr-4">Owner</th>
                     <th className="text-right py-2 pr-4">Avg Completion</th>
                     <th className="text-right py-2 pr-2">Closed Tickets</th>
@@ -440,12 +440,12 @@ export default function ReportingPage() {
                 </thead>
                 <tbody>
                   {completionByOwner.map((row) => (
-                    <tr key={row.userId} className="border-b border-neutral-900/70">
-                      <td className="py-1.5 pr-4 text-gray-200">{row.userName}</td>
-                      <td className="py-1.5 pr-4 text-right text-gray-100">
+                    <tr key={row.userId} className="border-b border-[var(--color-border-default)]">
+                      <td className="py-1.5 pr-4 text-[var(--color-text-primary)]">{row.userName}</td>
+                      <td className="py-1.5 pr-4 text-right text-[var(--color-text-primary)]">
                         {row.avgHours == null ? '—' : formatHours(row.avgHours)}
                       </td>
-                      <td className="py-1.5 pr-2 text-right text-gray-400">{row.closedCount}</td>
+                      <td className="py-1.5 pr-2 text-right text-[var(--color-text-secondary)]">{row.closedCount}</td>
                     </tr>
                   ))}
                 </tbody>

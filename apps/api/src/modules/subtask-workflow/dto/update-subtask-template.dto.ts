@@ -1,7 +1,6 @@
 import {
   IsString,
   IsOptional,
-  IsBoolean,
   IsInt,
   Min,
   MaxLength,
@@ -24,10 +23,6 @@ export class UpdateSubtaskTemplateDto {
   @IsOptional()
   @IsString()
   assignedUserId?: string | null;
-
-  @IsOptional()
-  @IsBoolean()
-  isRequired?: boolean;
 
   @IsOptional()
   @IsInt()

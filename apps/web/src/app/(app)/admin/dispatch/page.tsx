@@ -39,8 +39,8 @@ function SectionCard({
   return (
     <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
       <div className="flex items-center gap-2 mb-4">
-        <BarChart2 className="h-4 w-4 text-gray-400" />
-        <h3 className="text-sm font-semibold text-gray-300">{title}</h3>
+        <BarChart2 className="h-4 w-4 text-[var(--color-text-secondary)]" />
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
       </div>
       {children}
     </div>
@@ -65,12 +65,12 @@ function DispatchRow({
       className="w-full flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg text-left hover:bg-white/5 transition-colors"
     >
       <div className="min-w-0 flex-1">
-        <span className="text-gray-200 font-medium truncate block">{name}</span>
+        <span className="text-[var(--color-text-primary)] font-medium truncate block">{name}</span>
         {marketName != null && marketName !== '' && (
-          <span className="text-xs text-gray-500 truncate block">{marketName}</span>
+          <span className="text-xs text-[var(--color-text-muted)] truncate block">{marketName}</span>
         )}
       </div>
-      <span className="text-sm font-semibold text-teal-400 shrink-0">{count}</span>
+      <span className="text-sm font-semibold text-[var(--color-accent)] shrink-0">{count}</span>
     </button>
   );
 }
@@ -164,7 +164,7 @@ export default function DispatchPage() {
             ))}
           </Select>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs text-gray-500 whitespace-nowrap">From</span>
+            <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">From</span>
             <Input
               type="date"
               value={filters.createdAfter ?? ''}
@@ -173,7 +173,7 @@ export default function DispatchPage() {
             />
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs text-gray-500 whitespace-nowrap">To</span>
+            <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">To</span>
             <Input
               type="date"
               value={filters.createdBefore ?? ''}
@@ -192,11 +192,11 @@ export default function DispatchPage() {
         <SectionCard title="Open Issues by Location">
           {loadingStudio ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
-              <span className="text-xs text-gray-500">Loading…</span>
+              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : byStudio.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
+            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
           ) : (
             <div className="space-y-0.5">
               {byStudio.map((r) => (
@@ -216,11 +216,11 @@ export default function DispatchPage() {
         <SectionCard title="Open Issues by Category">
           {loadingCategory ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
-              <span className="text-xs text-gray-500">Loading…</span>
+              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : byCategory.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
+            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
           ) : (
             <div className="space-y-0.5">
               {byCategory.map((r) => (
@@ -239,11 +239,11 @@ export default function DispatchPage() {
         <SectionCard title="Open Issues by Market">
           {loadingMarket ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
-              <span className="text-xs text-gray-500">Loading…</span>
+              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : byMarket.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">No open maintenance tickets</p>
+            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
           ) : (
             <div className="space-y-0.5">
               {byMarket.map((r) => (
@@ -262,11 +262,11 @@ export default function DispatchPage() {
         <SectionCard title="Locations With Multiple Open Issues">
           {loadingMultiple ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-teal-500 border-t-transparent" />
-              <span className="text-xs text-gray-500">Loading…</span>
+              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
             </div>
           ) : studiosWithMultiple.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">No locations with 2+ open issues</p>
+            <p className="text-sm text-[var(--color-text-muted)] py-4">No locations with 2+ open issues</p>
           ) : (
             <div className="space-y-0.5">
               {studiosWithMultiple.map((r) => (

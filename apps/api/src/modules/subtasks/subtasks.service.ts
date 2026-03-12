@@ -12,7 +12,8 @@ import { TicketVisibilityService } from '../../common/permissions/ticket-visibil
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
-import { Role } from '@prisma/client';
+import { Role, TicketStatus } from '@prisma/client';
+import { assertValidTransition } from '../tickets/ticket-state-machine';
 import { PolicyService } from '../../policy/policy.service';
 import {
   SUBTASK_CREATE,
@@ -25,7 +26,8 @@ const TICKET_FOR_VISIBILITY_SELECT = {
   requesterId: true,
   ownerId: true,
   studioId: true,
-  owner: { select: { team: { select: { name: true } } } },
+  department: { select: { code: true } },
+  owner: { select: { teamId: true, team: { select: { name: true } } } },
 } as const;
 
 const SUBTASK_SELECT = {
@@ -34,8 +36,9 @@ const SUBTASK_SELECT = {
   title: true,
   description: true,
   status: true,
-  isRequired: true,
   dueDate: true,
+  availableAt: true,
+  startedAt: true,
   completedAt: true,
   departmentId: true,
   subtaskTemplateId: true,
@@ -74,6 +77,8 @@ export class SubtasksService {
         requesterId: ticket.requesterId,
         ownerId: ticket.ownerId,
         studioId: ticket.studioId,
+        department: ticket.department,
+        owner: ticket.owner,
       },
     });
     if (!decision.allowed) {
@@ -98,6 +103,7 @@ export class SubtasksService {
       if (!owner) throw new NotFoundException(`User ${dto.ownerId} not found`);
     }
 
+    const now = new Date();
     const subtask = await this.prisma.subtask.create({
       data: {
         ticketId,
@@ -106,9 +112,9 @@ export class SubtasksService {
         ownerId: dto.ownerId,
         title: dto.title,
         description: dto.description,
-        isRequired: dto.isRequired ?? true,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         status: 'READY',
+        availableAt: now,
       },
       select: SUBTASK_SELECT,
     });
@@ -123,7 +129,6 @@ export class SubtasksService {
         title: dto.title,
         teamId: dto.teamId,
         ownerId: dto.ownerId,
-        isRequired: dto.isRequired ?? true,
       },
     });
 
@@ -157,6 +162,8 @@ export class SubtasksService {
         requesterId: ticket.requesterId,
         ownerId: ticket.ownerId,
         studioId: ticket.studioId,
+        department: ticket.department,
+        owner: ticket.owner,
       },
     });
     if (!decision.allowed) {
@@ -184,6 +191,8 @@ export class SubtasksService {
         requesterId: subtask.ticket.requesterId,
         ownerId: subtask.ticket.ownerId,
         studioId: subtask.ticket.studioId,
+        department: subtask.ticket.department,
+        owner: subtask.ticket.owner,
       },
     });
     if (!decision.allowed) {
@@ -195,6 +204,16 @@ export class SubtasksService {
     const previousStatus = subtask.status;
     const now = new Date();
     const completing = dto.status === 'DONE' || dto.status === 'SKIPPED';
+    const isFirstActivity =
+      dto.status &&
+      dto.status !== previousStatus &&
+      (dto.status === 'IN_PROGRESS' ||
+        dto.status === 'DONE' ||
+        dto.status === 'SKIPPED');
+
+    // Timer logic: compute startedAt for first work activity
+    const needsStartedAt =
+      isFirstActivity && !subtask.startedAt;
 
     const { updated, becameReadyIds } = await this.prisma.$transaction(
       async (tx) => {
@@ -210,6 +229,7 @@ export class SubtasksService {
             ...(dto.dueDate !== undefined && {
               dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
             }),
+            ...(needsStartedAt ? { startedAt: now } : {}),
             ...(completing ? { completedAt: now } : {}),
             ...(dto.status &&
             !completing &&
@@ -243,8 +263,46 @@ export class SubtasksService {
     if (dto.status && dto.status !== previousStatus) {
       const ticket = await this.prisma.ticket.findUnique({
         where: { id: subtask.ticketId },
-        select: { ownerId: true },
+        select: { ownerId: true, requesterId: true, status: true, title: true },
       });
+
+      // Auto-transition: NEW/TRIAGED → IN_PROGRESS when first subtask has activity
+      if (
+        ticket &&
+        isFirstActivity &&
+        (ticket.status === 'NEW' || ticket.status === 'TRIAGED')
+      ) {
+        try {
+          assertValidTransition(
+            ticket.status as TicketStatus,
+            'IN_PROGRESS' as TicketStatus,
+          );
+          await this.prisma.ticket.update({
+            where: { id: subtask.ticketId },
+            data: { status: 'IN_PROGRESS' },
+          });
+          this.logger.log(
+            `Auto-transitioned ticket ${subtask.ticketId} from ${ticket.status} → IN_PROGRESS`,
+          );
+          await this.domainEvents.emit({
+            type: 'TICKET_STATUS_CHANGED',
+            ticketId: subtask.ticketId,
+            actorId: actor.id,
+            occurredAt: now,
+            payload: {
+              previousStatus: ticket.status,
+              newStatus: 'IN_PROGRESS',
+              requesterId: ticket.requesterId,
+              title: ticket.title,
+            },
+          });
+        } catch {
+          // Transition not valid (e.g. NEW → IN_PROGRESS may not be in machine); log and continue
+          this.logger.warn(
+            `Could not auto-transition ticket ${subtask.ticketId} from ${ticket.status} → IN_PROGRESS`,
+          );
+        }
+      }
 
       if (completing) {
         await this.domainEvents.emit({
@@ -258,6 +316,9 @@ export class SubtasksService {
             ticketOwnerId: ticket?.ownerId ?? undefined,
           },
         });
+
+        // Single authoritative resolution path: check if ALL subtasks are done/skipped
+        await this.checkAndResolveTicket(subtask.ticketId, actor, now);
       }
       for (const readyId of becameReadyIds) {
         const readySubtask = await this.prisma.subtask.findUnique({
@@ -285,19 +346,6 @@ export class SubtasksService {
           });
         }
       }
-      if (dto.status === 'BLOCKED') {
-        await this.domainEvents.emit({
-          type: 'SUBTASK_BLOCKED',
-          ticketId: subtask.ticketId,
-          actorId: actor.id,
-          occurredAt: now,
-          payload: {
-            subtaskId,
-            subtaskTitle: subtask.title,
-            ticketOwnerId: ticket?.ownerId ?? undefined,
-          },
-        });
-      }
     }
 
     // Domain event for assignment change
@@ -319,14 +367,69 @@ export class SubtasksService {
   }
 
   /**
-   * Returns count of required subtasks that are NOT done (DONE or SKIPPED satisfy the gate).
+   * Single authoritative resolution path (Stage 2 §9.2).
+   * Checks if ALL subtasks on the ticket are DONE or SKIPPED.
+   * If so, transitions the ticket to RESOLVED via the state machine.
+   */
+  private async checkAndResolveTicket(
+    ticketId: string,
+    actor: RequestUser,
+    now: Date,
+  ): Promise<void> {
+    const incompleteCount = await this.prisma.subtask.count({
+      where: {
+        ticketId,
+        status: { notIn: ['DONE', 'SKIPPED'] },
+      },
+    });
+    if (incompleteCount > 0) return;
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { status: true, requesterId: true, title: true },
+    });
+    if (!ticket) return;
+
+    // Only auto-resolve from IN_PROGRESS or WAITING states
+    try {
+      assertValidTransition(
+        ticket.status as TicketStatus,
+        'RESOLVED' as TicketStatus,
+      );
+    } catch {
+      return;
+    }
+
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status: 'RESOLVED', resolvedAt: now },
+    });
+    this.logger.log(
+      `Auto-resolved ticket ${ticketId}: all subtasks are DONE or SKIPPED`,
+    );
+
+    await this.domainEvents.emit({
+      type: 'TICKET_RESOLVED',
+      ticketId,
+      actorId: actor.id,
+      occurredAt: now,
+      payload: {
+        previousStatus: ticket.status,
+        newStatus: 'RESOLVED',
+        requesterId: ticket.requesterId,
+        title: ticket.title,
+      },
+    });
+  }
+
+  /**
+   * Returns count of subtasks that are NOT done (DONE or SKIPPED satisfy the gate).
    * Used by TicketsService.transitionStatus() to enforce the resolution gate.
    */
   async countBlockingSubtasks(ticketId: string): Promise<number> {
     return this.prisma.subtask.count({
       where: {
         ticketId,
-        isRequired: true,
         status: { notIn: ['DONE', 'SKIPPED'] },
       },
     });
@@ -343,6 +446,7 @@ export class SubtasksService {
         ticketId: true,
         ownerId: true,
         status: true,
+        startedAt: true,
         teamId: true,
         departmentId: true,
         ticket: {
@@ -350,6 +454,8 @@ export class SubtasksService {
             requesterId: true,
             ownerId: true,
             studioId: true,
+            department: { select: { code: true } },
+            owner: { select: { teamId: true, team: { select: { name: true } } } },
           },
         },
       },

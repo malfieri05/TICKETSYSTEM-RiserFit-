@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
+import { CommentsService } from '../comments/comments.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,7 +28,10 @@ import { TransitionStatusDto } from './dto/transition-status.dto';
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class TicketsController {
-  constructor(private readonly ticketsService: TicketsService) {}
+  constructor(
+    private readonly ticketsService: TicketsService,
+    private readonly commentsService: CommentsService,
+  ) {}
 
   // POST /api/tickets
   @Post()
@@ -69,6 +73,16 @@ export class TicketsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.ticketsService.findAll(filters, user);
+  }
+
+  // GET /api/tickets/:ticketId/mentionable-users?search=...
+  @Get(':ticketId/mentionable-users')
+  getMentionableUsers(
+    @Param('ticketId') ticketId: string,
+    @Query('search') search: string | undefined,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.commentsService.getMentionableUsers(ticketId, user, search);
   }
 
   // GET /api/tickets/:id

@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../../common/database/prisma.service';
 import { NotificationsService } from '../../modules/notifications/notifications.service';
 import { SseChannel } from '../../modules/notifications/channels/sse.channel';
+import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
 import {
   QUEUES,
   FanOutJobData,
@@ -11,7 +12,7 @@ import {
 } from '../../common/queue/queue.constants';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Department, NotificationEventType } from '@prisma/client';
+import { Department, NotificationEventType, Role } from '@prisma/client';
 
 /** Max recipients per event to prevent notification storms. */
 const MAX_RECIPIENTS_PER_EVENT = 200;
@@ -31,7 +32,6 @@ const FANOUT_RULES: Record<string, string[]> = {
   MENTION_IN_COMMENT: ['mentioned'],
   SUBTASK_ASSIGNED: ['subtaskOwner'],
   SUBTASK_COMPLETED: ['owner'],
-  SUBTASK_BLOCKED: ['owner'],
   SUBTASK_BECAME_READY: ['departmentUsers', 'subtaskOwner'],
   ATTACHMENT_ADDED: ['owner', 'watchers'],
 };
@@ -99,11 +99,6 @@ function buildNotificationContent(
         title: 'Subtask completed',
         body: `"${payload.subtaskTitle}" has been completed.`,
       };
-    case 'SUBTASK_BLOCKED':
-      return {
-        title: 'Subtask blocked',
-        body: `"${payload.subtaskTitle}" is now blocked.`,
-      };
     case 'SUBTASK_BECAME_READY':
       return {
         title: "It's your turn",
@@ -125,6 +120,7 @@ export class NotificationFanoutProcessor extends WorkerHost {
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
     private sseChannel: SseChannel,
+    private visibility: TicketVisibilityService,
     @InjectQueue(QUEUES.NOTIFICATION_DISPATCH)
     private dispatchQueue: Queue,
   ) {
@@ -198,6 +194,25 @@ export class NotificationFanoutProcessor extends WorkerHost {
             }
           }
           break;
+      }
+    }
+
+    // Stage 3: COMMENT_ADDED — subtract mentioned users so they only get MENTION_IN_COMMENT
+    if (eventType === 'COMMENT_ADDED') {
+      const mentionedIds = (payload.mentionedUserIds as string[]) ?? [];
+      for (const id of mentionedIds) {
+        recipientIds.delete(id);
+      }
+    }
+
+    // Stage 3: MENTION_IN_COMMENT — filter mentioned users by ticket visibility
+    if (eventType === 'MENTION_IN_COMMENT' && ticket) {
+      const mentionedIds = Array.from(recipientIds);
+      for (const userId of mentionedIds) {
+        const canView = await this.canUserViewTicket(ticket, userId);
+        if (!canView) {
+          recipientIds.delete(userId);
+        }
       }
     }
 
@@ -313,5 +328,62 @@ export class NotificationFanoutProcessor extends WorkerHost {
     this.logger.debug(
       `Fan-out complete: ${eventType} → ${users.length} recipients for ticket ${ticketId}`,
     );
+  }
+
+  /**
+   * Checks whether a given user would be able to view a ticket.
+   * Builds a minimal RequestUser from the DB and delegates to TicketVisibilityService.
+   */
+  private async canUserViewTicket(
+    ticket: {
+      id: string;
+      requesterId: string;
+      ownerId: string | null;
+    },
+    userId: string,
+  ): Promise<boolean> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        role: true,
+        studioId: true,
+        departments: { select: { department: true } },
+        studioScopes: { select: { studioId: true } },
+      },
+    });
+    if (!user) return false;
+
+    const fullTicket = await this.prisma.ticket.findUnique({
+      where: { id: ticket.id },
+      select: {
+        requesterId: true,
+        ownerId: true,
+        studioId: true,
+        department: { select: { code: true } },
+        owner: { select: { teamId: true, team: { select: { name: true } } } },
+      },
+    });
+    if (!fullTicket) return false;
+
+    const fakeRequestUser = {
+      id: user.id,
+      email: '',
+      displayName: '',
+      role: user.role,
+      teamId: null,
+      studioId: user.studioId,
+      marketId: null,
+      isActive: true,
+      departments: (user.departments ?? []).map((d) => d.department),
+      scopeStudioIds: (user.studioScopes ?? []).map((s) => s.studioId),
+    };
+
+    try {
+      this.visibility.assertCanView(fullTicket, fakeRequestUser as any);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

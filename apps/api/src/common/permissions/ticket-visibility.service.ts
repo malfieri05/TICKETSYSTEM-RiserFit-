@@ -3,6 +3,8 @@ import { Prisma, Role } from '@prisma/client';
 import { RequestUser } from '../../modules/auth/strategies/jwt.strategy';
 
 // Maps Department enum values to the legacy Team.name used for routing.
+// BRIDGE: kept as fallback for tickets that have no taxonomy departmentId set.
+// Remove once all tickets have taxonomy classification and all users have department assignments.
 const DEPARTMENT_TO_TEAM_NAME: Record<string, string> = {
   HR: 'HR',
   OPERATIONS: 'Operations',
@@ -15,12 +17,12 @@ export class TicketVisibilityService {
    * Builds a Prisma `where` clause that limits ticket results to only
    * those the actor is allowed to see.
    *
-   * ADMIN        → no restriction (returns `{}`)
-   * DEPARTMENT_USER → tickets assigned to them OR assigned to any user in
-   *                   their department(s) OR in their studio scope grants
-   * STUDIO_USER  → tickets they submitted OR tickets for their primary studio
-   *                OR tickets for their extra scope-granted studios (requesterId = self
-   *                OR studioId in [primary + scopeStudioIds])
+   * ADMIN          → no restriction (returns `{}`)
+   * DEPARTMENT_USER → tickets they own OR whose taxonomy department matches
+   *                   one of their departments (department.code) OR in their
+   *                   studio scope grants. BRIDGE: also matches tickets where
+   *                   owner's team.name aligns with their legacy Department enum.
+   * STUDIO_USER    → tickets they submitted OR tickets for their allowed studios.
    */
   buildWhereClause(actor: RequestUser): Prisma.TicketWhereInput {
     if (actor.role === Role.ADMIN) {
@@ -28,16 +30,27 @@ export class TicketVisibilityService {
     }
 
     if (actor.role === Role.DEPARTMENT_USER) {
-      const teamNames = actor.departments
-        .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+      const departmentCodes = actor.departments
+        .map((d) => String(d))
         .filter(Boolean);
 
       const conditions: Prisma.TicketWhereInput[] = [{ ownerId: actor.id }];
 
-      if (teamNames.length > 0) {
+      if (departmentCodes.length > 0) {
         conditions.push({
-          owner: { team: { name: { in: teamNames } } },
+          department: { code: { in: departmentCodes } },
         });
+
+        // BRIDGE: legacy team-name fallback for tickets without taxonomy departmentId
+        const teamNames = actor.departments
+          .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+          .filter(Boolean);
+        if (teamNames.length > 0) {
+          conditions.push({
+            departmentId: null,
+            owner: { team: { name: { in: teamNames } } },
+          });
+        }
       }
 
       if (actor.scopeStudioIds.length > 0) {
@@ -64,13 +77,15 @@ export class TicketVisibilityService {
   /**
    * Throws ForbiddenException if the actor cannot view the given ticket.
    * Call this after fetching the ticket (so the caller already knows it exists).
-   * For DEPARTMENT_USER, caller must include ticket.owner.team.name in the ticket select.
+   * For DEPARTMENT_USER, caller must include ticket.department and ticket.owner.team.name
+   * in the ticket select (department for taxonomy check, owner.team.name for bridge fallback).
    */
   assertCanView(
     ticket: {
       requesterId: string;
       ownerId: string | null;
       studioId: string | null;
+      department?: { code: string } | null;
       owner?: { teamId?: string | null; team?: { name: string } | null } | null;
     },
     actor: RequestUser,
@@ -80,15 +95,30 @@ export class TicketVisibilityService {
     if (actor.role === Role.DEPARTMENT_USER) {
       if (ticket.ownerId === actor.id) return;
 
-      const teamNames = actor.departments
-        .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+      const departmentCodes = actor.departments
+        .map((d) => String(d))
         .filter(Boolean);
+
       if (
-        teamNames.length > 0 &&
-        ticket.owner?.team?.name &&
-        teamNames.includes(ticket.owner.team.name)
+        departmentCodes.length > 0 &&
+        ticket.department?.code &&
+        departmentCodes.includes(ticket.department.code)
       ) {
         return;
+      }
+
+      // BRIDGE: legacy team-name fallback for tickets without taxonomy department
+      if (!ticket.department) {
+        const teamNames = actor.departments
+          .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+          .filter(Boolean);
+        if (
+          teamNames.length > 0 &&
+          ticket.owner?.team?.name &&
+          teamNames.includes(ticket.owner.team.name)
+        ) {
+          return;
+        }
       }
 
       if (actor.scopeStudioIds.includes(ticket.studioId ?? '')) return;

@@ -90,7 +90,7 @@ describe('SubtaskWorkflowService', () => {
   });
 
   describe('unlockDownstreamIfSatisfied', () => {
-    it('sets downstream to READY with readyAt and returns their IDs when all deps satisfied', async () => {
+    it('sets downstream to READY with availableAt and returns their IDs when all deps satisfied', async () => {
       const tx = buildTxMock();
       tx.subtaskDependency.findMany
         .mockResolvedValueOnce([{ subtaskId: 'sub-b' }])
@@ -106,7 +106,7 @@ describe('SubtaskWorkflowService', () => {
       expect(result).toEqual(['sub-b']);
       expect(tx.subtask.update).toHaveBeenCalledWith({
         where: { id: 'sub-b' },
-        data: { status: 'READY', readyAt: expect.any(Date) },
+        data: { status: 'READY', availableAt: expect.any(Date) },
       });
     });
 

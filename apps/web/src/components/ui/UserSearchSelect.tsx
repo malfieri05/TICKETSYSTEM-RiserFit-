@@ -118,7 +118,7 @@ export function UserSearchSelect({
       <div
         className={cn(
           'flex items-center rounded-lg border text-sm transition-colors',
-          'focus-within:ring-1 focus-within:ring-teal-500',
+          'focus-within:ring-1 focus-within:ring-[var(--color-accent)]',
         )}
         style={{
           background: 'var(--color-bg-surface)',

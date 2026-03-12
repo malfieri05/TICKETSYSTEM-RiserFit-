@@ -432,21 +432,21 @@ describe('Stage 5 Notifications (e2e)', () => {
   });
 
   describe('5. readyAt verification', () => {
-    it('readyAt is set on root READY subtasks at ticket creation', async () => {
+    it('availableAt is set on root READY subtasks at ticket creation', async () => {
       const subs = await prisma.subtask.findMany({
         where: {
           ticket: { title: 'Stage5 Initial READY ticket' },
           status: 'READY',
         },
-        select: { id: true, title: true, readyAt: true },
+        select: { id: true, title: true, availableAt: true },
       });
       expect(subs.length).toBeGreaterThanOrEqual(1);
       for (const s of subs) {
-        expect(s.readyAt).toBeInstanceOf(Date);
+        expect(s.availableAt).toBeInstanceOf(Date);
       }
     });
 
-    it('readyAt is set on downstream when becoming READY after dependency completion', async () => {
+    it('availableAt is set on downstream when becoming READY after dependency completion', async () => {
       const ticket = await prisma.ticket.findFirst({
         where: { title: 'Stage5 Its-your-turn ticket' },
         select: { id: true },
@@ -458,10 +458,10 @@ describe('Stage 5 Notifications (e2e)', () => {
           title: 'Step B',
           status: 'READY',
         },
-        select: { readyAt: true },
+        select: { availableAt: true },
       });
       expect(subs.length).toBeGreaterThanOrEqual(1);
-      expect(subs[0].readyAt).toBeInstanceOf(Date);
+      expect(subs[0].availableAt).toBeInstanceOf(Date);
     });
   });
 

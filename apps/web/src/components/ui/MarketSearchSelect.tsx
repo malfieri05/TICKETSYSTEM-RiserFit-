@@ -88,7 +88,7 @@ export function MarketSearchSelect({
         onClick={() => setIsOpen((o) => !o)}
         className={cn(
           'flex items-center rounded-lg border text-sm transition-colors min-w-[160px] cursor-pointer',
-          isOpen && 'ring-1 ring-teal-500',
+          isOpen && 'ring-1 ring-[var(--color-accent)]',
         )}
         style={{
           background: 'var(--color-bg-surface)',
@@ -129,7 +129,7 @@ export function MarketSearchSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type to filter states…"
-              className="w-full px-2 py-1.5 text-sm rounded focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full px-2 py-1.5 text-sm rounded focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
               style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
               autoFocus
               autoComplete="off"

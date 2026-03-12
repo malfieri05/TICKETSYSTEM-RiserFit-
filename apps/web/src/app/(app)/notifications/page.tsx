@@ -71,7 +71,7 @@ export default function NotificationsPage() {
       <div className="flex-1 p-6 max-w-2xl">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <div className="animate-spin h-6 w-6 rounded-full border-4 border-teal-500 border-t-transparent" />
+            <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
             <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Loading…</span>
           </div>
         ) : notifications.length === 0 ? (
@@ -88,12 +88,12 @@ export default function NotificationsPage() {
                 onClick={() => handleNotificationClick(notif)}
                 className="flex items-start gap-3 px-4 py-3 transition-colors"
                 style={{
-                  background: !notif.isRead ? 'rgba(20,184,166,0.06)' : 'transparent',
+                  background: !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent',
                   borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined,
                   cursor: notif.ticketId ? 'pointer' : 'default',
                 }}
                 onMouseEnter={(e) => { if (notif.ticketId) e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = !notif.isRead ? 'rgba(20,184,166,0.06)' : 'transparent'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent'; }}
               >
                 <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: !notif.isRead ? 'var(--color-accent)' : 'transparent' }} />
                 <div className="flex-1 min-w-0">

@@ -65,7 +65,7 @@ export default function NewWorkflowTemplatePage() {
       <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
         <Header title="New workflow template" />
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin h-8 w-8 rounded-full border-4 border-teal-500 border-t-transparent" />
+          <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
       </div>
     );
@@ -80,7 +80,7 @@ export default function NewWorkflowTemplatePage() {
           Back
         </Button>
         <div className="rounded-xl p-6 space-y-4" style={panel}>
-          <h2 className="text-base font-semibold text-gray-100">Select ticket context</h2>
+          <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Select ticket context</h2>
           <Select
             label="Ticket type"
             value={ticketClassId}

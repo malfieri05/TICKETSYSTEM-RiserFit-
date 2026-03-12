@@ -47,7 +47,6 @@ export class WorkflowAnalyticsService {
           const ticketsWithActive = await this.prisma.subtask.findMany({
             where: {
               subtaskTemplateId: { in: templateSubtaskIds },
-              isRequired: true,
               status: { notIn: [...SATISFIED_STATUSES] },
             },
             select: { ticketId: true },
@@ -143,7 +142,6 @@ export class WorkflowAnalyticsService {
           const requiredNotDone = await this.prisma.subtask.findMany({
             where: {
               ticketId: { in: workflowTicketIds },
-              isRequired: true,
               status: { notIn: [...SATISFIED_STATUSES] },
             },
             select: { ticketId: true },
@@ -192,11 +190,6 @@ export class WorkflowAnalyticsService {
       title: string;
       avgDurationHours: number;
     }[];
-    mostBlockedSubtasks: {
-      subtaskTemplateId: string;
-      title: string;
-      blockedCount: number;
-    }[];
   }> {
     const TOP = 10;
 
@@ -210,7 +203,7 @@ export class WorkflowAnalyticsService {
         subtaskTemplateId: true,
         createdAt: true,
         completedAt: true,
-        readyAt: true,
+        availableAt: true,
         subtaskTemplate: { select: { title: true } },
       },
     });
@@ -219,7 +212,7 @@ export class WorkflowAnalyticsService {
       {};
     for (const s of completedWithDuration) {
       if (!s.subtaskTemplateId || !s.completedAt) continue;
-      const start = s.readyAt ?? s.createdAt;
+      const start = s.availableAt ?? s.createdAt;
       const durationHours =
         (s.completedAt.getTime() - start.getTime()) / MS_PER_HOUR;
       if (!byTemplate[s.subtaskTemplateId]) {
@@ -241,39 +234,6 @@ export class WorkflowAnalyticsService {
       .sort((a, b) => b.avgDurationHours - a.avgDurationHours)
       .slice(0, TOP);
 
-    const blockedByTemplate = await this.prisma.subtask.groupBy({
-      by: ['subtaskTemplateId'],
-      where: {
-        status: 'BLOCKED',
-        subtaskTemplateId: { not: null },
-      },
-      _count: { id: true },
-    });
-
-    const templateIds = [
-      ...new Set(
-        blockedByTemplate.map((r) => r.subtaskTemplateId).filter(Boolean),
-      ),
-    ] as string[];
-    const templateTitles =
-      templateIds.length > 0
-        ? await this.prisma.subtaskTemplate.findMany({
-            where: { id: { in: templateIds } },
-            select: { id: true, title: true },
-          })
-        : [];
-    const titleMap = new Map(templateTitles.map((t) => [t.id, t.title]));
-
-    const mostBlocked = blockedByTemplate
-      .filter((r) => r.subtaskTemplateId)
-      .map((r) => ({
-        subtaskTemplateId: r.subtaskTemplateId!,
-        title: titleMap.get(r.subtaskTemplateId!) ?? '',
-        blockedCount: r._count.id,
-      }))
-      .sort((a, b) => b.blockedCount - a.blockedCount)
-      .slice(0, TOP);
-
-    return { longestSubtasks: longest, mostBlockedSubtasks: mostBlocked };
+    return { longestSubtasks: longest };
   }
 }

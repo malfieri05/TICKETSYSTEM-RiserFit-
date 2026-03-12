@@ -397,3 +397,21 @@ Constraints:
   - pgvector/Prisma RAG architecture remains intact; we only extend ingestion and metadata.
   - No per-chat Riser API dependencies; performance remains predictable.
 
+---
+
+## Implementation notes (hardening pass)
+
+- **Op Central contract:** Base URL (no trailing slash) + path `GET /v1/opdocs/policy/{id}`; auth header `x-api-key: <key>`. Per Stage 35 assumption; confirm with Riser if base URL or path differ.
+- **Error classification:** fetchPolicy now returns a reason for each failure: 401 (check API key), 403 (forbidden), 404 (not found), non-OK with body snippet, network error, invalid JSON, missing/empty id/title/content. Each is logged and surfaced in sync details.
+- **Payload validation:** id, title, and content (or body) are validated as non-empty strings before use; malformed payloads fail that policy and continue the batch.
+- **Config safety:** When RISER_API_BASE_URL, RISER_API_KEY, or RISER_POLICY_IDS are missing or empty, sync returns `configMissing: true` and the UI shows a clear message. Empty policy ID list also returns configMissing.
+- **GET /api/ai/documents 500 — root cause (verified):**
+  1. **Stale Prisma client:** Generated client did not include Riser fields (`upstreamProvider`, `upstreamId`, etc.). Fix: run `npx prisma generate` in apps/api after schema changes.
+  2. **DB missing columns:** Table `knowledge_documents` was missing columns added by migration `20260311110000_add_riser_fields_to_knowledge_documents`. Apply pending migrations with `npx prisma migrate deploy`. If deploy is blocked by a previously failed migration (e.g. P3009), resolve it per Prisma docs (`migrate resolve`) then run `migrate deploy` so the Riser columns exist. After both generate and deploy, GET /api/ai/documents returns 200 with the expected payload shape.
+
+- **Final verification (this pass):** GET /api/ai/documents was hit in local/dev. It returned 500; the controller try/catch logged the stack. Root cause: Prisma client knew about Riser fields but the database did not have those columns (migration not applied; deploy blocked by an earlier failed migration). Op Central contract comment in code now distinguishes confirmed (x-api-key header) vs current configured path and response shape (pending confirmation from Op Central docs). End-to-end sync with a real policy ID was not run (RISER_* env not set in verification run); configMissing path and error classification were verified in code.
+
+- **Migration recovery (completed):** The failed migration `20260309000000_remove_legacy_categories` was diagnosed (snake_case vs camelCase names); manual fix and resolve-applied + migrate deploy were executed. See **docs/migration-recovery-20260309-and-riser.md** for full diagnosis, exact commands, and post-recovery verification. GET /api/ai/documents now returns **200** with correct payload shape.
+
+- **Live integration verification:** Sync was exercised via POST `/api/ai/riser/sync`; in the verification run RISER_* were not set, so response was 202 with `configMissing: true`. Failure-path handling (401/403/404) verified in code. To complete live verification with real upstream: set RISER_API_BASE_URL, RISER_API_KEY, RISER_POLICY_IDS in `apps/api/.env`, restart API, then run sync from Admin → Knowledge Base or **scripts/verify-riser-live.sh**. See **docs/live-riser-verification.md** for steps and checklist.
+

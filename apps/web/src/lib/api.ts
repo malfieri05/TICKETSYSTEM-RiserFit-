@@ -110,10 +110,19 @@ export const invalidateTicketLists = (queryClient: QueryClient) => {
 export const commentsApi = {
   list: (ticketId: string) =>
     api.get<import('@/types').Comment[]>(`/tickets/${ticketId}/comments`),
-  create: (ticketId: string, data: { body: string; isInternal?: boolean }) =>
+  create: (ticketId: string, data: { body: string; parentCommentId?: string; isInternal?: boolean }) =>
     api.post<import('@/types').Comment>(`/tickets/${ticketId}/comments`, data),
   update: (ticketId: string, commentId: string, data: { body: string }) =>
     api.patch<import('@/types').Comment>(`/tickets/${ticketId}/comments/${commentId}`, data),
+};
+
+export const mentionableUsersApi = {
+  list: (ticketId: string, search?: string) => {
+    const params = search ? `?search=${encodeURIComponent(search)}` : '';
+    return api.get<{ id: string; name: string | null; email: string; displayName: string; avatarUrl: string | null }[]>(
+      `/tickets/${ticketId}/mentionable-users${params}`,
+    );
+  },
 };
 
 // ─── Subtasks ──────────────────────────────────────────────────────────────
@@ -121,7 +130,7 @@ export const commentsApi = {
 export const subtasksApi = {
   list: (ticketId: string) =>
     api.get<import('@/types').Subtask[]>(`/tickets/${ticketId}/subtasks`),
-  create: (ticketId: string, data: { title: string; isRequired?: boolean; ownerId?: string; teamId?: string }) =>
+  create: (ticketId: string, data: { title: string; ownerId?: string; teamId?: string }) =>
     api.post<import('@/types').Subtask>(`/tickets/${ticketId}/subtasks`, data),
   update: (ticketId: string, subtaskId: string, data: { status?: import('@/types').SubtaskStatus; title?: string }) =>
     api.patch<import('@/types').Subtask>(`/tickets/${ticketId}/subtasks/${subtaskId}`, data),
@@ -343,10 +352,13 @@ export const aiApi = {
 
   /** Sync Riser policies into the knowledge base (admin). */
   syncRiserPolicies: () =>
-    api.post<{ synced: number; skipped: number; failed: number; details: unknown[] }>(
-      '/ai/riser/sync',
-      {},
-    ),
+    api.post<{
+      synced: number;
+      skipped: number;
+      failed: number;
+      details: { id: string; status: string; reason?: string }[];
+      configMissing?: boolean;
+    }>('/ai/riser/sync', {}),
 };
 
 // ─── AI Agent (tool calling) ────────────────────────────────────────────────
@@ -424,7 +436,6 @@ export const workflowTemplatesApi = {
     description?: string | null;
     departmentId: string;
     assignedUserId?: string | null;
-    isRequired?: boolean;
     sortOrder?: number;
   }) => api.post<import('@/types').WorkflowTemplateSubtaskDto>('/subtask-workflow/subtask-templates', data),
   updateSubtaskTemplate: (id: string, data: {
@@ -432,7 +443,6 @@ export const workflowTemplatesApi = {
     description?: string | null;
     departmentId?: string;
     assignedUserId?: string | null;
-    isRequired?: boolean;
     sortOrder?: number;
   }) => api.patch<import('@/types').WorkflowTemplateSubtaskDto>(`/subtask-workflow/subtask-templates/${id}`, data),
   deleteSubtaskTemplate: (id: string) =>
@@ -468,7 +478,6 @@ export interface WorkflowDepartmentMetricsRow {
 
 export interface WorkflowBottlenecksResponse {
   longestSubtasks: { subtaskTemplateId: string; title: string; avgDurationHours: number }[];
-  mostBlockedSubtasks: { subtaskTemplateId: string; title: string; blockedCount: number }[];
 }
 
 export const workflowAnalyticsApi = {

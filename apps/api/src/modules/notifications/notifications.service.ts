@@ -16,17 +16,18 @@ export class NotificationsService {
    * Fetch paginated notifications for the current user.
    * Unread count is returned separately for the UI badge.
    */
-  async findForUser(userId: string, page = 1, limit = 20) {
+  async findForUser(userId: string, page = 1, limit = 20, unreadOnly?: boolean) {
     const skip = (page - 1) * limit;
+    const where = unreadOnly ? { userId, isRead: false } : { userId };
 
     const [notifications, total, unreadCount] = await Promise.all([
       this.prisma.notification.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      this.prisma.notification.count({ where: { userId } }),
+      this.prisma.notification.count({ where }),
       this.prisma.notification.count({ where: { userId, isRead: false } }),
     ]);
 

@@ -130,7 +130,7 @@ export function TicketAttachmentsSection({
 
         {uploading && (
           <div className="flex items-center gap-2 text-sm">
-            <div className="animate-spin h-4 w-4 rounded-full border-2 border-teal-500 border-t-transparent" />
+            <div className="animate-spin h-4 w-4 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
             <span style={{ color: 'var(--color-text-secondary)' }}>
               Uploading…
             </span>
@@ -143,7 +143,7 @@ export function TicketAttachmentsSection({
             style={{
               background: 'rgba(239,68,68,0.12)',
               border: '1px solid rgba(239,68,68,0.3)',
-              color: '#fca5a5',
+              color: '#dc2626',
             }}
           >
             {uploadError}

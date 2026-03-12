@@ -113,10 +113,9 @@ export class SubtaskWorkflowService {
           description: st.description,
           departmentId: st.departmentId,
           ownerId: st.assignedUserId,
-          isRequired: st.isRequired,
           subtaskTemplateId: st.id,
           status: hasDeps ? 'LOCKED' : 'READY',
-          readyAt: isReady ? now : undefined,
+          availableAt: isReady ? now : undefined,
         },
       });
       createdIds.set(st.id, subtask.id);
@@ -135,7 +134,7 @@ export class SubtaskWorkflowService {
 
   /**
    * When a subtask becomes DONE or SKIPPED, unlock downstream subtasks whose dependencies are all satisfied.
-   * Sets status to READY and readyAt = now(). Returns IDs of subtasks that became READY (for notification emission).
+   * Sets status to READY and availableAt = now(). Returns IDs of subtasks that became READY (for notification emission).
    */
   async unlockDownstreamIfSatisfied(
     tx: PrismaTx,
@@ -162,7 +161,7 @@ export class SubtaskWorkflowService {
       if (allSatisfied) {
         await tx.subtask.update({
           where: { id: subtaskId },
-          data: { status: 'READY', readyAt: now },
+          data: { status: 'READY', availableAt: now },
         });
         becameReady.push(subtaskId);
       }
@@ -277,7 +276,6 @@ export class SubtaskWorkflowService {
     description?: string | null;
     departmentId: string;
     assignedUserId?: string | null;
-    isRequired?: boolean;
     sortOrder?: number;
   }) {
     await this.prisma.subtaskWorkflowTemplate.findUniqueOrThrow({
@@ -290,7 +288,6 @@ export class SubtaskWorkflowService {
         description: data.description ?? undefined,
         departmentId: data.departmentId,
         assignedUserId: data.assignedUserId ?? undefined,
-        isRequired: data.isRequired ?? true,
         sortOrder: data.sortOrder ?? 0,
       },
     });
@@ -416,7 +413,6 @@ export class SubtaskWorkflowService {
     const ticketsWithActiveRequired = await this.prisma.subtask.findMany({
       where: {
         subtaskTemplateId: { in: templateSubtaskIds },
-        isRequired: true,
         status: { notIn: ['DONE', 'SKIPPED'] },
       },
       select: { ticketId: true },
@@ -449,7 +445,6 @@ export class SubtaskWorkflowService {
       description?: string | null;
       departmentId?: string;
       assignedUserId?: string | null;
-      isRequired?: boolean;
       sortOrder?: number;
     },
   ) {
@@ -467,7 +462,6 @@ export class SubtaskWorkflowService {
         ...(data.assignedUserId !== undefined && {
           assignedUserId: data.assignedUserId,
         }),
-        ...(data.isRequired !== undefined && { isRequired: data.isRequired }),
         ...(data.sortOrder !== undefined && { sortOrder: data.sortOrder }),
       },
     });
