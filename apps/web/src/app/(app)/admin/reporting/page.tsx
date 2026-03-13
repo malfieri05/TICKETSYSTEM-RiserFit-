@@ -6,6 +6,7 @@ import { BarChart2, Clock, Ticket, CheckCircle, AlertCircle, Download, MapPin } 
 import { reportingApi, api, type WorkflowTimingEntry } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
+import { ComboBox } from '@/components/ui/ComboBox';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -471,22 +472,14 @@ export default function ReportingPage() {
               Workflow / Subtask Completion Timing
             </h3>
             {workflowTimingData.length > 1 && (
-              <select
+              <ComboBox
+                placeholder="Select workflow"
+                clearable={false}
+                options={workflowTimingData.map((w) => ({ value: w.workflowId, label: w.workflowName }))}
                 value={selectedWorkflowId || activeWorkflow?.workflowId || ''}
-                onChange={(e) => setSelectedWorkflowId(e.target.value)}
-                className="text-sm rounded-lg px-3 py-1.5"
-                style={{
-                  background: 'var(--color-bg-page)',
-                  border: '1px solid var(--color-border-default)',
-                  color: 'var(--color-text-primary)',
-                }}
-              >
-                {workflowTimingData.map((w) => (
-                  <option key={w.workflowId} value={w.workflowId}>
-                    {w.workflowName}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setSelectedWorkflowId(v)}
+                className="min-w-[180px]"
+              />
             )}
           </div>
           <div className="max-h-[400px] overflow-y-auto">

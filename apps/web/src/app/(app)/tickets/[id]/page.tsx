@@ -397,7 +397,6 @@ export default function TicketDetailPage() {
                         <option value="READY">Ready</option>
                         <option value="IN_PROGRESS">In Progress</option>
                         <option value="DONE">Done</option>
-                        <option value="SKIPPED">Skipped</option>
                       </Select>
                     )}
                   </div>

@@ -56,6 +56,8 @@ export const POLISH_CLASS = {
   cellPadding: 'px-4 py-3',
   /** Table header text style */
   tableHeader: 'text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide',
+  /** Centered table header — used for Progress, Requester, Comments columns */
+  tableHeaderCenter: 'text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide',
   /** Section vertical gap (e.g. between title and filters) */
   sectionGap: 'space-y-4',
   /** Block vertical gap (e.g. between major sections) */

@@ -298,11 +298,47 @@ describe('TicketVisibilityService', () => {
       ).toBe(true);
     });
 
-    it('DEPARTMENT_USER who does not own the ticket cannot modify', () => {
+    it('DEPARTMENT_USER who does not own the ticket cannot modify (no dept/studio context)', () => {
       const actor = makeActor({ role: 'DEPARTMENT_USER', id: 'user-1' });
       expect(
         service.canModify({ requesterId: 'x', ownerId: 'user-2' }, actor),
       ).toBe(false);
+    });
+
+    it('DEPARTMENT_USER can modify when ticket department matches their department', () => {
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        id: 'user-1',
+        departments: ['HR'],
+      });
+      expect(
+        service.canModify(
+          {
+            requesterId: 'x',
+            ownerId: 'user-2',
+            department: { code: 'HR' },
+          },
+          actor,
+        ),
+      ).toBe(true);
+    });
+
+    it('DEPARTMENT_USER can modify when ticket studio is in their scope', () => {
+      const actor = makeActor({
+        role: 'DEPARTMENT_USER',
+        id: 'user-1',
+        scopeStudioIds: ['studio-A'],
+      });
+      expect(
+        service.canModify(
+          {
+            requesterId: 'x',
+            ownerId: 'user-2',
+            studioId: 'studio-A',
+          },
+          actor,
+        ),
+      ).toBe(true);
     });
 
     it('STUDIO_USER who submitted the ticket can modify', () => {

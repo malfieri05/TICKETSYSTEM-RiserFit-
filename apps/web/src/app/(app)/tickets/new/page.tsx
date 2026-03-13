@@ -13,6 +13,7 @@ import type {
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 import { UploadDropzone } from '@/components/uploads/UploadDropzone';
 
@@ -339,76 +340,64 @@ export default function NewTicketPage() {
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Create a new ticket</h2>
 
           {/* 1. Ticket class */}
-          <Select
+          <ComboBox
             id="ticketClass"
             label="Ticket type"
+            placeholder="— Select type —"
+            options={ticketClasses.map((c) => ({ value: c.id, label: c.name }))}
             value={ticketClassId}
-            onChange={(e) => {
-              setTicketClassId(e.target.value);
+            onChange={(v) => {
+              setTicketClassId(v);
               setDepartmentId('');
               setSupportTopicId('');
               setMaintenanceCategoryId('');
               setFormResponses({});
             }}
-          >
-            <option value="">— Select type —</option>
-            {ticketClasses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
+          />
 
           {/* 2a. SUPPORT: department → support topic */}
           {isSupport && (
             <>
-              <Select
+              <ComboBox
                 id="department"
                 label="Department"
+                placeholder="— Select department —"
+                options={supportDepts.map((d) => ({ value: d.id, label: d.name }))}
                 value={departmentId}
-                onChange={(e) => {
-                  setDepartmentId(e.target.value);
+                onChange={(v) => {
+                  setDepartmentId(v);
                   setSupportTopicId('');
                 }}
-              >
-                <option value="">— Select department —</option>
-                {supportDepts.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </Select>
+              />
               {departmentId && (
-                <Select
+                <ComboBox
                   id="supportTopic"
                   label="Topic"
+                  placeholder="— Select topic —"
+                  options={selectedDeptTopics.map((t) => ({ value: t.id, label: t.name }))}
                   value={supportTopicId}
-                  onChange={(e) => {
-                    setSupportTopicId(e.target.value);
+                  onChange={(v) => {
+                    setSupportTopicId(v);
                     setFormResponses({});
                   }}
-                >
-                  <option value="">— Select topic —</option>
-                  {selectedDeptTopics.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </Select>
+                />
               )}
             </>
           )}
 
           {/* 2b. MAINTENANCE: maintenance category */}
           {isMaintenance && (
-            <Select
+            <ComboBox
               id="maintenanceCategory"
               label="Maintenance category"
+              placeholder="— Select category —"
+              options={maintenanceCategories.map((c) => ({ value: c.id, label: c.name }))}
               value={maintenanceCategoryId}
-              onChange={(e) => {
-                setMaintenanceCategoryId(e.target.value);
+              onChange={(v) => {
+                setMaintenanceCategoryId(v);
                 setFormResponses({});
               }}
-            >
-              <option value="">— Select category —</option>
-              {maintenanceCategories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
+            />
           )}
 
           {/* Schema loading / error */}
@@ -441,17 +430,14 @@ export default function NewTicketPage() {
                   onChange={(e) => setSubmitterEmail(e.target.value)}
                   required
                 />
-                <Select
+                <ComboBox
                   id="studioId"
                   label="Employee / hiring location"
+                  placeholder="— Select location —"
+                  options={studiosList.map((s) => ({ value: s.id, label: `${s.name}${s.marketName ? ` (${s.marketName})` : ''}` }))}
                   value={studioId}
-                  onChange={(e) => setStudioId(e.target.value)}
-                >
-                  <option value="">— Select location —</option>
-                  {studiosList.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}{s.marketName ? ` (${s.marketName})` : ''}</option>
-                  ))}
-                </Select>
+                  onChange={setStudioId}
+                />
               </div>
 
               {hasSchemaFields && (

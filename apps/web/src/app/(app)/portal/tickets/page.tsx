@@ -8,9 +8,11 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
+import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 
 const PAGE_SIZE = 20;
@@ -28,6 +30,7 @@ export default function PortalTicketsPage() {
   }));
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (studioIdFromUrl !== undefined) {
@@ -137,18 +140,20 @@ export default function PortalTicketsPage() {
               <option value="RESOLVED">Resolved</option>
               <option value="CLOSED">Closed</option>
             </Select>
-            <Select value={filters.departmentId ?? ''} onChange={(e) => setFilter('departmentId', e.target.value)} className="w-44">
-              <option value="">All departments</option>
-              {departmentOptions.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </Select>
-            <Select value={filters.studioId ?? ''} onChange={(e) => setFilter('studioId', e.target.value)} className="w-44">
-              <option value="">All locations</option>
-              {studioOptions.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </Select>
+            <ComboBox
+              placeholder="All departments"
+              options={departmentOptions.map((d) => ({ value: d.id, label: d.name }))}
+              value={filters.departmentId ?? ''}
+              onChange={(v) => setFilter('departmentId', v)}
+              className="w-44"
+            />
+            <ComboBox
+              placeholder="All locations"
+              options={studioOptions.map((s) => ({ value: s.id, label: s.name }))}
+              value={filters.studioId ?? ''}
+              onChange={(v) => setFilter('studioId', v)}
+              className="w-44"
+            />
             {hasActiveFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Clear filters
@@ -274,6 +279,7 @@ export default function PortalTicketsPage() {
           )}
         </div>
       </div>
+      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );
 }

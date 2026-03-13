@@ -1,38 +1,42 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { Inbox as InboxIcon } from 'lucide-react';
+import { Inbox as InboxIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { ticketsApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
-import { InboxLayout } from '@/components/inbox/InboxLayout';
+import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
+import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { Button } from '@/components/ui/Button';
 
+const STORAGE_KEY = 'inbox-topics-collapsed';
 const PAGE_SIZE = 20;
 
-const CANONICAL_HEADERS = [
-  { label: 'ID', key: 'id' },
-  { label: 'Title', key: 'title' },
-  { label: 'Created', key: 'created' },
-  { label: 'Status', key: 'status' },
-  { label: 'Priority', key: 'priority' },
-  { label: 'Progress', key: 'progress' },
-  { label: 'Requester', key: 'requester' },
-  { label: 'Comments', key: 'comments' },
-] as const;
-
 export default function InboxPage() {
-  const router = useRouter();
   const { user } = useAuth();
   const [page, setPage] = useState(1);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [topicsPanelCollapsed, setTopicsPanelCollapsed] = useState(false);
+
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEY) === 'true';
+    setTopicsPanelCollapsed(!!stored);
+  }, []);
+
+  const toggleTopicsPanel = () => {
+    setTopicsPanelCollapsed((prev) => {
+      const next = !prev;
+      if (typeof window !== 'undefined') localStorage.setItem(STORAGE_KEY, String(next));
+      return next;
+    });
+  };
 
   const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';
   const { data: foldersData } = useQuery({
@@ -107,8 +111,8 @@ export default function InboxPage() {
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {CANONICAL_HEADERS.map((h) => (
-            <th key={h.key} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -127,9 +131,9 @@ export default function InboxPage() {
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}
-              requesterDisplayName={ticket.requester.displayName}
-              isSelected={false}
-              onSelect={() => router.push(`/tickets/${ticket.id}`)}
+              requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
+              isSelected={selectedId === ticket.id}
+              onSelect={() => setSelectedId(ticket.id)}
             />
           );
         })}
@@ -141,8 +145,8 @@ export default function InboxPage() {
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {CANONICAL_HEADERS.map((h) => (
-            <th key={h.key} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -150,19 +154,217 @@ export default function InboxPage() {
     </table>
   );
 
+  const feedTitle =
+    selectedFolderId === 'all'
+      ? 'Actionable tickets'
+      : (() => {
+          const folder = folders.find((f) => f.id === selectedFolderId);
+          return folder ? `${folder.label} Tickets` : 'Actionable tickets';
+        })();
+
+  const topicFolders = folders.filter((f) => f.id !== 'all');
+  const allCount = folders.find((f) => f.id === 'all')?.activeCount;
+
+  const TOGGLE_CIRCLE_SIZE = 28;
+  const DIVIDER_WIDTH = 2;
+  /** When expanded, reserve space for the right-edge handle (line + circle). */
+  const EXPANDED_HANDLE_WIDTH = 32;
+  const EXPANDED_CONTENT_WIDTH = 208 - EXPANDED_HANDLE_WIDTH;
+
+  const leftSidebar =
+    canSeeFolders && (topicFolders.length > 0 || allCount != null) ? (
+      <aside
+        className={`shrink-0 relative ${topicsPanelCollapsed ? 'flex flex-col' : 'flex flex-row'}`}
+        style={{
+          width: topicsPanelCollapsed ? DIVIDER_WIDTH : 208,
+          transition: 'width 0.25s ease-out',
+          overflow: topicsPanelCollapsed ? 'visible' : 'hidden',
+        }}
+      >
+        {/* Collapsed: thin divider line + circle with chevron-right centered on line */}
+        {topicsPanelCollapsed && (
+          <>
+            <div
+              className="absolute top-0 bottom-0 w-px shrink-0"
+              style={{
+                left: DIVIDER_WIDTH / 2 - 1,
+                background: 'var(--color-border-default)',
+              }}
+            />
+            <button
+              type="button"
+              onClick={toggleTopicsPanel}
+              className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border"
+              style={{
+                width: TOGGLE_CIRCLE_SIZE,
+                height: TOGGLE_CIRCLE_SIZE,
+                left: DIVIDER_WIDTH / 2 - TOGGLE_CIRCLE_SIZE / 2,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'var(--color-bg-page)',
+                borderColor: 'var(--color-border-default)',
+                color: 'var(--color-text-primary)',
+                boxShadow: 'var(--shadow-card)',
+              }}
+              aria-label="Expand topics"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--color-bg-surface)';
+                e.currentTarget.style.borderColor = 'var(--color-accent)';
+                e.currentTarget.style.color = 'var(--color-accent)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--color-bg-page)';
+                e.currentTarget.style.borderColor = 'var(--color-border-default)';
+                e.currentTarget.style.color = 'var(--color-text-primary)';
+              }}
+            >
+              <ChevronRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+            </button>
+          </>
+        )}
+
+        {/* Expanded: panel content + right-edge divider with circle (chevron-left) */}
+        {!topicsPanelCollapsed && (
+          <>
+            <div className="flex flex-col shrink-0 border-r" style={{ width: EXPANDED_CONTENT_WIDTH, borderColor: POLISH_THEME.listBorder, background: 'var(--color-bg-surface)' }}>
+              <div className="shrink-0 p-3 border-b" style={{ borderColor: POLISH_THEME.listBorder, minHeight: 44 }}>
+                <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaMuted }}>
+                  Topics
+                </span>
+              </div>
+              <nav className="p-2 space-y-0.5 overflow-y-auto flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedFolderId('all');
+                setPage(1);
+              }}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
+              style={{
+                background: selectedFolderId === 'all' ? 'rgba(52,120,196,0.15)' : 'transparent',
+                color: selectedFolderId === 'all' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                border: selectedFolderId === 'all' ? '1px solid rgba(52,120,196,0.4)' : '1px solid transparent',
+              }}
+              onMouseEnter={(e) => {
+                if (selectedFolderId !== 'all') {
+                  e.currentTarget.style.background = 'rgba(52,120,196,0.08)';
+                  e.currentTarget.style.borderColor = 'rgba(52,120,196,0.25)';
+                  e.currentTarget.style.color = 'var(--color-text-primary)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (selectedFolderId !== 'all') {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = 'transparent';
+                  e.currentTarget.style.color = 'var(--color-text-secondary)';
+                }
+              }}
+            >
+              <span className="truncate">All</span>
+              {allCount != null && (
+                <span
+                  className="shrink-0 text-xs tabular-nums"
+                  style={{ color: selectedFolderId === 'all' ? POLISH_THEME.accent : POLISH_THEME.metaDim }}
+                >
+                  {allCount}
+                </span>
+              )}
+            </button>
+            {topicFolders.map((folder) => {
+              const isActive = folder.id === selectedFolderId;
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedFolderId(folder.id);
+                    setPage(1);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
+                  style={{
+                    background: isActive ? 'rgba(52,120,196,0.15)' : 'transparent',
+                    color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
+                    border: isActive ? '1px solid rgba(52,120,196,0.4)' : '1px solid transparent',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'rgba(52,120,196,0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(52,120,196,0.25)';
+                      e.currentTarget.style.color = 'var(--color-text-primary)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.borderColor = 'transparent';
+                      e.currentTarget.style.color = 'var(--color-text-secondary)';
+                    }
+                  }}
+                >
+                  <span className="truncate">{folder.label}</span>
+                  {folder.activeCount != null && (
+                    <span
+                      className="shrink-0 text-xs tabular-nums"
+                      style={{ color: isActive ? POLISH_THEME.accent : POLISH_THEME.metaDim }}
+                    >
+                      {folder.activeCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+              </nav>
+            </div>
+            {/* Right-edge divider line + collapse circle (chevron-left) */}
+            <div
+              className="flex flex-col items-center shrink-0 relative"
+              style={{ width: EXPANDED_HANDLE_WIDTH }}
+            >
+              <div
+                className="absolute top-0 bottom-0 w-px"
+                style={{ left: 0, background: 'var(--color-border-default)' }}
+              />
+              <button
+                type="button"
+                onClick={toggleTopicsPanel}
+                className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border"
+                style={{
+                  width: TOGGLE_CIRCLE_SIZE,
+                  height: TOGGLE_CIRCLE_SIZE,
+                  top: 12,
+                  left: EXPANDED_HANDLE_WIDTH / 2 - TOGGLE_CIRCLE_SIZE / 2,
+                  background: 'var(--color-bg-page)',
+                  borderColor: 'var(--color-border-default)',
+                  color: 'var(--color-text-primary)',
+                  boxShadow: 'var(--shadow-card)',
+                }}
+                aria-label="Collapse topics"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--color-bg-surface)';
+                  e.currentTarget.style.borderColor = 'var(--color-accent)';
+                  e.currentTarget.style.color = 'var(--color-accent)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'var(--color-bg-page)';
+                  e.currentTarget.style.borderColor = 'var(--color-border-default)';
+                  e.currentTarget.style.color = 'var(--color-text-primary)';
+                }}
+              >
+                <ChevronLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
+              </button>
+            </div>
+          </>
+        )}
+      </aside>
+    ) : undefined;
+
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Actionable" />
-      <InboxLayout
-        title="Actionable tickets"
+      <TicketFeedLayout
+        title={feedTitle}
         description="Tickets with incomplete subtasks assigned to you or your departments."
-        folders={canSeeFolders ? folders : undefined}
-        selectedFolderId={selectedFolderId}
-        onFolderChange={(id) => {
-          setSelectedFolderId(id);
-          setPage(1);
-        }}
-        folderOrientation={canSeeFolders ? 'vertical' : 'horizontal'}
+        leftSidebar={leftSidebar}
         isInitialLoading={isInitialLoading}
         isFetching={isFetching}
         hasTickets={hasTickets}
@@ -171,6 +373,7 @@ export default function InboxPage() {
         pagination={pagination}
         initialSkeleton={initialSkeleton}
       />
+      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );
 }

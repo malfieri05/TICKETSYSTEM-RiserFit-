@@ -78,7 +78,7 @@ export const ticketsApi = {
         teamId?: string;
         ownerId?: string;
       }) => api.post<import('@/types').TicketDetail>('/tickets', data),
-  update: (id: string, data: { title?: string; description?: string; priority?: import('@/types').TicketPriority }) =>
+  update: (id: string, data: { title?: string; description?: string; priority?: import('@/types').TicketPriority; formResponses?: Record<string, string> }) =>
     api.patch<import('@/types').TicketDetail>(`/tickets/${id}`, data),
   assign: (id: string, ownerId: string | null) =>
     api.patch<import('@/types').TicketDetail>(`/tickets/${id}/assign`, { ownerId }),

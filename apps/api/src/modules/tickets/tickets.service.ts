@@ -851,31 +851,62 @@ export class TicketsService {
       });
     }
 
-    const oldValues = {
+    const oldValues: Record<string, unknown> = {
       title: ticket.title,
       priority: ticket.priority,
     };
+    if (
+      dto.formResponses != null &&
+      Object.keys(dto.formResponses).length > 0
+    ) {
+      const existing = await this.prisma.ticketFormResponse.findMany({
+        where: { ticketId: id },
+        select: { fieldKey: true, value: true },
+      });
+      oldValues.formResponses = Object.fromEntries(
+        existing.map((r) => [r.fieldKey, r.value]),
+      );
+    }
 
-    const updated = await this.prisma.ticket.update({
-      where: { id },
-      data: {
-        ...(dto.title && { title: dto.title }),
-        ...(dto.description && { description: dto.description }),
-        ...(dto.ticketClassId && { ticketClassId: dto.ticketClassId }),
-        ...(dto.departmentId !== undefined && {
-          departmentId: dto.departmentId,
-        }),
-        ...(dto.supportTopicId !== undefined && {
-          supportTopicId: dto.supportTopicId,
-        }),
-        ...(dto.maintenanceCategoryId !== undefined && {
-          maintenanceCategoryId: dto.maintenanceCategoryId,
-        }),
-        ...(dto.studioId !== undefined && { studioId: dto.studioId }),
-        ...(dto.marketId !== undefined && { marketId: dto.marketId }),
-        ...(dto.priority && { priority: dto.priority }),
-      },
-      select: TICKET_LIST_SELECT,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.ticket.update({
+        where: { id },
+        data: {
+          ...(dto.title && { title: dto.title }),
+          ...(dto.description && { description: dto.description }),
+          ...(dto.ticketClassId && { ticketClassId: dto.ticketClassId }),
+          ...(dto.departmentId !== undefined && {
+            departmentId: dto.departmentId,
+          }),
+          ...(dto.supportTopicId !== undefined && {
+            supportTopicId: dto.supportTopicId,
+          }),
+          ...(dto.maintenanceCategoryId !== undefined && {
+            maintenanceCategoryId: dto.maintenanceCategoryId,
+          }),
+          ...(dto.studioId !== undefined && { studioId: dto.studioId }),
+          ...(dto.marketId !== undefined && { marketId: dto.marketId }),
+          ...(dto.priority && { priority: dto.priority }),
+        },
+        select: TICKET_LIST_SELECT,
+      });
+      if (
+        dto.formResponses != null &&
+        Object.keys(dto.formResponses).length > 0
+      ) {
+        for (const [fieldKey, value] of Object.entries(dto.formResponses)) {
+          await tx.ticketFormResponse.upsert({
+            where: { ticketId_fieldKey: { ticketId: id, fieldKey } },
+            create: {
+              ticketId: id,
+              fieldKey,
+              value: String(value ?? ''),
+            },
+            update: { value: String(value ?? '') },
+          });
+        }
+      }
+      return result;
     });
 
     await this.auditLog.log({

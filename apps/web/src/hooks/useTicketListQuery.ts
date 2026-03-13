@@ -32,6 +32,8 @@ export function normalizeTicketListKey(
     'maintenanceCategoryId',
     'ownerId',
     'requesterId',
+    'createdAfter',
+    'createdBefore',
   ] as const;
 
   for (const k of filterKeys) {
@@ -67,6 +69,8 @@ export function buildListParams(
   if (rest.ownerId != null) out.ownerId = rest.ownerId;
   if (rest.requesterId != null) out.requesterId = rest.requesterId;
   if (rest.actionableForMe === true) out.actionableForMe = true;
+  if (rest.createdAfter != null) out.createdAfter = rest.createdAfter;
+  if (rest.createdBefore != null) out.createdBefore = rest.createdBefore;
   return out;
 }
 

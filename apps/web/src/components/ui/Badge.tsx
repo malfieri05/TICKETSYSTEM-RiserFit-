@@ -32,9 +32,9 @@ const priorityStyles: Record<TicketPriority, BadgeStyle> = {
 
 const subtaskStyles: Record<SubtaskStatus, BadgeStyle> = {
   LOCKED:      { bg: 'var(--color-bg-surface-raised)', text: 'var(--color-text-muted)',  ring: 'var(--color-border-default)' },
-  READY:       { bg: 'rgba(16,185,129,0.15)',  text: '#059669', ring: 'rgba(16,185,129,0.3)' },
+  READY:       { bg: 'rgba(59,130,246,0.15)',  text: '#3b82f6', ring: 'rgba(59,130,246,0.3)' },
   IN_PROGRESS: { bg: 'rgba(234,179,8,0.15)',   text: '#ca8a04', ring: 'rgba(234,179,8,0.3)' },
-  DONE:        { bg: 'rgba(20,184,166,0.15)',   text: '#0d9488', ring: 'rgba(20,184,166,0.3)' },
+  DONE:        { bg: 'rgba(34,197,94,0.15)',   text: '#16a34a', ring: 'rgba(34,197,94,0.3)' },
   SKIPPED:     { bg: 'var(--color-bg-surface-raised)', text: 'var(--color-text-muted)',  ring: 'var(--color-border-default)' },
 };
 

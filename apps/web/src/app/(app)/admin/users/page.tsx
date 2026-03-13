@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Pencil, MapPin, X } from 'lucide-react';
+import { Pencil, MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -75,6 +75,8 @@ export default function AdminUsersPage() {
   const [locationsModalUserId, setLocationsModalUserId] = useState<string | null>(null);
   const [deactivateConfirmUserId, setDeactivateConfirmUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [addUserModalOpen, setAddUserModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
 
   const filteredUsers = (() => {
     const q = searchQuery.trim().toLowerCase();
@@ -125,14 +127,68 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Users" />
+      {/* Add new user modal (demo only — no backend) */}
+      {addUserModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setAddUserModalOpen(false)}
+        >
+          <div
+            className="rounded-xl shadow-xl max-w-md w-full p-6"
+            style={{
+              background: 'var(--color-bg-surface-raised)',
+              border: '1px solid var(--color-border-default)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                Allow new user sign up:
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAddUserModalOpen(false)}
+                className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-bg-surface)]"
+                style={{ color: 'var(--color-text-muted)' }}
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
+              Send secure one-time create account link.
+            </p>
+            <Input
+              type="email"
+              placeholder="New user's email address"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              className="w-full"
+            />
+            <p className="text-xs mt-3" style={{ color: 'var(--color-text-muted)' }}>
+              (Demo only — invite not sent.)
+            </p>
+            <div className="flex justify-end mt-5">
+              <Button size="sm" onClick={() => {}}>
+                Send Invite.
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="p-6">
-        <div className="mb-4">
+        <div className="mb-4 flex items-center justify-between gap-4">
           <Input
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="max-w-sm"
           />
+          <Button size="sm" onClick={() => { setAddUserModalOpen(true); setInviteEmail(''); }}>
+            <Plus className="h-4 w-4" />
+            Add new user
+          </Button>
         </div>
         <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (

@@ -133,13 +133,13 @@ export class DashboardService {
     >(
       `
       SELECT ROUND(
-        AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+        AVG(EXTRACT(EPOCH FROM (t."resolvedAt" - t."createdAt")) / 3600)::numeric,
         1
       )::float AS avg_hours
       FROM tickets t
       WHERE t.status IN ('RESOLVED', 'CLOSED')
-        AND t.resolved_at IS NOT NULL
-        AND t.resolved_at >= $1
+        AND t."resolvedAt" IS NOT NULL
+        AND t."resolvedAt" >= $1
     `,
       since,
     );

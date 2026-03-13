@@ -70,7 +70,13 @@ function canMutateSubtask(
   const ticket = subtask.ticket;
 
   const canModifyTicket = helpers.visibility.canModify(
-    { requesterId: ticket.requesterId, ownerId: ticket.ownerId },
+    {
+      requesterId: ticket.requesterId,
+      ownerId: ticket.ownerId,
+      studioId: ticket.studioId,
+      department: ticket.department,
+      owner: ticket.owner,
+    },
     subject,
   );
 

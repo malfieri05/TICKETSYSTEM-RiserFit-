@@ -142,23 +142,64 @@ export class TicketVisibilityService {
    * Returns true if the actor can modify (update, change status, etc.) the ticket.
    * This is separate from visibility — even visible tickets may not be editable.
    *
-   * ADMIN / DEPARTMENT_USER (owner or dept-routed) → can modify
-   * STUDIO_USER → can only modify their own submitted tickets
+   * ADMIN → can modify any ticket.
+   * DEPARTMENT_USER → can modify if they can view (owner, or department match, or studio scope).
+   * STUDIO_USER → can only modify their own submitted tickets.
    */
   canModify(
-    ticket: { requesterId: string; ownerId: string | null },
+    ticket: {
+      requesterId: string;
+      ownerId: string | null;
+      studioId?: string | null;
+      department?: { code: string } | null;
+      owner?: { teamId?: string | null; team?: { name: string } | null } | null;
+    },
     actor: RequestUser,
   ): boolean {
     if (actor.role === Role.ADMIN) return true;
     if (actor.role === Role.DEPARTMENT_USER) {
-      return ticket.ownerId === actor.id;
+      if (ticket.ownerId === actor.id) return true;
+      const departmentCodes = actor.departments
+        .map((d) => String(d))
+        .filter(Boolean);
+      if (
+        departmentCodes.length > 0 &&
+        ticket.department?.code &&
+        departmentCodes.includes(ticket.department.code)
+      ) {
+        return true;
+      }
+      if (!ticket.department && ticket.owner?.team?.name) {
+        const teamNames = actor.departments
+          .map((d) => DEPARTMENT_TO_TEAM_NAME[d])
+          .filter(Boolean);
+        if (
+          teamNames.length > 0 &&
+          teamNames.includes(ticket.owner.team.name)
+        ) {
+          return true;
+        }
+      }
+      if (
+        ticket.studioId != null &&
+        actor.scopeStudioIds.includes(ticket.studioId)
+      ) {
+        return true;
+      }
+      return false;
     }
     // STUDIO_USER can only edit their own submitted tickets
     return ticket.requesterId === actor.id;
   }
 
   assertCanModify(
-    ticket: { requesterId: string; ownerId: string | null },
+    ticket: {
+      requesterId: string;
+      ownerId: string | null;
+      studioId?: string | null;
+      department?: { code: string } | null;
+      owner?: { teamId?: string | null; team?: { name: string } | null } | null;
+    },
     actor: RequestUser,
   ): void {
     if (!this.canModify(ticket, actor)) {

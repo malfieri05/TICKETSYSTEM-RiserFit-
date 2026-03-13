@@ -7,7 +7,8 @@ import { api } from '@/lib/api';
 import type { Market, Studio } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
 import dynamic from 'next/dynamic';
 
@@ -201,12 +202,13 @@ export default function AdminMarketsPage() {
           {showAddForm && (
             <div className="rounded-xl p-4 space-y-3" style={panel}>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Add Location</h3>
-              <Select label="State" value={addFormMarketId} onChange={(e) => setAddFormMarketId(e.target.value)}>
-                <option value="">— Select state —</option>
-                {markets.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
-              </Select>
+              <ComboBox
+                label="State"
+                placeholder="— Select state —"
+                options={markets.map((m) => ({ value: m.id, label: m.name }))}
+                value={addFormMarketId}
+                onChange={setAddFormMarketId}
+              />
               <Input label="Name" placeholder="Location name" value={addForm.name} onChange={(e) => setAddForm((f) => ({ ...f, name: e.target.value }))} />
               <Input label="Formatted address" placeholder="e.g. 123 Main St, City, State" value={addForm.formattedAddress} onChange={(e) => setAddForm((f) => ({ ...f, formattedAddress: e.target.value }))} />
               <div>

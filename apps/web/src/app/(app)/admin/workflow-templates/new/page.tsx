@@ -7,7 +7,8 @@ import { ArrowLeft } from 'lucide-react';
 import { adminApi, workflowTemplatesApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
@@ -81,58 +82,46 @@ export default function NewWorkflowTemplatePage() {
         </Button>
         <div className="rounded-xl p-6 space-y-4" style={panel}>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Select ticket context</h2>
-          <Select
+          <ComboBox
             label="Ticket type"
+            placeholder="— Select type —"
+            options={ticketClasses.map((c) => ({ value: c.id, label: c.name }))}
             value={ticketClassId}
-            onChange={(e) => {
-              setTicketClassId(e.target.value);
+            onChange={(v) => {
+              setTicketClassId(v);
               setDepartmentId('');
               setSupportTopicId('');
               setMaintenanceCategoryId('');
             }}
-          >
-            <option value="">— Select type —</option>
-            {ticketClasses.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
+          />
           {isSupport && (
             <>
-              <Select
+              <ComboBox
                 label="Department"
+                placeholder="— Select department —"
+                options={supportDepts.map((d) => ({ value: d.id, label: d.name }))}
                 value={departmentId}
-                onChange={(e) => { setDepartmentId(e.target.value); setSupportTopicId(''); }}
-              >
-                <option value="">— Select department —</option>
-                {supportDepts.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </Select>
+                onChange={(v) => { setDepartmentId(v); setSupportTopicId(''); }}
+              />
               {departmentId && (
-                <Select
+                <ComboBox
                   label="Support topic"
+                  placeholder="— Select topic —"
+                  options={selectedDeptTopics.map((t) => ({ value: t.id, label: t.name }))}
                   value={supportTopicId}
-                  onChange={(e) => setSupportTopicId(e.target.value)}
-                >
-                  <option value="">— Select topic —</option>
-                  {selectedDeptTopics.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </Select>
+                  onChange={setSupportTopicId}
+                />
               )}
             </>
           )}
           {isMaintenance && (
-            <Select
+            <ComboBox
               label="Maintenance category"
+              placeholder="— Select category —"
+              options={maintenanceCategories.map((c) => ({ value: c.id, label: c.name }))}
               value={maintenanceCategoryId}
-              onChange={(e) => setMaintenanceCategoryId(e.target.value)}
-            >
-              <option value="">— Select category —</option>
-              {maintenanceCategories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
+              onChange={setMaintenanceCategoryId}
+            />
           )}
           <Input
             label="Template name (optional)"

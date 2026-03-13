@@ -18,9 +18,11 @@ import {
   Sun,
   Moon,
   Activity,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
+import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
 import type { Department } from '@/types';
 
 type PortalTab = 'my' | 'studio' | 'dashboard';
@@ -39,18 +41,16 @@ const navItemsDefault: NavItem[] = [
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
-/** Studio users: My Tickets / By Studio(s) / Dashboard in sidebar, all under /portal. */
+/** Studio users: Home = main ticket feed (portal my), then Dashboard, Notifications. */
 const navItemsStudioUser: NavItem[] = [
-  { href: '/portal', label: 'My Tickets', icon: Home, tab: 'my' },
-  { href: '/portal', label: 'By Studio(s)', icon: LayoutGrid, tab: 'studio' },
+  { href: '/portal', label: 'Home', icon: Home, tab: 'my' },
   { href: '/portal', label: 'Dashboard', icon: LayoutDashboard, tab: 'dashboard' },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
-/** Department users land on Inbox (actionable queue + topics). */
+/** Department users: Home = main ticket feed, then Dashboard, Notifications. */
 const navItemsDepartmentUser: NavItem[] = [
-  { href: '/inbox', label: 'Inbox', icon: Inbox },
-  { href: '/tickets', label: 'Tickets', icon: Home },
+  { href: '/tickets', label: 'Home', icon: Home },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
@@ -114,6 +114,7 @@ export function Sidebar() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { unreadCount } = useNotificationCount();
+  const { isOpen: isNotificationsPanelOpen, open: openNotificationsPanel, close: closeNotificationsPanel } = useNotificationsPanel();
 
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   useEffect(() => {
@@ -144,7 +145,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-40 flex w-60 flex-col"
+      className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col"
       style={{ background: 'var(--color-bg-surface)', borderRight: '1px solid var(--color-border-default)' }}
     >
       {/* Logo */}
@@ -192,6 +193,32 @@ export function Sidebar() {
             label === 'Notifications'
               ? `Notifications (${unreadCount ?? 0})`
               : label;
+          if (label === 'Notifications') {
+            return (
+              <button
+                key={`${href}-${label}`}
+                type="button"
+                onClick={() => isNotificationsPanelOpen ? closeNotificationsPanel() : openNotificationsPanel()}
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  borderLeft: '3px solid transparent',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-surface-raised)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
+              >
+                <span className="flex items-center gap-3 min-w-0">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {displayLabel}
+                </span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 ml-auto transition-transform duration-200 ease-out"
+                  style={{ color: 'var(--color-text-muted)', transform: isNotificationsPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                />
+              </button>
+            );
+          }
           return (
             <Link
               key={`${href}-${label}`}

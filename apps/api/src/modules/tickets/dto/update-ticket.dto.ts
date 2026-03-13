@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  IsObject,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -45,4 +46,9 @@ export class UpdateTicketDto {
   @IsOptional()
   @IsEnum(Priority)
   priority?: Priority;
+
+  /** Key-value map of form response field keys to values. Upserts each key. */
+  @IsOptional()
+  @IsObject()
+  formResponses?: Record<string, string>;
 }

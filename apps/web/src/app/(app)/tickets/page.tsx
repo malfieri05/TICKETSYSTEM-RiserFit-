@@ -8,9 +8,11 @@ import { adminApi } from '@/lib/api';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
+import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -20,19 +22,9 @@ const PAGE_SIZE = 20;
 
 type ViewTab = 'active' | 'completed';
 
-const CANONICAL_HEADERS = [
-  { label: 'ID', key: 'id' },
-  { label: 'Title', key: 'title' },
-  { label: 'Created', key: 'created' },
-  { label: 'Status', key: 'status' },
-  { label: 'Priority', key: 'priority' },
-  { label: 'Progress', key: 'progress' },
-  { label: 'Requester', key: 'requester' },
-  { label: 'Comments', key: 'comments' },
-] as const;
-
 const FILTER_KEYS: (keyof TicketFilters)[] = [
   'departmentId', 'ticketClass', 'supportTopicId', 'maintenanceCategoryId', 'studioId', 'state',
+  'createdAfter', 'createdBefore',
 ];
 
 export default function TicketsPage() {
@@ -111,6 +103,14 @@ export default function TicketsPage() {
   });
   const markets = marketsData?.data ?? [];
 
+  const supportClass = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT');
+  const maintenanceClass = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE');
+  const supportVsMaintenanceOptions = [
+    { value: '', label: 'All' },
+    ...(supportClass ? [{ value: supportClass.id, label: 'Support only' }] : []),
+    ...(maintenanceClass ? [{ value: maintenanceClass.id, label: 'Maintenance only' }] : []),
+  ];
+
   const typeOptions = (() => {
     if (!taxonomy) return [];
     const opts: { value: string; label: string; params: Partial<TicketFilters> }[] = [];
@@ -171,6 +171,19 @@ export default function TicketsPage() {
     });
   };
 
+  const setDateFilter = (kind: 'createdAfter' | 'createdBefore', dateStr: string) => {
+    const value = dateStr
+      ? kind === 'createdAfter'
+        ? `${dateStr}T00:00:00.000Z`
+        : `${dateStr}T23:59:59.999Z`
+      : undefined;
+    setFilters((f) => {
+      const next = { ...f, [kind]: value, page: 1 };
+      syncUrl(next, search);
+      return next;
+    });
+  };
+
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
 
   const listParams = {
@@ -185,6 +198,8 @@ export default function TicketsPage() {
     maintenanceCategoryId: filters.maintenanceCategoryId,
     studioId: filters.studioId,
     state: filters.state,
+    createdAfter: filters.createdAfter,
+    createdBefore: filters.createdBefore,
   };
 
   const {
@@ -247,89 +262,110 @@ export default function TicketsPage() {
         })}
       </div>
 
-      <div ref={listContainerRef} className="flex-1 p-6 space-y-4 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>
-        {/* Filter bar */}
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-            <Input
-              placeholder="Search tickets or paste ID..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-64 pl-9"
-            />
-          </div>
-
-          <Select
-            value={filters.departmentId ?? ''}
-            onChange={(e) => updateFilter('departmentId', e.target.value)}
-            className="w-48"
-          >
-            <option value="">All departments</option>
-            {(taxonomy?.departments ?? []).map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </Select>
-
-          <Select
-            value={currentTypeValue}
-            onChange={(e) => handleTypeChange(e.target.value)}
-            className="w-52"
-          >
-            <option value="">All types</option>
-            {typeOptions.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </Select>
-
-          <Select
-            value={currentLocationValue}
-            onChange={(e) => handleLocationChange(e.target.value)}
-            className="w-48"
-          >
-            <option value="">All locations</option>
-            {locationOptions.map((o) => (
-              <option key={`${o.key}-${o.value}`} value={`${o.key === 'state' ? 'state' : 'studio'}-${o.value}`}>
-                {o.label}
-              </option>
-            ))}
-          </Select>
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="md" onClick={clearAllFilters}>
-              Clear filters
-            </Button>
-          )}
-        </div>
-
-        <div className="rounded-xl overflow-hidden relative" style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}`, boxShadow: POLISH_THEME.listContainerShadow }}>
-          {isFetching && tickets.length > 0 && !isInitialLoading && (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 2,
-                zIndex: 5,
-                background: `linear-gradient(90deg, transparent, var(--color-accent), transparent)`,
-                backgroundSize: '200% 100%',
-                animation: 'shimmer 1.4s ease-in-out infinite',
-              }}
-            />
-          )}
-          {isInitialLoading ? (
+      <div ref={listContainerRef} className="flex-1 flex flex-col overflow-hidden">
+        <TicketFeedLayout
+          filters={
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
+                <Input
+                  placeholder="Search tickets or paste ID..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-64 pl-9"
+                />
+              </div>
+              <ComboBox
+                placeholder="All departments"
+                options={(taxonomy?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))}
+                value={filters.departmentId ?? ''}
+                onChange={(v) => updateFilter('departmentId', v)}
+                className="w-48"
+              />
+              <ComboBox
+                placeholder="Support vs. Maintenance"
+                options={supportVsMaintenanceOptions}
+                value={filters.ticketClass ?? ''}
+                onChange={(v) => updateFilter('ticketClass', v)}
+                className="w-48"
+              />
+              <ComboBox
+                placeholder="All types"
+                options={typeOptions.map((o) => ({ value: o.value, label: o.label }))}
+                value={currentTypeValue}
+                onChange={handleTypeChange}
+                className="w-52"
+              />
+              <ComboBox
+                placeholder="All locations"
+                options={locationOptions.map((o) => ({ value: `${o.key === 'state' ? 'state' : 'studio'}-${o.value}`, label: o.label }))}
+                value={currentLocationValue}
+                onChange={handleLocationChange}
+                className="w-48"
+              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={filters.createdAfter ? filters.createdAfter.slice(0, 10) : ''}
+                  onChange={(e) => setDateFilter('createdAfter', e.target.value)}
+                  className="rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                  title="From date"
+                />
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>–</span>
+                <input
+                  type="date"
+                  value={filters.createdBefore ? filters.createdBefore.slice(0, 10) : ''}
+                  onChange={(e) => setDateFilter('createdBefore', e.target.value)}
+                  className="rounded-lg border px-3 py-2 text-sm"
+                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                  title="To date"
+                />
+              </div>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="md" onClick={clearAllFilters}>
+                  Clear filters
+                </Button>
+              )}
+            </div>
+          }
+          isInitialLoading={isInitialLoading}
+          isFetching={isFetching}
+          hasTickets={tickets.length > 0}
+          ticketList={
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-                  {CANONICAL_HEADERS.map((h) => (
-                    <th key={h.key} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+                  {CANONICAL_FEED_HEADERS.map((h) => (
+                    <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
                   ))}
                 </tr>
               </thead>
-              <TicketsTableSkeletonRows count={8} />
+              <tbody>
+                {tickets.map((ticket) => {
+                  const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+                  const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+                  return (
+                    <TicketTableRow
+                      key={ticket.id}
+                      id={ticket.id}
+                      title={ticket.title}
+                      status={ticket.status}
+                      priority={ticket.priority}
+                      createdAt={ticket.createdAt}
+                      commentCount={ticket._count?.comments ?? 0}
+                      completedSubtasks={completedSubtasks}
+                      totalSubtasks={totalSubtasks}
+                      requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
+                      isSelected={selectedId === ticket.id}
+                      onSelect={() => setSelectedId(ticket.id)}
+                    />
+                  );
+                })}
+              </tbody>
             </table>
-          ) : tickets.length === 0 ? (
+          }
+          emptyState={
             <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
               {hasActiveFilters ? (
                 <>
@@ -356,66 +392,50 @@ export default function TicketsPage() {
                 </>
               )}
             </div>
-          ) : (
+          }
+          pagination={
+            totalPages > 1 ? (
+              <div
+                className="flex items-center justify-between px-4 py-3"
+                style={{ borderTop: '1px solid var(--color-border-default)' }}
+              >
+                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={(filters.page ?? 1) <= 1 || isFetching}
+                    onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={(filters.page ?? 1) >= totalPages || isFetching}
+                    onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            ) : null
+          }
+          initialSkeleton={
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-                  {CANONICAL_HEADERS.map((h) => (
-                    <th key={h.key} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+                  {CANONICAL_FEED_HEADERS.map((h) => (
+                    <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody>
-                {tickets.map((ticket) => {
-                  const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-                  const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-                  return (
-                    <TicketTableRow
-                      key={ticket.id}
-                      id={ticket.id}
-                      title={ticket.title}
-                      status={ticket.status}
-                      priority={ticket.priority}
-                      createdAt={ticket.createdAt}
-                      commentCount={ticket._count?.comments ?? 0}
-                      completedSubtasks={completedSubtasks}
-                      totalSubtasks={totalSubtasks}
-                      requesterDisplayName={ticket.requester.displayName}
-                      isSelected={selectedId === ticket.id}
-                      onSelect={() => setSelectedId(ticket.id)}
-                    />
-                  );
-                })}
-              </tbody>
+              <TicketsTableSkeletonRows count={8} />
             </table>
-          )}
-        </div>
-
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between">
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) <= 1 || isFetching}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={(filters.page ?? 1) >= totalPages || isFetching}
-                onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
+          }
+        />
       </div>
 
       <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />

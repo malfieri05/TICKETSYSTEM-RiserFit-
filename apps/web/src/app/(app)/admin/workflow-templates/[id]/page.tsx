@@ -36,7 +36,8 @@ import type {
 } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Input';
+import { Input, Textarea } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { UserSearchSelect } from '@/components/ui/UserSearchSelect';
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
@@ -531,11 +532,13 @@ export default function WorkflowTemplateDetailPage() {
                 <div className="space-y-2 flex-1">
                   <Input label="Title" value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
                   <Textarea label="Description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} />
-                  <Select label="Department" value={editDepartmentId} onChange={(e) => setEditDepartmentId(e.target.value)}>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </Select>
+                  <ComboBox
+                    label="Department"
+                    placeholder="— Department —"
+                    options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                    value={editDepartmentId}
+                    onChange={setEditDepartmentId}
+                  />
                   <UserSearchSelect
                     label="Assigned user (optional)"
                     users={departmentUsers}
@@ -572,12 +575,12 @@ export default function WorkflowTemplateDetailPage() {
             <p className="text-xs font-medium text-[var(--color-text-secondary)] mb-2">Add subtask</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <Input placeholder="Title" value={addSubtaskTitle} onChange={(e) => setAddSubtaskTitle(e.target.value)} />
-              <Select value={addSubtaskDepartmentId} onChange={(e) => setAddSubtaskDepartmentId(e.target.value)}>
-                <option value="">— Department —</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </Select>
+              <ComboBox
+                placeholder="— Department —"
+                options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                value={addSubtaskDepartmentId}
+                onChange={setAddSubtaskDepartmentId}
+              />
             </div>
             <Textarea placeholder="Description (optional)" value={addSubtaskDescription} onChange={(e) => setAddSubtaskDescription(e.target.value)} rows={2} className="mt-2" />
             <UserSearchSelect
@@ -614,29 +617,23 @@ export default function WorkflowTemplateDetailPage() {
             </ul>
           )}
           <div className="flex flex-wrap items-end gap-2">
-            <Select
+            <ComboBox
+              placeholder="— This subtask —"
+              options={subtasks.map((s) => ({ value: s.id, label: s.title }))}
               value={depSubtaskId}
-              onChange={(e) => { setDepSubtaskId(e.target.value); setDepDependsOnId(''); }}
+              onChange={(v) => { setDepSubtaskId(v); setDepDependsOnId(''); }}
               className="min-w-[180px]"
-            >
-              <option value="">— This subtask —</option>
-              {subtasks.map((s) => (
-                <option key={s.id} value={s.id}>{s.title}</option>
-              ))}
-            </Select>
-            <Select
-              value={depDependsOnId}
-              onChange={(e) => setDepDependsOnId(e.target.value)}
-              className="min-w-[180px]"
-            >
-              <option value="">— Depends on —</option>
-              {subtasks
+            />
+            <ComboBox
+              placeholder="— Depends on —"
+              options={subtasks
                 .filter((s) => s.id !== depSubtaskId)
                 .filter((s) => !depSubtaskId || !wouldCreateCycle(deps, depSubtaskId, s.id))
-                .map((s) => (
-                  <option key={s.id} value={s.id}>{s.title}</option>
-                ))}
-            </Select>
+                .map((s) => ({ value: s.id, label: s.title }))}
+              value={depDependsOnId}
+              onChange={setDepDependsOnId}
+              className="min-w-[180px]"
+            />
             <Button size="sm" onClick={() => addDepMut.mutate()} disabled={!canAddDep} loading={addDepMut.isPending}>
               Add dependency
             </Button>

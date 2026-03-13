@@ -2,20 +2,20 @@
 
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Ticket, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
-import { ticketsApi, dashboardApi, type StudioDashboardSummaryResponse } from '@/lib/api';
+import { ticketsApi, dashboardApi, adminApi, type StudioDashboardSummaryResponse } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
-import { StatusBadge } from '@/components/ui/Badge';
-import type { TicketListItem } from '@/types';
-import { InboxLayout } from '@/components/inbox/InboxLayout';
+import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
@@ -77,10 +77,10 @@ function BreakdownBar({ label, count, max, color }: { label: string; count: numb
 }
 
 export default function PortalPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Scope summary (dashboard metrics + allowed studios)
   const { data: scopeData, isLoading: scopeLoading } = useQuery({
@@ -90,14 +90,52 @@ export default function PortalPage() {
   const scope = scopeData?.data;
   const allowedStudios = scope?.allowedStudios ?? [];
 
+  const { data: taxonomyData } = useQuery({
+    queryKey: ['ticket-taxonomy'],
+    queryFn: () => adminApi.getTicketTaxonomy(),
+  });
+  const taxonomy = taxonomyData?.data;
+
   // ─── My Tickets tab state ───────────────────────────────────────────────────
   const [myPage, setMyPage] = useState(1);
   const [mySearch, setMySearch] = useState('');
   const myDebouncedSearch = useDebouncedValue(mySearch, 300);
+  const [myTicketClass, setMyTicketClass] = useState<string>('');
+  const [mySupportTopicId, setMySupportTopicId] = useState<string>('');
+  const [myMaintenanceCategoryId, setMyMaintenanceCategoryId] = useState<string>('');
+  const [myStudioId, setMyStudioId] = useState<string>('');
+  const [myCreatedAfter, setMyCreatedAfter] = useState<string>('');
+  const [myCreatedBefore, setMyCreatedBefore] = useState<string>('');
+
+  const mySupportClass = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT');
+  const myMaintenanceClass = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE');
+  const mySupportVsMaintenanceOptions = [
+    { value: '', label: 'All' },
+    ...(mySupportClass ? [{ value: mySupportClass.id, label: 'Support only' }] : []),
+    ...(myMaintenanceClass ? [{ value: myMaintenanceClass.id, label: 'Maintenance only' }] : []),
+  ];
+  const myTypeOptions = (() => {
+    if (!taxonomy) return [];
+    const opts: { value: string; label: string; supportTopicId?: string; maintenanceCategoryId?: string }[] = [];
+    for (const dept of taxonomy.supportTopicsByDepartment ?? []) {
+      for (const topic of dept.topics ?? []) {
+        opts.push({ value: `st-${topic.id}`, label: `Support – ${topic.name}`, supportTopicId: topic.id });
+      }
+    }
+    for (const cat of taxonomy.maintenanceCategories ?? []) {
+      opts.push({ value: `mc-${cat.id}`, label: `Maintenance – ${cat.name}`, maintenanceCategoryId: cat.id });
+    }
+    return opts;
+  })();
+  const myCurrentTypeValue = mySupportTopicId ? `st-${mySupportTopicId}` : myMaintenanceCategoryId ? `mc-${myMaintenanceCategoryId}` : '';
+  const myLocationOptions = [
+    { value: '', label: 'All' },
+    ...allowedStudios.map((s) => ({ value: s.id, label: s.name })),
+  ];
 
   useEffect(() => {
     setMyPage(1);
-  }, [myDebouncedSearch]);
+  }, [myDebouncedSearch, myTicketClass, mySupportTopicId, myMaintenanceCategoryId, myStudioId, myCreatedAfter, myCreatedBefore]);
 
   const {
     tickets: myTickets,
@@ -112,12 +150,28 @@ export default function PortalPage() {
       limit: PAGE_SIZE,
       search: myDebouncedSearch || undefined,
       requesterId: user?.id ?? undefined,
+      ticketClass: myTicketClass || undefined,
+      supportTopicId: mySupportTopicId || undefined,
+      maintenanceCategoryId: myMaintenanceCategoryId || undefined,
+      studioId: myStudioId || undefined,
+      createdAfter: myCreatedAfter ? `${myCreatedAfter}T00:00:00.000Z` : undefined,
+      createdBefore: myCreatedBefore ? `${myCreatedBefore}T23:59:59.999Z` : undefined,
     },
     { enabled: !!user && activeTab === 'my' },
   );
 
   const myHasTickets = myTickets.length > 0;
-  const myHasFilters = !!myDebouncedSearch;
+  const myHasFilters = !!myDebouncedSearch || !!myTicketClass || !!mySupportTopicId || !!myMaintenanceCategoryId || !!myStudioId || !!myCreatedAfter || !!myCreatedBefore;
+
+  const clearMyFilters = () => {
+    setMyTicketClass('');
+    setMySupportTopicId('');
+    setMyMaintenanceCategoryId('');
+    setMyStudioId('');
+    setMyCreatedAfter('');
+    setMyCreatedBefore('');
+    setMyPage(1);
+  };
 
   const myPagination =
     myTotalPages > 1 ? (
@@ -164,6 +218,55 @@ export default function PortalPage() {
           className="w-56 pl-9"
         />
       </div>
+      <ComboBox
+        placeholder="Support vs. Maintenance"
+        options={mySupportVsMaintenanceOptions}
+        value={myTicketClass}
+        onChange={setMyTicketClass}
+        className="w-48"
+      />
+      <ComboBox
+        placeholder="All types"
+        options={myTypeOptions.map((o) => ({ value: o.value, label: o.label }))}
+        value={myCurrentTypeValue}
+        onChange={(val) => {
+          const opt = myTypeOptions.find((o) => o.value === val);
+          setMySupportTopicId(opt?.supportTopicId ?? '');
+          setMyMaintenanceCategoryId(opt?.maintenanceCategoryId ?? '');
+        }}
+        className="w-52"
+      />
+      <ComboBox
+        placeholder="All locations"
+        options={myLocationOptions}
+        value={myStudioId}
+        onChange={setMyStudioId}
+        className="w-48"
+      />
+      <div className="flex items-center gap-2">
+        <input
+          type="date"
+          value={myCreatedAfter}
+          onChange={(e) => setMyCreatedAfter(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+          title="From date"
+        />
+        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>–</span>
+        <input
+          type="date"
+          value={myCreatedBefore}
+          onChange={(e) => setMyCreatedBefore(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-sm"
+          style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+          title="To date"
+        />
+      </div>
+      {myHasFilters && (
+        <Button variant="ghost" size="md" onClick={clearMyFilters}>
+          Clear filters
+        </Button>
+      )}
     </div>
   );
 
@@ -171,10 +274,13 @@ export default function PortalPage() {
     <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
       {myHasFilters ? (
         <>
-          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current search</p>
+          <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current filters</p>
           <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
-            Try clearing your search or using different keywords.
+            Try adjusting your filters or search.
           </p>
+          <Button variant="ghost" size="sm" onClick={clearMyFilters}>
+            Clear filters
+          </Button>
         </>
       ) : (
         <>
@@ -187,15 +293,12 @@ export default function PortalPage() {
     </div>
   );
 
-  // Canonical feed headers — same order as all other ticket list surfaces
-  const portalHeaders = ['ID', 'Title', 'Created', 'Status', 'Priority', 'Progress', 'Requester', 'Comments'];
-
   const myTicketList = (
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {portalHeaders.map((h) => (
-            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -220,7 +323,8 @@ export default function PortalPage() {
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}
               requesterDisplayName={requesterDisplayName}
-              onSelect={() => router.push(`/tickets/${ticket.id}`)}
+              isSelected={selectedId === ticket.id}
+              onSelect={() => setSelectedId(ticket.id)}
             />
           );
         })}
@@ -232,8 +336,8 @@ export default function PortalPage() {
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {portalHeaders.map((h) => (
-            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -359,8 +463,8 @@ export default function PortalPage() {
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {portalHeaders.map((h) => (
-            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -385,7 +489,8 @@ export default function PortalPage() {
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}
               requesterDisplayName={requesterDisplayName}
-              onSelect={() => router.push(`/tickets/${ticket.id}`)}
+              isSelected={selectedId === ticket.id}
+              onSelect={() => setSelectedId(ticket.id)}
             />
           );
         })}
@@ -397,8 +502,8 @@ export default function PortalPage() {
     <table className="w-full text-sm">
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-          {portalHeaders.map((h) => (
-            <th key={h} className={POLISH_CLASS.tableHeader} style={{ color: POLISH_THEME.theadText }}>{h}</th>
+          {CANONICAL_FEED_HEADERS.map((h) => (
+            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
         </tr>
       </thead>
@@ -429,7 +534,7 @@ export default function PortalPage() {
       <Header title="My Tickets" />
       {/* Tab bodies controlled by ?tab=… from sidebar navigation */}
       {activeTab === 'my' && (
-        <InboxLayout
+        <TicketFeedLayout
           title="My tickets"
           description="Tickets you have requested, across all locations."
           isInitialLoading={myInitialLoading}
@@ -444,7 +549,7 @@ export default function PortalPage() {
       )}
 
       {activeTab === 'studio' && (
-        <InboxLayout
+        <TicketFeedLayout
           title="Tickets by studio"
           description="Tickets you have requested, grouped by your allowed locations."
           isInitialLoading={studioInitialLoading}
@@ -570,6 +675,7 @@ export default function PortalPage() {
           </div>
         </div>
       )}
+      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
     </div>
   );
 }

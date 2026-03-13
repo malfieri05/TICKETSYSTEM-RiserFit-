@@ -16,12 +16,67 @@ export function formatTicketId(id: string): string {
   return id.slice(0, 8);
 }
 
+/** Initials from display name: "First Last" -> "FL", "Madison" -> "MA", "A" -> "A". */
+function getInitials(displayName: string): string {
+  const trimmed = displayName.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0].charAt(0);
+    const last = parts[parts.length - 1].charAt(0);
+    return `${first}${last}`.toUpperCase();
+  }
+  const one = trimmed.slice(0, 2);
+  return one.length === 1 ? one.toUpperCase() : one.toUpperCase();
+}
+
+function RequesterAvatar({ displayName }: { displayName: string }) {
+  const initials = getInitials(displayName);
+  return (
+    <div className="relative group inline-flex">
+      <div
+        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 transition-colors"
+        style={{
+          background: 'var(--color-bg-surface-raised)',
+          border: `1px solid ${POLISH_THEME.listBorder}`,
+          color: 'var(--color-text-primary)',
+        }}
+        aria-hidden
+      >
+        {initials}
+      </div>
+      <div
+        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20"
+        style={{
+          background: 'var(--color-bg-surface-raised)',
+          border: `1px solid ${POLISH_THEME.listBorder}`,
+          color: 'var(--color-text-primary)',
+          boxShadow: 'var(--shadow-panel)',
+        }}
+      >
+        {displayName}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Canonical feed header definitions — used by all ticket list surfaces
  * (tickets page, inbox/actionable, and portal) to ensure consistent column order.
  *
  * Column order: ID | Title | Created | Status | Priority | Progress | Requester | Comments
  */
+/** Columns whose header and cell content should be center-aligned. */
+const CENTERED_COLS = new Set(['progress', 'requester', 'comments']);
+
+/**
+ * Returns the correct `<th>` class for a given column key.
+ * Progress, Requester, and Comments are center-aligned; all others left-align.
+ */
+export function getThClass(key: string): string {
+  return CENTERED_COLS.has(key) ? POLISH_CLASS.tableHeaderCenter : POLISH_CLASS.tableHeader;
+}
+
 export const CANONICAL_FEED_HEADERS = [
   { label: 'ID', key: 'id' },
   { label: 'Title', key: 'title' },
@@ -113,7 +168,7 @@ function TicketTableRowComponent({
       </td>
 
       {/* 6. Progress — green bar + count, centered; Comments icon is in its own column */}
-      <td className={POLISH_CLASS.cellPadding}>
+      <td className={`${POLISH_CLASS.cellPadding} text-center`}>
         <div className="flex flex-col items-center gap-1">
           <span className="text-xs font-medium tabular-nums" style={cellMuted}>
             {completedSubtasks} / {totalSubtasks}
@@ -137,15 +192,17 @@ function TicketTableRowComponent({
         </div>
       </td>
 
-      {/* 7. Requester */}
-      <td className={`${POLISH_CLASS.cellPadding} text-xs`} style={cellDim}>
-        {requesterDisplayName}
+      {/* 7. Requester — circle with initials + hover tooltip with full name */}
+      <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+        <div className="flex justify-center">
+          <RequesterAvatar displayName={requesterDisplayName || '—'} />
+        </div>
       </td>
 
       {/* 8. Comments */}
-      <td className={POLISH_CLASS.cellPadding}>
+      <td className={`${POLISH_CLASS.cellPadding} text-center`}>
         {commentCount > 0 ? (
-          <div className="flex items-center gap-1 text-xs" style={cellDim}>
+          <div className="flex items-center justify-center gap-1 text-xs" style={cellDim}>
             <MessageCircle className="h-3 w-3" />
             <span className="tabular-nums">{commentCount}</span>
           </div>

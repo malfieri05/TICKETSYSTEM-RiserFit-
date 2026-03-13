@@ -220,6 +220,10 @@ export interface TicketFilters {
   limit?: number;
   /** When true, list only tickets with incomplete subtasks for current user's dept/assignment. */
   actionableForMe?: boolean;
+  /** ISO date string: filter tickets created on or after this date (inclusive start of day). */
+  createdAfter?: string;
+  /** ISO date string: filter tickets created on or before this date (inclusive end of day). */
+  createdBefore?: string;
 }
 
 /** Stage 23: studio scope item (additional location for a user). */

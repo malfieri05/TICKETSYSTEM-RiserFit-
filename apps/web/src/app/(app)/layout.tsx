@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { AiChatWidget } from '@/components/ai/AiChatWidget';
+import { NotificationsPanelProvider } from '@/contexts/NotificationsPanelContext';
 import { useNotificationStream } from '@/hooks/useNotifications';
 
 function NotificationStreamInit() {
@@ -33,11 +34,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <NotificationStreamInit />
-      <Sidebar />
-      <main className="ml-60 flex-1 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>{children}</main>
-      <AiChatWidget />
-    </div>
+    <NotificationsPanelProvider>
+      <div className="flex h-screen overflow-hidden">
+        <NotificationStreamInit />
+        <Sidebar />
+        <main className="ml-60 flex-1 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>{children}</main>
+        <AiChatWidget />
+      </div>
+    </NotificationsPanelProvider>
   );
 }

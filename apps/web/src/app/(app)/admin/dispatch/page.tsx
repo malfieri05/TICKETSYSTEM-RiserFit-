@@ -7,7 +7,8 @@ import { BarChart2 } from 'lucide-react';
 import { reportingApi, adminApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
+import { ComboBox } from '@/components/ui/ComboBox';
 
 type DispatchFilters = {
   studioId?: string;
@@ -145,24 +146,27 @@ export default function DispatchPage() {
       <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl">
         {/* Filters — single row with horizontal scroll on narrow viewports */}
         <div className="rounded-xl p-4 flex flex-nowrap gap-3 items-end overflow-x-auto" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-          <Select value={filters.studioId ?? ''} onChange={(e) => setFilter('studioId', e.target.value)} className="w-44 shrink-0">
-            <option value="">All Studios</option>
-            {studios.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </Select>
-          <Select value={filters.marketId ?? ''} onChange={(e) => setFilter('marketId', e.target.value)} className="w-44 shrink-0">
-            <option value="">All States</option>
-            {markets.map((m) => (
-              <option key={m.id} value={m.id}>{m.name}</option>
-            ))}
-          </Select>
-          <Select value={filters.maintenanceCategoryId ?? ''} onChange={(e) => setFilter('maintenanceCategoryId', e.target.value)} className="w-48 shrink-0">
-            <option value="">All Maintenance Categories</option>
-            {maintenanceCategories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </Select>
+          <ComboBox
+            placeholder="All Studios"
+            options={studios.map((s) => ({ value: s.id, label: s.name }))}
+            value={filters.studioId ?? ''}
+            onChange={(v) => setFilter('studioId', v)}
+            className="w-44 shrink-0"
+          />
+          <ComboBox
+            placeholder="All States"
+            options={markets.map((m) => ({ value: m.id, label: m.name }))}
+            value={filters.marketId ?? ''}
+            onChange={(v) => setFilter('marketId', v)}
+            className="w-44 shrink-0"
+          />
+          <ComboBox
+            placeholder="All Maintenance Categories"
+            options={maintenanceCategories.map((c) => ({ value: c.id, label: c.name }))}
+            value={filters.maintenanceCategoryId ?? ''}
+            onChange={(v) => setFilter('maintenanceCategoryId', v)}
+            className="w-48 shrink-0"
+          />
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">From</span>
             <Input

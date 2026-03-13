@@ -201,6 +201,17 @@ function CommentBubble({
       style={{
         background: POLISH_THEME.listBg,
         border: `1px solid ${POLISH_THEME.innerBorder}`,
+        transition: 'all 150ms ease-out',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)';
+        e.currentTarget.style.borderColor = 'rgba(52,120,196,0.3)';
+        e.currentTarget.style.transform = 'translateY(-1px)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = 'none';
+        e.currentTarget.style.borderColor = POLISH_THEME.innerBorder;
+        e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
       <div className="flex items-center gap-2">

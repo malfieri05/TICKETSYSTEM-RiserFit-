@@ -42,7 +42,7 @@ export default function LoginPage() {
 
       const role = res.data.user.role;
       if (role === 'DEPARTMENT_USER') {
-        router.push('/inbox');
+        router.push('/tickets');
       } else if (role === 'STUDIO_USER') {
         router.push('/portal');
       } else {
@@ -165,18 +165,6 @@ export default function LoginPage() {
               {mode === 'login' ? 'Sign in' : 'Create account'}
             </Button>
           </form>
-
-          {/* Mode toggle */}
-          <p className="text-center text-sm text-[var(--color-text-muted)]">
-            {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <button
-              type="button"
-              onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}
-              className="font-medium text-[var(--color-accent)] hover:opacity-90 transition-colors"
-            >
-              {mode === 'login' ? 'Create one' : 'Sign in'}
-            </button>
-          </p>
 
           {/* Divider */}
           <div className="relative">

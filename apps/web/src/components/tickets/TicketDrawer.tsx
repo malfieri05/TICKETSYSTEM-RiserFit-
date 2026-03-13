@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare,
-  Clock, Plus, User, CheckCircle2,
+  Clock, Plus, User, CheckCircle2, Maximize2, Pencil,
 } from 'lucide-react';
 import { ticketsApi, subtasksApi, invalidateTicketLists } from '@/lib/api';
 import type { SubtaskStatus } from '@/types';
@@ -26,7 +27,13 @@ interface Props {
 const TAB_ORDER = ['subtasks', 'comments', 'submission', 'history'] as const;
 type TabKey = (typeof TAB_ORDER)[number];
 
+/** Submission field key → display label: underscores to spaces, capitalize words. */
+function formatFieldLabel(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function TicketDrawer({ ticketId, onClose }: Props) {
+  const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
   const open = !!ticketId;
@@ -34,12 +41,19 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabKey>('subtasks');
   const [newSubtask, setNewSubtask] = useState('');
   const [completionToast, setCompletionToast] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editTitleValue, setEditTitleValue] = useState('');
+  const [isEditingSubmission, setIsEditingSubmission] = useState(false);
+  const [submissionEditValues, setSubmissionEditValues] = useState<Record<string, string>>({});
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setActiveTab('subtasks');
     setNewSubtask('');
     setCompletionToast(false);
+    setIsEditingTitle(false);
+    setIsEditingSubmission(false);
+    setSubmissionEditValues({});
   }, [ticketId]);
 
   useEffect(() => {
@@ -115,6 +129,25 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     },
   });
 
+  const titleUpdateMut = useMutation({
+    mutationFn: (title: string) => ticketsApi.update(ticketId!, { title }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      invalidateTicketLists(qc);
+      setIsEditingTitle(false);
+    },
+  });
+
+  const submissionUpdateMut = useMutation({
+    mutationFn: (formResponses: Record<string, string>) =>
+      ticketsApi.update(ticketId!, { formResponses }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      invalidateTicketLists(qc);
+      setIsEditingSubmission(false);
+    },
+  });
+
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] })?.formResponses ?? [];
 
@@ -131,7 +164,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     <div
       className="fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-300 ease-out"
       style={{
-        width: 'min(920px, 76vw)',
+        width: 'min(828px, 68vw)',
         background: 'var(--color-bg-surface-raised)',
         borderLeft: `1px solid ${POLISH_THEME.listBorder}`,
         transform: open ? 'translateX(0)' : 'translateX(100%)',
@@ -174,13 +207,82 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
           {/* ── Panel header ──────────────────────────────────────────────────── */}
           <div className="px-6 pt-4 pb-3 shrink-0" style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}>
-            {/* Primary: title */}
-            <h2
-              className="text-lg font-bold leading-snug"
-              style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}
-            >
-              {ticket.title}
-            </h2>
+            {/* Primary: title (editable when canManage) */}
+            {isEditingTitle ? (
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  value={editTitleValue}
+                  onChange={(e) => setEditTitleValue(e.target.value)}
+                  className="text-lg font-bold leading-snug w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                  style={{
+                    color: 'var(--color-text-primary)',
+                    letterSpacing: '-0.01em',
+                    background: 'var(--color-bg-surface)',
+                    borderColor: POLISH_THEME.innerBorder,
+                  }}
+                  minLength={3}
+                  maxLength={255}
+                  aria-label="Ticket title"
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const t = editTitleValue.trim();
+                      if (t.length >= 3 && t.length <= 255) titleUpdateMut.mutate(t);
+                    }}
+                    disabled={editTitleValue.trim().length < 3 || editTitleValue.trim().length > 255 || titleUpdateMut.isPending}
+                    loading={titleUpdateMut.isPending}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setIsEditingTitle(false);
+                      setEditTitleValue(ticket.title);
+                    }}
+                    disabled={titleUpdateMut.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <h2
+                  className="text-lg font-bold leading-snug flex-1 min-w-0"
+                  style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}
+                >
+                  {ticket.title}
+                </h2>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditTitleValue(ticket.title);
+                      setIsEditingTitle(true);
+                    }}
+                    className="p-1.5 rounded-lg shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                    style={{ color: 'var(--color-text-muted)' }}
+                    aria-label="Edit ticket title"
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
+                      e.currentTarget.style.color = 'var(--color-text-secondary)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'var(--color-text-muted)';
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Secondary: ticket ID (prominent) + status badge — same row */}
             <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -251,7 +353,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
           {/* ── Tab bar (sticky, shrink-0) ─────────────────────────────────────── */}
           <div
-            className="sticky top-0 z-10 px-5 shrink-0"
+            className="sticky top-0 z-10 px-5 shrink-0 flex items-center justify-between"
             style={{ background: 'var(--color-bg-surface)', borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}
           >
             <nav className="flex gap-0.5 py-2">
@@ -280,6 +382,29 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 );
               })}
             </nav>
+            {ticketId && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  router.push(`/tickets/${ticketId}`);
+                }}
+                className="p-1.5 rounded-lg transition-colors shrink-0"
+                style={{ color: 'var(--color-text-muted)' }}
+                title="Open in full screen"
+                aria-label="Open in full screen"
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
+                  e.currentTarget.style.color = 'var(--color-text-secondary)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = 'var(--color-text-muted)';
+                }}
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
 
           {/* ── Sliding tab content ─────────────────────────────────────────────── */}
@@ -343,10 +468,23 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   return (
                     <div
                       key={s.id}
-                      className="rounded-xl p-3.5 flex items-center gap-3 transition-colors duration-150"
+                      className="rounded-xl p-3.5 flex items-center gap-3"
                       style={{
                         background: isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg,
                         border: `1px solid ${POLISH_THEME.innerBorder}`,
+                        transition: 'all 150ms ease-out',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
+                        e.currentTarget.style.borderColor = 'rgba(52,120,196,0.35)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(52,120,196,0.08)';
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg;
+                        e.currentTarget.style.borderColor = POLISH_THEME.innerBorder;
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
                       <div className="flex-1 min-w-0">
@@ -378,7 +516,6 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           <option value="READY">Ready</option>
                           <option value="IN_PROGRESS">In Progress</option>
                           <option value="DONE">Done</option>
-                          <option value="SKIPPED">Skipped</option>
                         </Select>
                       )}
                     </div>
@@ -418,24 +555,105 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   className="rounded-xl overflow-hidden"
                   style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}
                 >
-                  <div className="px-4 py-3" style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                  <div
+                    className="flex items-center justify-between px-4 py-3"
+                    style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}
+                  >
                     <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaDim }}>
                       Submission data
                     </span>
+                    {isEditingSubmission ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => submissionUpdateMut.mutate(submissionEditValues)}
+                          loading={submissionUpdateMut.isPending}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            setIsEditingSubmission(false);
+                            setSubmissionEditValues({});
+                          }}
+                          disabled={submissionUpdateMut.isPending}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : canManage && formResponses.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSubmissionEditValues(
+                            Object.fromEntries(formResponses.map((r) => [r.fieldKey, r.value ?? ''])),
+                          );
+                          setIsEditingSubmission(true);
+                        }}
+                        className="p-1.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                        style={{ color: 'var(--color-text-muted)' }}
+                        aria-label="Edit submission data"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
+                          e.currentTarget.style.color = 'var(--color-text-secondary)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent';
+                          e.currentTarget.style.color = 'var(--color-text-muted)';
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
                   </div>
-                  {formResponses.length === 0 && (
-                    <p className="px-4 py-6 text-sm" style={{ color: POLISH_THEME.metaDim }}>No form data.</p>
+                  {isEditingSubmission ? (
+                    <>
+                      {formResponses.length === 0 ? (
+                        <p className="px-4 py-6 text-sm" style={{ color: POLISH_THEME.metaDim }}>No submission fields to edit.</p>
+                      ) : (
+                        <div className="p-4">
+                          {formResponses.map((r) => (
+                            <div
+                              key={r.fieldKey}
+                              className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 items-center px-0 py-3"
+                              style={{
+                                borderTop: `1px solid ${POLISH_THEME.rowBorder}`,
+                              }}
+                            >
+                              <label className="text-sm break-words" style={{ color: POLISH_THEME.metaDim }}>
+                                {formatFieldLabel(r.fieldKey)}
+                              </label>
+                              <Input
+                                value={submissionEditValues[r.fieldKey] ?? ''}
+                                onChange={(e) =>
+                                  setSubmissionEditValues((prev) => ({ ...prev, [r.fieldKey]: e.target.value }))
+                                }
+                                className="min-w-0"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {formResponses.length === 0 && (
+                        <p className="px-4 py-6 text-sm" style={{ color: POLISH_THEME.metaDim }}>No form data.</p>
+                      )}
+                      {formResponses.map((r) => (
+                        <div
+                          key={r.fieldKey}
+                          className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 px-4 py-3 items-baseline"
+                          style={{ borderTop: `1px solid ${POLISH_THEME.rowBorder}` }}
+                        >
+                          <dt className="text-sm break-words" style={{ color: POLISH_THEME.metaDim }}>{formatFieldLabel(r.fieldKey)}</dt>
+                          <dd className="text-sm min-w-0 break-words" style={{ color: 'var(--color-text-primary)' }}>{r.value ?? '—'}</dd>
+                        </div>
+                      ))}
+                    </>
                   )}
-                  {formResponses.map((r) => (
-                    <div
-                      key={r.fieldKey}
-                      className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 px-4 py-3 items-baseline"
-                      style={{ borderTop: `1px solid ${POLISH_THEME.rowBorder}` }}
-                    >
-                      <dt className="text-sm break-words" style={{ color: POLISH_THEME.metaDim }}>{r.fieldKey}</dt>
-                      <dd className="text-sm min-w-0 break-words" style={{ color: 'var(--color-text-primary)' }}>{r.value ?? '—'}</dd>
-                    </div>
-                  ))}
                 </div>
                 <TicketAttachmentsSection ticketId={ticketId!} canManage={canManage} variant="drawer" />
               </div>
@@ -449,7 +667,27 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   <div
                     key={entry.id}
                     className="flex gap-3 py-2 text-sm"
-                    style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}
+                    style={{
+                      borderBottom: `1px solid ${POLISH_THEME.listBorder}`,
+                      borderRadius: '0',
+                      transition: 'all 150ms ease-out',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'var(--color-bg-surface)';
+                      e.currentTarget.style.borderRadius = '10px';
+                      e.currentTarget.style.padding = '8px 10px';
+                      e.currentTarget.style.margin = '0 -10px';
+                      e.currentTarget.style.borderBottom = '1px solid transparent';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.borderRadius = '0';
+                      e.currentTarget.style.padding = '';
+                      e.currentTarget.style.margin = '';
+                      e.currentTarget.style.borderBottom = `1px solid ${POLISH_THEME.listBorder}`;
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
                   >
                     <div className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--color-text-muted)' }} />
                     <div>
