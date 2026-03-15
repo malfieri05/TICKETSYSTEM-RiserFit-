@@ -442,6 +442,8 @@ model Ticket {
   @@index([createdAt])
   @@index([status, ownerId])
   @@index([requesterId, status])
+  @@index([updatedAt])
+  @@index([resolvedAt])
   @@map("tickets")
 }
 
@@ -690,6 +692,7 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, createdAt])
   @@index([ticketId])
+  @@index([userId, ticketId, eventType, createdAt])
   @@map("notifications")
 }
 

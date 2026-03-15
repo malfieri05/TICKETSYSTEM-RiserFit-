@@ -58,6 +58,7 @@ export default function DashboardPage() {
     queryKey: ['dashboard-summary'],
     queryFn: () => dashboardApi.summary(),
     refetchInterval: 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const summary = data?.data as DashboardSummaryResponse | undefined;

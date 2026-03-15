@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
@@ -67,11 +67,7 @@ export default function TicketsPage() {
   }, [pathname, router]);
 
   const updateFilter = (key: keyof TicketFilters, value: string) => {
-    setFilters((f) => {
-      const next = { ...f, [key]: value || undefined, page: 1 };
-      syncUrl(next, search);
-      return next;
-    });
+    setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
   };
 
   const clearAllFilters = () => {
@@ -88,8 +84,7 @@ export default function TicketsPage() {
     if (hasInitializedFromUrl.current) {
       syncUrl(filters, debouncedSearch);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
+  }, [filters, debouncedSearch, syncUrl]);
 
   const { data: taxonomyData } = useQuery({
     queryKey: ['ticket-taxonomy'],
@@ -106,12 +101,11 @@ export default function TicketsPage() {
   const supportClass = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT');
   const maintenanceClass = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE');
   const supportVsMaintenanceOptions = [
-    { value: '', label: 'All' },
     ...(supportClass ? [{ value: supportClass.id, label: 'Support only' }] : []),
     ...(maintenanceClass ? [{ value: maintenanceClass.id, label: 'Maintenance only' }] : []),
   ];
 
-  const typeOptions = (() => {
+  const typeOptions = useMemo(() => {
     if (!taxonomy) return [];
     const opts: { value: string; label: string; params: Partial<TicketFilters> }[] = [];
     for (const dept of taxonomy.supportTopicsByDepartment ?? []) {
@@ -123,7 +117,21 @@ export default function TicketsPage() {
       opts.push({ value: `mc-${cat.id}`, label: `Maintenance – ${cat.name}`, params: { maintenanceCategoryId: cat.id } });
     }
     return opts;
-  })();
+  }, [taxonomy]);
+
+  const typeOptionsForClass = useMemo(() => {
+    if (!filters.ticketClass || !supportClass || !maintenanceClass) return typeOptions;
+    if (filters.ticketClass === supportClass.id) return typeOptions.filter((o) => o.value.startsWith('st-'));
+    if (filters.ticketClass === maintenanceClass.id) return typeOptions.filter((o) => o.value.startsWith('mc-'));
+    return typeOptions;
+  }, [typeOptions, filters.ticketClass, supportClass?.id, maintenanceClass?.id]);
+
+  useEffect(() => {
+    const typeValue = filters.supportTopicId ? `st-${filters.supportTopicId}` : filters.maintenanceCategoryId ? `mc-${filters.maintenanceCategoryId}` : '';
+    if (typeValue && !typeOptionsForClass.some((o) => o.value === typeValue)) {
+      setFilters((f) => ({ ...f, supportTopicId: undefined, maintenanceCategoryId: undefined, page: 1 }));
+    }
+  }, [typeOptionsForClass, filters.supportTopicId, filters.maintenanceCategoryId]);
 
   const currentTypeValue = filters.supportTopicId
     ? `st-${filters.supportTopicId}`
@@ -136,12 +144,11 @@ export default function TicketsPage() {
     setFilters((f) => {
       const next: TicketFilters = { ...f, supportTopicId: undefined, maintenanceCategoryId: undefined, ticketClass: undefined, page: 1 };
       if (match) Object.assign(next, match.params);
-      syncUrl(next, search);
       return next;
     });
   };
 
-  const locationOptions = (() => {
+  const locationOptions = useMemo(() => {
     const opts: { value: string; label: string; key: 'studioId' | 'state' }[] = [];
     for (const m of markets) {
       opts.push({ value: m.id, label: m.name, key: 'state' });
@@ -150,7 +157,7 @@ export default function TicketsPage() {
       }
     }
     return opts;
-  })();
+  }, [markets]);
 
   const currentLocationValue = filters.studioId
     ? `studio-${filters.studioId}`
@@ -166,7 +173,6 @@ export default function TicketsPage() {
       } else if (val.startsWith('state-')) {
         next.state = val.replace('state-', '');
       }
-      syncUrl(next, search);
       return next;
     });
   };
@@ -177,12 +183,11 @@ export default function TicketsPage() {
         ? `${dateStr}T00:00:00.000Z`
         : `${dateStr}T23:59:59.999Z`
       : undefined;
-    setFilters((f) => {
-      const next = { ...f, [kind]: value, page: 1 };
-      syncUrl(next, search);
-      return next;
-    });
+    setFilters((f) => ({ ...f, [kind]: value, page: 1 }));
   };
+
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleClose = useCallback(() => setSelectedId(null), []);
 
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
 
@@ -219,16 +224,6 @@ export default function TicketsPage() {
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Tickets" />
 
-      <div
-        className="px-6 py-3 text-sm space-y-1"
-        style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)', color: 'var(--color-text-secondary)' }}
-      >
-        <p>Global list of all tickets you are allowed to see across departments and locations.</p>
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Use the Active / Completed tabs to switch between open work and historical tickets. Filters and search further narrow this list.
-        </p>
-      </div>
-
       <div className="flex items-center gap-1 px-6 py-2.5" style={{ background: 'var(--color-bg-page)', borderBottom: '1px solid var(--color-border-default)' }}>
         {([
           { key: 'active' as ViewTab, label: 'Active' },
@@ -239,14 +234,13 @@ export default function TicketsPage() {
             <button
               key={key}
               onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+              data-active={active}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all [&:not([data-active])]:hover:text-[var(--color-text-secondary)]"
               style={{
                 background: active ? 'var(--color-bg-surface)' : 'transparent',
                 color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
                 border: active ? '1px solid var(--color-border-default)' : '1px solid transparent',
               }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = 'var(--color-text-muted)'; }}
             >
               {label}
               {total > 0 && active && (
@@ -283,7 +277,7 @@ export default function TicketsPage() {
                 className="w-48"
               />
               <ComboBox
-                placeholder="Support vs. Maintenance"
+                placeholder="All"
                 options={supportVsMaintenanceOptions}
                 value={filters.ticketClass ?? ''}
                 onChange={(v) => updateFilter('ticketClass', v)}
@@ -291,7 +285,7 @@ export default function TicketsPage() {
               />
               <ComboBox
                 placeholder="All types"
-                options={typeOptions.map((o) => ({ value: o.value, label: o.label }))}
+                options={typeOptionsForClass.map((o) => ({ value: o.value, label: o.label }))}
                 value={currentTypeValue}
                 onChange={handleTypeChange}
                 className="w-52"
@@ -358,7 +352,7 @@ export default function TicketsPage() {
                       totalSubtasks={totalSubtasks}
                       requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
                       isSelected={selectedId === ticket.id}
-                      onSelect={() => setSelectedId(ticket.id)}
+                      onSelect={handleSelect}
                     />
                   );
                 })}
@@ -438,7 +432,7 @@ export default function TicketsPage() {
         />
       </div>
 
-      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
+      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
     </div>
   );
 }

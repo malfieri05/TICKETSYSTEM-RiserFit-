@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, memo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Send, Reply as ReplyIcon, ChevronDown, ChevronUp } from 'lucide-react';
@@ -57,10 +57,43 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
   const commentMut = useMutation({
     mutationFn: (data: { body: string; parentCommentId?: string }) =>
       commentsApi.create(ticketId, data),
-    onSuccess: () => {
+    onMutate: (variables) => {
+      const snapshot = qc.getQueryData(['ticket', ticketId]) as { comments: CommentData[] } | undefined;
+      const prev = snapshot ?? { comments: [] };
+      const optimisticId = `opt-${Date.now()}`;
+      const optimisticAuthor: CommentAuthor | null = user
+        ? { id: user.id, name: user.name ?? null, displayName: user.displayName, avatarUrl: user.avatarUrl ?? null }
+        : null;
+      const optimisticComment: CommentData = {
+        id: optimisticId,
+        body: variables.body,
+        author: optimisticAuthor,
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+        parentCommentId: variables.parentCommentId ?? null,
+        mentions: [],
+        replies: [],
+      };
+      let updatedComments: CommentData[];
+      if (variables.parentCommentId) {
+        updatedComments = (prev.comments ?? []).map((c) =>
+          c.id === variables.parentCommentId
+            ? { ...c, replies: [...(c.replies ?? []), optimisticComment] }
+            : c,
+        );
+      } else {
+        updatedComments = [...(prev.comments ?? []), optimisticComment];
+      }
+      qc.setQueryData(['ticket', ticketId], { ...prev, comments: updatedComments });
       setCommentBody('');
       setReplyBody('');
       setReplyingTo(null);
+      return { snapshot };
+    },
+    onError: (_err, _variables, context) => {
+      if (context?.snapshot != null) {
+        qc.setQueryData(['ticket', ticketId], context.snapshot);
+      }
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
@@ -68,24 +101,24 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
     },
   });
 
-  const toggleExpand = (commentId: string) => {
+  const toggleExpand = useCallback((commentId: string) => {
     setExpandedThreads((prev) => {
       const next = new Set(prev);
       if (next.has(commentId)) next.delete(commentId);
       else next.add(commentId);
       return next;
     });
-  };
+  }, []);
 
-  const handleSubmitComment = () => {
+  const handleSubmitComment = useCallback(() => {
     if (!commentBody.trim()) return;
     commentMut.mutate({ body: commentBody });
-  };
+  }, [commentBody, commentMut]);
 
-  const handleSubmitReply = (parentId: string) => {
+  const handleSubmitReply = useCallback((parentId: string) => {
     if (!replyBody.trim()) return;
     commentMut.mutate({ body: replyBody, parentCommentId: parentId });
-  };
+  }, [replyBody, commentMut]);
 
   return (
     <div className="space-y-3">
@@ -182,7 +215,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
   );
 }
 
-function CommentBubble({
+const CommentBubble = memo(function CommentBubble({
   comment,
   ticketId,
   isReply,
@@ -197,21 +230,10 @@ function CommentBubble({
 
   return (
     <div
-      className={`rounded-xl p-4 space-y-2 ${isReply ? 'py-3' : ''}`}
+      className={`rounded-xl p-4 space-y-2 transition-all duration-150 ease-out hover:shadow-[0_4px_16px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] hover:border-[rgba(52,120,196,0.3)] hover:-translate-y-px ${isReply ? 'py-3' : ''}`}
       style={{
         background: POLISH_THEME.listBg,
         border: `1px solid ${POLISH_THEME.innerBorder}`,
-        transition: 'all 150ms ease-out',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.1), 0 1px 4px rgba(0,0,0,0.06)';
-        e.currentTarget.style.borderColor = 'rgba(52,120,196,0.3)';
-        e.currentTarget.style.transform = 'translateY(-1px)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.boxShadow = 'none';
-        e.currentTarget.style.borderColor = POLISH_THEME.innerBorder;
-        e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
       <div className="flex items-center gap-2">
@@ -235,9 +257,9 @@ function CommentBubble({
       {children && <div className="pt-1">{children}</div>}
     </div>
   );
-}
+});
 
-function CommentBodyRenderer({ body }: { body: string }) {
+const CommentBodyRenderer = memo(function CommentBodyRenderer({ body }: { body: string }) {
   const mentionRegex = /@\[(.+?)\]\([a-zA-Z0-9_-]+\)/g;
   const parts: (string | JSX.Element)[] = [];
   let lastIndex = 0;
@@ -263,9 +285,9 @@ function CommentBodyRenderer({ body }: { body: string }) {
   }
 
   return <>{parts}</>;
-}
+});
 
-function MentionComposer({
+const MentionComposer = memo(function MentionComposer({
   ticketId,
   value,
   onChange,
@@ -390,14 +412,8 @@ function MentionComposer({
               <button
                 key={u.id}
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer"
+                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer hover:bg-[var(--color-bg-surface)]"
                 style={{ color: 'var(--color-text-primary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-surface)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   insertMention(u);
@@ -443,4 +459,4 @@ function MentionComposer({
       </div>
     </div>
   );
-}
+});

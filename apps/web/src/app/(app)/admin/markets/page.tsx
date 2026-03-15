@@ -349,10 +349,8 @@ export default function AdminMarketsPage() {
                 <button
                   type="button"
                   onClick={() => { setSelectedStudio(null); setEditingStudio(null); }}
-                  className="p-1 rounded transition-colors"
+                  className="p-1 rounded transition-colors hover:bg-[var(--color-bg-surface)]"
                   style={{ color: 'var(--color-text-muted)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   aria-label="Close"
                 >
                   <X className="h-4 w-4" />

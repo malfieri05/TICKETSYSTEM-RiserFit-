@@ -53,7 +53,7 @@ export default function NewTicketPage() {
   const taxonomy = taxonomyRes?.data;
 
   const { data: marketsRes } = useQuery({
-    queryKey: ['admin-markets'],
+    queryKey: ['markets'],
     queryFn: () => adminApi.listMarkets(),
   });
   const studiosList = useMemo(() => {
@@ -258,6 +258,8 @@ export default function NewTicketPage() {
     try {
       const res = await mutation.mutateAsync(payload);
       const ticketId = res.data.id;
+
+      qc.prefetchQuery({ queryKey: ['ticket', ticketId], queryFn: () => ticketsApi.get(ticketId) });
 
       if (stagedFiles.length > 0) {
         setUploadingAttachments(true);

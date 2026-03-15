@@ -83,7 +83,7 @@ export default function DispatchPage() {
   const params = useMemo(() => toParams(filters), [filters]);
 
   const { data: taxonomyRes } = useQuery({
-    queryKey: ['admin', 'ticket-taxonomy'],
+    queryKey: ['ticket-taxonomy'],
     queryFn: () => adminApi.getTicketTaxonomy(),
   });
   const taxonomy = taxonomyRes?.data;
@@ -93,7 +93,7 @@ export default function DispatchPage() {
   );
 
   const { data: marketsRes } = useQuery({
-    queryKey: ['admin', 'markets'],
+    queryKey: ['markets'],
     queryFn: () => adminApi.listMarkets(),
   });
   const markets = marketsRes?.data ?? [];
@@ -143,9 +143,12 @@ export default function DispatchPage() {
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Vendor Dispatch" />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 max-w-5xl">
-        {/* Filters — single row with horizontal scroll on narrow viewports */}
-        <div className="rounded-xl p-4 flex flex-nowrap gap-3 items-end overflow-x-auto" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+      {/* Filters — sticky bar outside scroll container so dropdowns overlay content and stay visible */}
+      <div
+        className="sticky top-0 z-10 shrink-0 px-6 py-4"
+        style={{ background: 'var(--color-bg-page)', borderBottom: '1px solid var(--color-border-default)' }}
+      >
+        <div className="rounded-xl p-4 flex flex-wrap gap-3 items-end" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <ComboBox
             placeholder="All Studios"
             options={studios.map((s) => ({ value: s.id, label: s.name }))}
@@ -191,7 +194,10 @@ export default function DispatchPage() {
             </Button>
           )}
         </div>
+      </div>
 
+      {/* Scrollable content — only this section scrolls so filter dropdowns are not clipped */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 space-y-6 max-w-5xl">
         {/* Open Issues by Studio */}
         <SectionCard title="Open Issues by Location">
           {loadingStudio ? (
@@ -289,3 +295,4 @@ export default function DispatchPage() {
     </div>
   );
 }
+

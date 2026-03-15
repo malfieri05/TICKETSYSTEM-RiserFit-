@@ -122,46 +122,55 @@ export default function ReportingPage() {
   const { data: summaryRes, isLoading: summaryLoading } = useQuery({
     queryKey: ['reporting', 'summary'],
     queryFn: () => reportingApi.summary(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: volumeRes } = useQuery({
     queryKey: ['reporting', 'volume', volumeDays],
     queryFn: () => reportingApi.volumeByDay(volumeDays),
+    refetchOnWindowFocus: false,
   });
 
   const { data: statusRes } = useQuery({
     queryKey: ['reporting', 'by-status'],
     queryFn: () => reportingApi.byStatus(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: priorityRes } = useQuery({
     queryKey: ['reporting', 'by-priority'],
     queryFn: () => reportingApi.byPriority(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: categoryRes } = useQuery({
     queryKey: ['reporting', 'by-category'],
     queryFn: () => reportingApi.byCategory(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: marketRes } = useQuery({
     queryKey: ['reporting', 'by-market'],
     queryFn: () => reportingApi.byMarket(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: resolutionRes } = useQuery({
     queryKey: ['reporting', 'resolution-time'],
     queryFn: () => reportingApi.resolutionTime(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: completionOwnerRes } = useQuery({
     queryKey: ['reporting', 'completion-time', 'owners'],
     queryFn: () => reportingApi.completionByOwner(),
+    refetchOnWindowFocus: false,
   });
 
   const { data: workflowTimingRes } = useQuery({
     queryKey: ['reporting', 'workflow-timing'],
     queryFn: () => reportingApi.workflowTiming(),
+    refetchOnWindowFocus: false,
   });
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState<string>('');

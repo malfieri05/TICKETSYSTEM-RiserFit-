@@ -72,14 +72,8 @@ export function AttachmentRow({
           e.stopPropagation();
           onDownload(attachment);
         }}
-        className="p-1.5 rounded transition-colors duration-150"
+        className="p-1.5 rounded transition-colors duration-150 hover:text-[var(--color-accent)]"
         style={{ color: 'var(--color-text-muted)' }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.color = 'var(--color-accent)')
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.color = 'var(--color-text-muted)')
-        }
         title="Download"
       >
         <Download className="h-4 w-4" />
@@ -91,12 +85,8 @@ export function AttachmentRow({
             e.stopPropagation();
             onDelete(attachment.id);
           }}
-          className="p-1.5 rounded transition-colors duration-150"
+          className="p-1.5 rounded transition-colors duration-150 hover:text-red-600"
           style={{ color: 'var(--color-text-muted)' }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#dc2626')}
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.color = 'var(--color-text-muted)')
-          }
           title="Delete"
         >
           <Trash2 className="h-4 w-4" />

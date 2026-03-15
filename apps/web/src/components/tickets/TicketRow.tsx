@@ -102,7 +102,7 @@ export interface TicketTableRowProps {
   requesterDisplayName: string;
   /** Highlight the row as selected (used by drawer-based ticket list). Defaults to false. */
   isSelected?: boolean;
-  onSelect: () => void;
+  onSelect: (id: string) => void;
 }
 
 function TicketTableRowComponent({
@@ -123,20 +123,14 @@ function TicketTableRowComponent({
 
   return (
     <tr
-      onClick={onSelect}
+      onClick={() => onSelect(id)}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === 'Enter' && onSelect()}
-      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)]`}
+      onKeyDown={(e) => e.key === 'Enter' && onSelect(id)}
+      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)] hover:bg-[var(--color-bg-surface)]`}
       style={{
         borderBottom: rowBorder,
-        background: isSelected ? POLISH_THEME.rowSelected : 'transparent',
-      }}
-      onMouseEnter={(e) => {
-        if (!isSelected) e.currentTarget.style.background = POLISH_THEME.rowHover;
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = isSelected ? POLISH_THEME.rowSelected : 'transparent';
+        background: isSelected ? POLISH_THEME.rowSelected : undefined,
       }}
     >
       {/* 1. ID */}
@@ -237,7 +231,7 @@ export interface PortalTicketTableRowProps {
   completedSubtasks?: number;
   totalSubtasks?: number;
   isResolvedOrClosed: boolean;
-  onSelect: () => void;
+  onSelect: (id: string) => void;
 }
 
 export function PortalTicketTableRow({

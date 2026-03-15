@@ -4,6 +4,7 @@ import { useState, useRef, FormEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -208,12 +209,13 @@ export default function KnowledgeBasePage() {
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
                 <div
                   onClick={() => pdfInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors',
+                    !pdfFile && 'hover:border-[var(--color-accent)]',
+                  )}
                   style={pdfFile
                     ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
                     : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
-                  onMouseEnter={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
-                  onMouseLeave={(e) => { if (!pdfFile) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {pdfFile ? (
                     <>
@@ -242,12 +244,13 @@ export default function KnowledgeBasePage() {
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">File (.txt or .md, max 10 MB)</label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors"
+                  className={cn(
+                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors',
+                    !file && 'hover:border-[var(--color-accent)]',
+                  )}
                   style={file
                     ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
                     : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
-                  onMouseEnter={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-accent)'; }}
-                  onMouseLeave={(e) => { if (!file) e.currentTarget.style.borderColor = 'var(--color-border-default)'; }}
                 >
                   {file ? (
                     <>
@@ -364,9 +367,8 @@ export default function KnowledgeBasePage() {
                 {docs.map((doc, i) => (
                   <tr
                     key={doc.id}
+                    className="hover:bg-[var(--color-bg-surface)]"
                     style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <td className="px-4 py-3 font-medium text-[var(--color-text-primary)] max-w-xs">
                       <span className="line-clamp-1">{doc.title}</span>
@@ -472,20 +474,16 @@ export default function KnowledgeBasePage() {
                           title="Re-index document"
                           disabled={doc.ingestionStatus === 'indexing' || reindexMut.isPending}
                           onClick={() => reindexMut.mutate(doc.id)}
-                          className="p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="p-1.5 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:text-[var(--color-accent)]"
                           style={{ color: 'var(--color-text-muted)' }}
-                          onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.color = 'var(--color-accent)'; }}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           <RefreshCw className="h-4 w-4" />
                         </button>
                         <button
                           title={doc.isActive ? 'Disable' : 'Enable'}
                           onClick={() => toggleMut.mutate({ id: doc.id, isActive: !doc.isActive })}
-                          className="p-1.5 rounded-md transition-colors"
+                          className="p-1.5 rounded-md transition-colors hover:text-[var(--color-text-secondary)]"
                           style={{ color: 'var(--color-text-muted)' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           {doc.isActive ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
@@ -496,10 +494,8 @@ export default function KnowledgeBasePage() {
                               deleteMut.mutate(doc.id);
                             }
                           }}
-                          className="p-1.5 rounded-md transition-colors"
+                          className="p-1.5 rounded-md transition-colors hover:text-red-600"
                           style={{ color: 'var(--color-text-muted)' }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = '#dc2626')}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

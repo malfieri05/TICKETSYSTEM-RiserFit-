@@ -27,6 +27,14 @@
   --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.4);
   --color-scrollbar-thumb: #333333;
   --color-scrollbar-thumb-hover: #555555;
+  /* Sidebar liquid glass + nav states */
+  --sidebar-glass-bg: rgba(17, 17, 17, 0.85);
+  --sidebar-glass-border: rgba(42, 42, 42, 0.9);
+  --sidebar-nav-hover: rgba(52, 120, 196, 0.11);
+  --sidebar-nav-active-bg: rgba(52, 120, 196, 0.22);
+  --sidebar-nav-active-border: var(--color-accent);
+  --sidebar-text: #ffffff;
+  --sidebar-text-secondary: rgba(255, 255, 255, 0.85);
 }
 
 [data-theme="light"] {
@@ -55,6 +63,14 @@
   --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.12);
   --color-scrollbar-thumb: #c4c4c4;
   --color-scrollbar-thumb-hover: #a3a3a3;
+  /* Sidebar liquid glass + nav states */
+  --sidebar-glass-bg: rgba(255, 255, 255, 0.72);
+  --sidebar-glass-border: rgba(224, 224, 224, 0.85);
+  --sidebar-nav-hover: rgba(40, 104, 184, 0.08);
+  --sidebar-nav-active-bg: rgba(40, 104, 184, 0.16);
+  --sidebar-nav-active-border: var(--color-accent);
+  --sidebar-text: #171717;
+  --sidebar-text-secondary: #525252;
 }
 
 * {
@@ -81,6 +97,15 @@ body {
 .header-nav-link:hover {
   background: var(--color-bg-surface-raised);
   color: var(--color-text-secondary);
+}
+
+/* Sidebar nav: faint blue hover when not selected; no transform to avoid layout glitch */
+.sidebar-nav-item {
+  transition: background-color 0.2s ease-out, color 0.2s ease-out;
+}
+.sidebar-nav-item:not([data-active="true"]):hover {
+  background: var(--sidebar-nav-hover) !important;
+  color: var(--sidebar-text) !important;
 }
 
 /* Stage 4: Tab content slide-in animation (used by ticket detail page tabs) */

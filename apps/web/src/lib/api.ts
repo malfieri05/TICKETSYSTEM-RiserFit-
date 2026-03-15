@@ -101,8 +101,8 @@ export const invalidateTicketLists = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-my'] });
   queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-studio'] });
 
-  // Fallback: anything else keyed under ['tickets', ...]
-  queryClient.invalidateQueries({ queryKey: ['tickets'] });
+  // Legacy portal list
+  queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-legacy'] });
 };
 
 // ─── Comments ──────────────────────────────────────────────────────────────

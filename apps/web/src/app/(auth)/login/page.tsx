@@ -180,10 +180,8 @@ export default function LoginPage() {
           <button
             type="button"
             onClick={() => setSsoMessage(true)}
-            className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors"
+            className="w-full flex items-center justify-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-bg-surface)]"
             style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface-raised)')}
           >
             {/* Microsoft logo SVG */}
             <svg width="20" height="20" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">

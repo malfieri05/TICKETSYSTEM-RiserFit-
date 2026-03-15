@@ -320,24 +320,25 @@ export class SubtasksService {
         // Single authoritative resolution path: check if ALL subtasks are done/skipped
         await this.checkAndResolveTicket(subtask.ticketId, actor, now);
       }
-      for (const readyId of becameReadyIds) {
-        const readySubtask = await this.prisma.subtask.findUnique({
-          where: { id: readyId },
+      if (becameReadyIds.length > 0) {
+        const readySubtasks = await this.prisma.subtask.findMany({
+          where: { id: { in: becameReadyIds } },
           select: {
+            id: true,
             title: true,
             ticketId: true,
             departmentId: true,
             ownerId: true,
           },
         });
-        if (readySubtask) {
+        for (const readySubtask of readySubtasks) {
           await this.domainEvents.emit({
             type: 'SUBTASK_BECAME_READY',
             ticketId: readySubtask.ticketId,
             actorId: actor.id,
             occurredAt: now,
             payload: {
-              subtaskId: readyId,
+              subtaskId: readySubtask.id,
               subtaskTitle: readySubtask.title,
               ticketId: readySubtask.ticketId,
               departmentId: readySubtask.departmentId,

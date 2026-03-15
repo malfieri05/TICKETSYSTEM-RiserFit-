@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Pencil, MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
@@ -78,7 +78,7 @@ export default function AdminUsersPage() {
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
 
-  const filteredUsers = (() => {
+  const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return users;
     return users.filter((u) => {
@@ -90,7 +90,7 @@ export default function AdminUsersPage() {
       const defaultLocation = (u.studio?.name ?? '').toLowerCase();
       return name.includes(q) || email.includes(q) || roleLabel.includes(q) || defaultLocation.includes(q);
     });
-  })();
+  }, [users, searchQuery]);
 
   const handleSave = async (userId: string) => {
     const role = roleDrafts[userId];
@@ -225,10 +225,8 @@ export default function AdminUsersPage() {
                   return (
                   <tr
                     key={u.id}
-                    className="transition-colors duration-150"
+                    className="transition-colors duration-150 hover:bg-[var(--color-bg-surface)]"
                     style={{ borderTop: i > 0 ? '1px solid var(--color-border-default)' : undefined }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
                     <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{u.displayName}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{u.email}</td>
@@ -480,10 +478,8 @@ function ManageLocationsModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded transition-colors"
+            className="p-1.5 rounded transition-colors hover:text-[var(--color-text-primary)]"
             style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
             <X className="h-5 w-5" />
           </button>

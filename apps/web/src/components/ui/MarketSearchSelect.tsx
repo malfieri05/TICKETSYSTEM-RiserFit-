@@ -102,10 +102,8 @@ export function MarketSearchSelect({
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-8 p-1 rounded transition-colors"
+            className="absolute right-8 p-1 rounded transition-colors hover:text-[var(--color-text-primary)]"
             style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
             aria-label="Clear selection"
           >
             <X className="h-4 w-4" />
@@ -140,10 +138,8 @@ export function MarketSearchSelect({
             <li
               role="option"
               aria-selected={value === ''}
-              className="px-3 py-2 cursor-pointer transition-colors text-sm"
+              className="px-3 py-2 cursor-pointer transition-colors text-sm hover:bg-[var(--color-bg-surface)]"
               style={{ color: 'var(--color-text-primary)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
               onClick={() => handleSelect('')}
             >
               All states
@@ -158,10 +154,8 @@ export function MarketSearchSelect({
                   key={m.id}
                   role="option"
                   aria-selected={value === m.id}
-                  className="px-3 py-2 cursor-pointer transition-colors text-sm"
+                  className="px-3 py-2 cursor-pointer transition-colors text-sm hover:bg-[var(--color-bg-surface)]"
                   style={{ color: 'var(--color-text-primary)' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   onClick={() => handleSelect(m.id)}
                 >
                   {m.name}

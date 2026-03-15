@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -153,12 +153,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const tabIndex = TAB_ORDER.indexOf(activeTab);
 
-  const TABS = [
+  const TABS = useMemo(() => [
     { key: 'subtasks' as const,   label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`,   icon: CheckSquare },
     { key: 'comments' as const,   label: `Comments${ticket ? ` (${(ticket.comments ?? []).reduce((n: number, c: any) => n + 1 + (c.replies?.length ?? 0), 0)})` : ''}`, icon: MessageSquare },
     { key: 'submission' as const, label: 'Ticket Submission', icon: User },
     { key: 'history' as const,    label: 'History',           icon: Clock },
-  ];
+  ], [ticket]);
 
   return (
     <div
@@ -179,16 +179,8 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
         <button
           onClick={onClose}
           aria-label="Close ticket panel"
-          className="p-1.5 rounded-lg transition-colors"
+          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
           style={{ color: 'var(--color-text-muted)' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-            e.currentTarget.style.color = 'var(--color-text-primary)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = 'var(--color-text-muted)';
-          }}
         >
           <X className="h-4.5 w-4.5" />
         </button>
@@ -266,17 +258,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       setEditTitleValue(ticket.title);
                       setIsEditingTitle(true);
                     }}
-                    className="p-1.5 rounded-lg shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                    className="p-1.5 rounded-lg shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                     style={{ color: 'var(--color-text-muted)' }}
                     aria-label="Edit ticket title"
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                      e.currentTarget.style.color = 'var(--color-text-secondary)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = 'var(--color-text-muted)';
-                    }}
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
@@ -363,17 +347,11 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${!active ? 'hover:text-[var(--color-text-secondary)]' : ''}`}
                     style={{
                       background: active ? 'var(--color-bg-surface-raised)' : 'transparent',
                       color: active ? POLISH_THEME.accent : 'var(--color-text-muted)',
                       border: active ? `1px solid ${POLISH_THEME.listBorder}` : '1px solid transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active) e.currentTarget.style.color = 'var(--color-text-secondary)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active) e.currentTarget.style.color = 'var(--color-text-muted)';
                     }}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -389,18 +367,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   onClose();
                   router.push(`/tickets/${ticketId}`);
                 }}
-                className="p-1.5 rounded-lg transition-colors shrink-0"
+                className="p-1.5 rounded-lg transition-colors shrink-0 hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Open in full screen"
                 aria-label="Open in full screen"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-muted)';
-                }}
               >
                 <Maximize2 className="h-3.5 w-3.5" />
               </button>
@@ -468,23 +438,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   return (
                     <div
                       key={s.id}
-                      className="rounded-xl p-3.5 flex items-center gap-3"
+                      className="rounded-xl p-3.5 flex items-center gap-3 transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface-raised)] hover:border-[rgba(52,120,196,0.35)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(52,120,196,0.08)] hover:-translate-y-px"
                       style={{
                         background: isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg,
                         border: `1px solid ${POLISH_THEME.innerBorder}`,
-                        transition: 'all 150ms ease-out',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                        e.currentTarget.style.borderColor = 'rgba(52,120,196,0.35)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1), inset 0 0 0 1px rgba(52,120,196,0.08)';
-                        e.currentTarget.style.transform = 'translateY(-1px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg;
-                        e.currentTarget.style.borderColor = POLISH_THEME.innerBorder;
-                        e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.transform = 'translateY(0)';
                       }}
                     >
                       <div className="flex-1 min-w-0">
@@ -592,17 +549,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           );
                           setIsEditingSubmission(true);
                         }}
-                        className="p-1.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)]"
+                        className="p-1.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                         style={{ color: 'var(--color-text-muted)' }}
                         aria-label="Edit submission data"
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                          e.currentTarget.style.color = 'var(--color-text-secondary)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent';
-                          e.currentTarget.style.color = 'var(--color-text-muted)';
-                        }}
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
@@ -666,27 +615,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 {(historyRes?.data ?? []).map((entry) => (
                   <div
                     key={entry.id}
-                    className="flex gap-3 py-2 text-sm"
+                    className="flex gap-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
                     style={{
                       borderBottom: `1px solid ${POLISH_THEME.listBorder}`,
-                      borderRadius: '0',
-                      transition: 'all 150ms ease-out',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--color-bg-surface)';
-                      e.currentTarget.style.borderRadius = '10px';
-                      e.currentTarget.style.padding = '8px 10px';
-                      e.currentTarget.style.margin = '0 -10px';
-                      e.currentTarget.style.borderBottom = '1px solid transparent';
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.borderRadius = '0';
-                      e.currentTarget.style.padding = '';
-                      e.currentTarget.style.margin = '';
-                      e.currentTarget.style.borderBottom = `1px solid ${POLISH_THEME.listBorder}`;
-                      e.currentTarget.style.boxShadow = 'none';
                     }}
                   >
                     <div className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--color-text-muted)' }} />

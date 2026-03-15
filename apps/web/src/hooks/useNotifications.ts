@@ -14,17 +14,21 @@ export function useNotificationCount() {
     queryFn: () => notificationsApi.list({ unreadOnly: true, limit: 1 }),
     enabled: !!token,
     refetchInterval: 30_000,
+    refetchOnWindowFocus: false,
   });
 
   return { unreadCount: data?.data.unreadCount ?? 0 };
 }
 
-export function useNotifications(params?: { page?: number; limit?: number; unreadOnly?: boolean }) {
+export function useNotifications(
+  params?: { page?: number; limit?: number; unreadOnly?: boolean },
+  opts?: { enabled?: boolean },
+) {
   const { token } = useAuth();
   return useQuery({
     queryKey: ['notifications', params],
     queryFn: () => notificationsApi.list(params),
-    enabled: !!token,
+    enabled: !!token && (opts?.enabled ?? true),
   });
 }
 
@@ -65,7 +69,7 @@ export function useNotificationStream() {
       queryClient.invalidateQueries({ queryKey: ['tickets', 'actionable'] });
       queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-my'] });
       queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-studio'] });
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-legacy'] });
       if (shouldInvalidateInboxFolders) {
         queryClient.invalidateQueries({ queryKey: ['inbox-folders'] });
       }
@@ -99,7 +103,7 @@ export function useNotificationStream() {
         queryClient.invalidateQueries({ queryKey: ['tickets', 'actionable'] });
         queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-my'] });
         queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-studio'] });
-        queryClient.invalidateQueries({ queryKey: ['tickets'] });
+        queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-legacy'] });
       }
       hasOpenedOnceRef.current = true;
     };

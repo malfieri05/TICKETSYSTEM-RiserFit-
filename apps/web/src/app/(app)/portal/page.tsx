@@ -1,7 +1,7 @@
 'use client';
 
 import type React from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Ticket, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
@@ -81,6 +81,8 @@ export default function PortalPage() {
   const { user } = useAuth();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleClose = useCallback(() => setSelectedId(null), []);
 
   // Scope summary (dashboard metrics + allowed studios)
   const { data: scopeData, isLoading: scopeLoading } = useQuery({
@@ -324,7 +326,7 @@ export default function PortalPage() {
               totalSubtasks={totalSubtasks}
               requesterDisplayName={requesterDisplayName}
               isSelected={selectedId === ticket.id}
-              onSelect={() => setSelectedId(ticket.id)}
+              onSelect={handleSelect}
             />
           );
         })}
@@ -490,7 +492,7 @@ export default function PortalPage() {
               totalSubtasks={totalSubtasks}
               requesterDisplayName={requesterDisplayName}
               isSelected={selectedId === ticket.id}
-              onSelect={() => setSelectedId(ticket.id)}
+              onSelect={handleSelect}
             />
           );
         })}
@@ -675,7 +677,7 @@ export default function PortalPage() {
           </div>
         </div>
       )}
-      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
+      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
     </div>
   );
 }

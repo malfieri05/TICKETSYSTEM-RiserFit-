@@ -545,6 +545,7 @@ export default function WorkflowTemplateDetailPage() {
                     value={editAssignedUserId}
                     onChange={setEditAssignedUserId}
                     placeholder="Search by name or email…"
+                    dropdownPosition="above"
                   />
                   <Input label="Sort order" type="number" value={editSortOrder} onChange={(e) => setEditSortOrder(Number(e.target.value))} />
                   <div className="flex gap-2">
@@ -589,6 +590,7 @@ export default function WorkflowTemplateDetailPage() {
               value={addSubtaskAssignedUserId}
               onChange={setAddSubtaskAssignedUserId}
               placeholder="Search by name or email…"
+              dropdownPosition="above"
               className="mt-2 max-w-xs"
             />
             <Button className="mt-2" size="sm" onClick={() => createSubtaskMut.mutate()} disabled={!addSubtaskTitle.trim() || !(addSubtaskDepartmentId || departments[0]?.id)} loading={createSubtaskMut.isPending}>

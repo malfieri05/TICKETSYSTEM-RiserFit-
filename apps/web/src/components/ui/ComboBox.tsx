@@ -211,10 +211,10 @@ export function ComboBox({
                 className={cn(
                   'px-3 py-2 cursor-pointer text-sm truncate',
                   value === opt.value && 'font-medium',
+                  highlightIndex === i ? 'bg-[var(--color-bg-surface)]' : 'hover:bg-[var(--color-bg-surface)]',
                 )}
                 style={{
                   color: value === opt.value ? 'var(--color-accent)' : (opt.value === '' ? 'var(--color-text-muted)' : 'var(--color-text-primary)'),
-                  background: highlightIndex === i ? 'var(--color-bg-surface)' : 'transparent',
                 }}
                 onMouseEnter={() => setHighlightIndex(i)}
                 onClick={() => {

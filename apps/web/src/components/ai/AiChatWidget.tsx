@@ -193,20 +193,16 @@ export function AiChatWidget() {
             <div className="flex items-center gap-1.5">
               <button
                 onClick={startNewConversation}
-                className="text-[10px] px-2 py-1 rounded-lg transition-colors font-medium"
+                className="text-[10px] px-2 py-1 rounded-lg transition-colors font-medium hover:text-[var(--color-text-primary)]"
                 style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
                 title="New conversation"
               >
                 New
               </button>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1 rounded-lg transition-colors"
+                className="p-1 rounded-lg transition-colors hover:text-[var(--color-text-primary)]"
                 style={{ color: 'var(--color-text-muted)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-primary)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
               >
                 <X className="h-5 w-5" />
               </button>

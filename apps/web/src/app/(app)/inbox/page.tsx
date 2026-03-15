@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Inbox as InboxIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
@@ -37,6 +37,9 @@ export default function InboxPage() {
       return next;
     });
   };
+
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleClose = useCallback(() => setSelectedId(null), []);
 
   const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';
   const { data: foldersData } = useQuery({
@@ -133,7 +136,7 @@ export default function InboxPage() {
               totalSubtasks={totalSubtasks}
               requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
               isSelected={selectedId === ticket.id}
-              onSelect={() => setSelectedId(ticket.id)}
+              onSelect={handleSelect}
             />
           );
         })}
@@ -194,7 +197,7 @@ export default function InboxPage() {
             <button
               type="button"
               onClick={toggleTopicsPanel}
-              className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border"
+              className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border hover:bg-[var(--color-bg-surface)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
               style={{
                 width: TOGGLE_CIRCLE_SIZE,
                 height: TOGGLE_CIRCLE_SIZE,
@@ -207,16 +210,6 @@ export default function InboxPage() {
                 boxShadow: 'var(--shadow-card)',
               }}
               aria-label="Expand topics"
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--color-bg-surface)';
-                e.currentTarget.style.borderColor = 'var(--color-accent)';
-                e.currentTarget.style.color = 'var(--color-accent)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--color-bg-page)';
-                e.currentTarget.style.borderColor = 'var(--color-border-default)';
-                e.currentTarget.style.color = 'var(--color-text-primary)';
-              }}
             >
               <ChevronRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
             </button>
@@ -239,25 +232,12 @@ export default function InboxPage() {
                 setSelectedFolderId('all');
                 setPage(1);
               }}
-              className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
+              data-active={selectedFolderId === 'all'}
+              className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2 [&:not([data-active])]:hover:bg-[rgba(52,120,196,0.08)] [&:not([data-active])]:hover:border-[rgba(52,120,196,0.25)] [&:not([data-active])]:hover:text-[var(--color-text-primary)]"
               style={{
                 background: selectedFolderId === 'all' ? 'rgba(52,120,196,0.15)' : 'transparent',
                 color: selectedFolderId === 'all' ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                 border: selectedFolderId === 'all' ? '1px solid rgba(52,120,196,0.4)' : '1px solid transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (selectedFolderId !== 'all') {
-                  e.currentTarget.style.background = 'rgba(52,120,196,0.08)';
-                  e.currentTarget.style.borderColor = 'rgba(52,120,196,0.25)';
-                  e.currentTarget.style.color = 'var(--color-text-primary)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selectedFolderId !== 'all') {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = 'transparent';
-                  e.currentTarget.style.color = 'var(--color-text-secondary)';
-                }
               }}
             >
               <span className="truncate">All</span>
@@ -280,25 +260,12 @@ export default function InboxPage() {
                     setSelectedFolderId(folder.id);
                     setPage(1);
                   }}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2"
+                  data-active={isActive}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-between gap-2 [&:not([data-active])]:hover:bg-[rgba(52,120,196,0.08)] [&:not([data-active])]:hover:border-[rgba(52,120,196,0.25)] [&:not([data-active])]:hover:text-[var(--color-text-primary)]"
                   style={{
                     background: isActive ? 'rgba(52,120,196,0.15)' : 'transparent',
                     color: isActive ? 'var(--color-accent)' : 'var(--color-text-secondary)',
                     border: isActive ? '1px solid rgba(52,120,196,0.4)' : '1px solid transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'rgba(52,120,196,0.08)';
-                      e.currentTarget.style.borderColor = 'rgba(52,120,196,0.25)';
-                      e.currentTarget.style.color = 'var(--color-text-primary)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.borderColor = 'transparent';
-                      e.currentTarget.style.color = 'var(--color-text-secondary)';
-                    }
                   }}
                 >
                   <span className="truncate">{folder.label}</span>
@@ -327,7 +294,7 @@ export default function InboxPage() {
               <button
                 type="button"
                 onClick={toggleTopicsPanel}
-                className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border"
+                className="absolute rounded-full flex items-center justify-center transition-all duration-200 ease-out cursor-pointer border hover:bg-[var(--color-bg-surface)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                 style={{
                   width: TOGGLE_CIRCLE_SIZE,
                   height: TOGGLE_CIRCLE_SIZE,
@@ -339,16 +306,6 @@ export default function InboxPage() {
                   boxShadow: 'var(--shadow-card)',
                 }}
                 aria-label="Collapse topics"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-surface)';
-                  e.currentTarget.style.borderColor = 'var(--color-accent)';
-                  e.currentTarget.style.color = 'var(--color-accent)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-page)';
-                  e.currentTarget.style.borderColor = 'var(--color-border-default)';
-                  e.currentTarget.style.color = 'var(--color-text-primary)';
-                }}
               >
                 <ChevronLeft className="h-3.5 w-3.5 shrink-0" strokeWidth={2.5} />
               </button>
@@ -373,7 +330,7 @@ export default function InboxPage() {
         pagination={pagination}
         initialSkeleton={initialSkeleton}
       />
-      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
+      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
     </div>
   );
 }

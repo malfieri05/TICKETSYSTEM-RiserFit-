@@ -22,6 +22,8 @@ export interface UserSearchSelectProps {
   className?: string;
   /** Optional: restrict to a subset (e.g. department users). Filter applied before search. */
   filter?: (u: UserOption) => boolean;
+  /** Position of the suggestions list relative to the input. Default 'below'. */
+  dropdownPosition?: 'above' | 'below';
 }
 
 const defaultFilter = () => true;
@@ -38,6 +40,7 @@ export function UserSearchSelect({
   placeholder = 'Search by name or email…',
   className,
   filter = defaultFilter,
+  dropdownPosition = 'below',
 }: UserSearchSelectProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -140,14 +143,8 @@ export function UserSearchSelect({
             <button
               type="button"
               onClick={handleClear}
-              className="absolute right-2 p-1 rounded transition-colors"
+              className="absolute right-2 p-1 rounded transition-colors hover:text-[var(--color-text-primary)]"
               style={{ color: 'var(--color-text-muted)' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--color-text-primary)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--color-text-muted)';
-              }}
               aria-label="Clear selection"
             >
               <X className="h-4 w-4" />
@@ -177,7 +174,10 @@ export function UserSearchSelect({
 
       {showDropdown && (
         <ul
-          className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border py-1"
+          className={cn(
+            'absolute left-0 right-0 z-50 max-h-60 overflow-y-auto rounded-lg border py-1',
+            dropdownPosition === 'above' ? 'bottom-full mb-1' : 'top-full mt-1',
+          )}
           style={{
             background: 'var(--color-bg-surface-raised)',
             borderColor: 'var(--color-border-default)',
@@ -194,14 +194,8 @@ export function UserSearchSelect({
               <li
                 key={u.id}
                 role="option"
-                className="flex flex-col gap-0.5 px-3 py-2 cursor-pointer transition-colors"
+                className="flex flex-col gap-0.5 px-3 py-2 cursor-pointer transition-colors hover:bg-[var(--color-bg-surface)]"
                 style={{ color: 'var(--color-text-primary)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'var(--color-bg-surface)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                }}
                 onClick={() => handleSelect(u)}
               >
                 <span className="font-medium truncate">{u.displayName || u.email}</span>

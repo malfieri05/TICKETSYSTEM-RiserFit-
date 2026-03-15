@@ -145,8 +145,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-50 flex w-60 flex-col"
-      style={{ background: 'var(--color-bg-surface)', borderRight: '1px solid var(--color-border-default)' }}
+      className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col"
+      style={{
+        background: 'var(--sidebar-glass-bg)',
+        borderRight: '1px solid var(--sidebar-glass-border)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
     >
       {/* Logo */}
       <div
@@ -161,7 +166,7 @@ export function Sidebar() {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
         </div>
-        <span className="font-bold tracking-tight" style={{ color: 'var(--color-text-primary)' }}>Riser Fitness</span>
+        <span className="font-bold tracking-tight" style={{ color: 'var(--sidebar-text)' }}>Riser Fitness</span>
       </div>
 
       {/* Nav */}
@@ -170,10 +175,8 @@ export function Sidebar() {
         {/* + New Ticket button — sits above Home */}
         <button
           onClick={() => router.push('/tickets/new')}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold mb-4 transition-colors"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold mb-4 transition-colors hover:opacity-90"
           style={{ background: 'var(--color-accent)', color: '#ffffff' }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
         >
           <Plus className="h-4 w-4 shrink-0" />
           New Ticket
@@ -199,14 +202,12 @@ export function Sidebar() {
                 key={`${href}-${label}`}
                 type="button"
                 onClick={() => isNotificationsPanelOpen ? closeNotificationsPanel() : openNotificationsPanel()}
-                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-left"
+                className="sidebar-nav-item flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium text-left"
                 style={{
                   background: 'transparent',
-                  color: 'var(--color-text-muted)',
+                  color: 'var(--sidebar-text)',
                   borderLeft: '3px solid transparent',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--color-bg-surface-raised)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-muted)'; }}
               >
                 <span className="flex items-center gap-3 min-w-0">
                   <Icon className="h-4 w-4 shrink-0" />
@@ -214,7 +215,7 @@ export function Sidebar() {
                 </span>
                 <ChevronRight
                   className="h-4 w-4 shrink-0 ml-auto transition-transform duration-200 ease-out"
-                  style={{ color: 'var(--color-text-muted)', transform: isNotificationsPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  style={{ color: 'var(--sidebar-text)', transform: isNotificationsPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
                 />
               </button>
             );
@@ -223,14 +224,13 @@ export function Sidebar() {
             <Link
               key={`${href}-${label}`}
               href={tab ? { pathname: '/portal', query: { tab } } : href}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+              data-active={active ? 'true' : undefined}
+              className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
               style={{
-                background: active ? 'var(--color-bg-surface-raised)' : 'transparent',
-                color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                borderLeft: `3px solid ${active ? 'var(--color-accent)' : 'transparent'}`,
+                background: active ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+                color: active ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+                borderLeft: `4px solid ${active ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
               }}
-              onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = 'var(--color-bg-surface-raised)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; } }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = active ? 'var(--color-bg-surface-raised)' : 'transparent'; e.currentTarget.style.color = active ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
             >
               <Icon className="h-4 w-4 shrink-0" />
               {displayLabel}
@@ -241,21 +241,12 @@ export function Sidebar() {
         {isAdmin && (
           <Link
             href={actionableNavItem.href}
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            data-active={pathname === actionableNavItem.href ? 'true' : undefined}
+            className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
-              background: pathname === actionableNavItem.href ? 'var(--color-bg-surface-raised)' : 'transparent',
-              color: pathname === actionableNavItem.href ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-              borderLeft: `3px solid ${pathname === actionableNavItem.href ? 'var(--color-accent)' : 'transparent'}`,
-            }}
-            onMouseEnter={(e) => {
-              if (pathname !== actionableNavItem.href) {
-                e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                e.currentTarget.style.color = 'var(--color-text-secondary)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = pathname === actionableNavItem.href ? 'var(--color-bg-surface-raised)' : 'transparent';
-              e.currentTarget.style.color = pathname === actionableNavItem.href ? 'var(--color-text-primary)' : 'var(--color-text-muted)';
+              background: pathname === actionableNavItem.href ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+              color: pathname === actionableNavItem.href ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              borderLeft: `4px solid ${pathname === actionableNavItem.href ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
             <actionableNavItem.icon className="h-4 w-4 shrink-0" />
@@ -266,21 +257,12 @@ export function Sidebar() {
         {user?.studioId && (
           <Link
             href="/handbook"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            data-active={pathname === '/handbook' ? 'true' : undefined}
+            className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
-              background: pathname === '/handbook' ? 'var(--color-bg-surface-raised)' : 'transparent',
-              color: pathname === '/handbook' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-              borderLeft: `3px solid ${pathname === '/handbook' ? 'var(--color-accent)' : 'transparent'}`,
-            }}
-            onMouseEnter={(e) => {
-              if (pathname !== '/handbook') {
-                e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-                e.currentTarget.style.color = 'var(--color-text-secondary)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = pathname === '/handbook' ? 'var(--color-bg-surface-raised)' : 'transparent';
-              e.currentTarget.style.color = pathname === '/handbook' ? 'var(--color-text-primary)' : 'var(--color-text-muted)';
+              background: pathname === '/handbook' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+              color: pathname === '/handbook' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              borderLeft: `4px solid ${pathname === '/handbook' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
             <BookMarked className="h-4 w-4 shrink-0" />
@@ -291,14 +273,14 @@ export function Sidebar() {
         {isAdmin && (
           <>
             <div className="pt-5 pb-1.5 px-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+              <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--sidebar-text-secondary)' }}>
                 Admin
               </p>
             </div>
             {adminGroups.map((group) => (
               <div key={group.label}>
                 <div className="pt-3 pb-1 px-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--color-text-muted)' }}>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--sidebar-text-secondary)' }}>
                     {group.label}
                   </p>
                 </div>
@@ -308,14 +290,13 @@ export function Sidebar() {
                     <Link
                       key={href}
                       href={href}
-                      className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                      data-active={active ? 'true' : undefined}
+                      className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
                       style={{
-                        background: active ? 'var(--color-bg-surface-raised)' : 'transparent',
-                        color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                        borderLeft: `3px solid ${active ? 'var(--color-accent)' : 'transparent'}`,
+                        background: active ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+                        color: active ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+                        borderLeft: `4px solid ${active ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
                       }}
-                      onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = 'var(--color-bg-surface-raised)'; e.currentTarget.style.color = 'var(--color-text-secondary)'; } }}
-                      onMouseLeave={(e) => { e.currentTarget.style.background = active ? 'var(--color-bg-surface-raised)' : 'transparent'; e.currentTarget.style.color = active ? 'var(--color-text-primary)' : 'var(--color-text-muted)'; }}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
                       {label}
@@ -335,7 +316,7 @@ export function Sidebar() {
             type="button"
             onClick={toggleTheme}
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)]"
-            style={{ color: 'var(--color-text-muted)' }}
+            style={{ color: 'var(--sidebar-text)' }}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           >
@@ -343,21 +324,19 @@ export function Sidebar() {
           </button>
         </div>
         <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full text-white text-sm font-semibold shrink-0" style={{ background: 'var(--color-accent)' }}>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold shrink-0" style={{ background: 'var(--color-accent)', color: '#ffffff' }}>
             {user?.displayName?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{user?.displayName}</p>
-            <p className="truncate text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+            <p className="truncate text-sm font-medium" style={{ color: 'var(--sidebar-text)' }}>{user?.displayName}</p>
+            <p className="truncate text-[11px]" style={{ color: 'var(--sidebar-text-secondary)' }}>
               {userRoleDisplayLabel(user?.role, user?.departments)}
             </p>
           </div>
           <button
             onClick={handleLogout}
-            className="transition-colors"
-            style={{ color: 'var(--color-text-muted)' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-muted)')}
+            className="transition-colors hover:opacity-80"
+            style={{ color: 'var(--sidebar-text)' }}
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />

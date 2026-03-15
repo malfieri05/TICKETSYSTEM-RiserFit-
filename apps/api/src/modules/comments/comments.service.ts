@@ -5,7 +5,6 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -299,53 +298,53 @@ export class CommentsService {
       }));
     if (!t) return [];
 
-    // Build conditions: who can see this ticket?
-    const userConditions: Array<{ id?: string; role?: Role | { in: Role[] }; departments?: object; scopeStudioIds?: object }> = [];
+    const ids = new Set<string>();
 
-    // All ADMINs can see all tickets
-    const admins = await this.prisma.user.findMany({
-      where: { role: 'ADMIN', isActive: true },
-      select: { id: true },
-    });
-    const ids = new Set(admins.map((u) => u.id));
-
-    // Requester and owner
     if (t.requesterId) ids.add(t.requesterId);
     if (t.ownerId) ids.add(t.ownerId);
 
-    // DEPARTMENT_USERs who match the ticket's department
-    if (t.department?.code) {
-      const deptUsers = await this.prisma.userDepartment.findMany({
-        where: { department: t.department.code as any },
-        select: { userId: true },
-      });
-      for (const u of deptUsers) ids.add(u.userId);
-    }
+    const queries: Promise<void>[] = [];
 
-    // Users with studio scope that includes this ticket's studio
-    if (t.studioId) {
-      const studioScopeUsers = await this.prisma.userStudioScope.findMany({
-        where: { studioId: t.studioId },
-        select: { userId: true },
-      });
-      for (const u of studioScopeUsers) ids.add(u.userId);
-
-      // Users whose primary studio matches
-      const primaryStudioUsers = await this.prisma.user.findMany({
-        where: { studioId: t.studioId, isActive: true },
+    queries.push(
+      this.prisma.user.findMany({
+        where: { role: 'ADMIN', isActive: true },
         select: { id: true },
-      });
-      for (const u of primaryStudioUsers) ids.add(u.id);
+      }).then((admins) => { for (const u of admins) ids.add(u.id); }),
+    );
+
+    if (t.department?.code) {
+      queries.push(
+        this.prisma.userDepartment.findMany({
+          where: { department: t.department.code as any },
+          select: { userId: true },
+        }).then((rows) => { for (const u of rows) ids.add(u.userId); }),
+      );
     }
 
-    // Watchers can also see the ticket
-    const watchers = await this.prisma.ticketWatcher.findMany({
-      where: { ticketId },
-      select: { userId: true },
-    });
-    for (const w of watchers) ids.add(w.userId);
+    if (t.studioId) {
+      queries.push(
+        this.prisma.userStudioScope.findMany({
+          where: { studioId: t.studioId },
+          select: { userId: true },
+        }).then((rows) => { for (const u of rows) ids.add(u.userId); }),
+      );
+      queries.push(
+        this.prisma.user.findMany({
+          where: { studioId: t.studioId, isActive: true },
+          select: { id: true },
+        }).then((rows) => { for (const u of rows) ids.add(u.id); }),
+      );
+    }
 
-    // Filter to only active users
+    queries.push(
+      this.prisma.ticketWatcher.findMany({
+        where: { ticketId },
+        select: { userId: true },
+      }).then((rows) => { for (const w of rows) ids.add(w.userId); }),
+    );
+
+    await Promise.all(queries);
+
     if (ids.size === 0) return [];
     const activeUsers = await this.prisma.user.findMany({
       where: { id: { in: Array.from(ids) }, isActive: true },

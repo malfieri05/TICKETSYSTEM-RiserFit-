@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Bell, CheckCheck, X, ExternalLink } from 'lucide-react';
 import { notificationsApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/Button';
 import { POLISH_THEME } from '@/lib/polish';
@@ -22,7 +23,7 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<'unread' | 'read'>('unread');
 
-  const { data, isLoading } = useNotifications(listParams);
+  const { data, isLoading } = useNotifications(listParams, { enabled: open });
   const notifications = data?.data?.data ?? [];
   const unread = notifications.filter((n) => !n.isRead);
   const read = notifications.filter((n) => n.isRead);
@@ -80,14 +81,14 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
       {open && (
         <button
           type="button"
-          className="fixed top-0 right-0 bottom-0 left-60 z-[39]"
+          className="fixed top-0 right-0 bottom-0 left-[260px] z-[39]"
           style={{ background: 'rgba(0,0,0,0.35)' }}
           onClick={onClose}
           aria-label="Close notifications panel"
         />
       )}
       <div
-        className="fixed top-0 left-60 z-40 h-full flex flex-col"
+        className="fixed top-0 left-[260px] z-40 h-full flex flex-col"
       style={{
         width: 'min(400px, 90vw)',
         background: 'var(--color-bg-surface-raised)',
@@ -126,35 +127,19 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
           <button
             type="button"
             onClick={() => { onClose(); router.push('/notifications'); }}
-            className="p-2 rounded-lg transition-colors"
+            className="p-2 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
             style={{ color: 'var(--color-text-muted)' }}
             title="Open full page"
             aria-label="Open full page"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-              e.currentTarget.style.color = 'var(--color-text-secondary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'var(--color-text-muted)';
-            }}
           >
             <ExternalLink className="h-4 w-4" />
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg transition-colors"
+            className="p-2 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
             style={{ color: 'var(--color-text-muted)' }}
             aria-label="Close panel"
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--color-bg-surface-raised)';
-              e.currentTarget.style.color = 'var(--color-text-primary)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
-              e.currentTarget.style.color = 'var(--color-text-muted)';
-            }}
           >
             <X className="h-4 w-4" />
           </button>
@@ -218,16 +203,13 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
               <div
                 key={notif.id}
                 onClick={() => handleNotificationClick(notif)}
-                className="flex items-start gap-3 px-4 py-3 transition-colors"
+                className={cn(
+                  'flex items-start gap-3 px-4 py-3 transition-colors',
+                  notif.ticketId && 'hover:bg-[var(--color-bg-surface)]',
+                )}
                 style={{
                   background: !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent',
                   cursor: notif.ticketId ? 'pointer' : 'default',
-                }}
-                onMouseEnter={(e) => {
-                  if (notif.ticketId) e.currentTarget.style.background = 'var(--color-bg-surface)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent';
                 }}
               >
                 <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: !notif.isRead ? 'var(--color-accent)' : 'transparent' }} />

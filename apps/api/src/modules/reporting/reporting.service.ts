@@ -77,21 +77,18 @@ export class ReportingService {
     const since = new Date();
     since.setDate(since.getDate() - days);
 
-    const tickets = await this.prisma.ticket.findMany({
-      where: { createdAt: { gte: since } },
-      select: { createdAt: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const rows = await this.prisma.$queryRaw<{ day: Date; count: bigint }[]>`
+      SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+      FROM tickets
+      WHERE "createdAt" >= ${since}
+      GROUP BY day
+      ORDER BY day
+    `;
 
-    const byDay = new Map<string, number>();
-    for (const t of tickets) {
-      const key = t.createdAt.toISOString().slice(0, 10); // YYYY-MM-DD
-      byDay.set(key, (byDay.get(key) ?? 0) + 1);
-    }
-
-    return Array.from(byDay.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, count]) => ({ date, count }));
+    return rows.map((r) => ({
+      date: r.day.toISOString().slice(0, 10),
+      count: Number(r.count),
+    }));
   }
 
   // ── Breakdown by status ───────────────────────────────────────────────────

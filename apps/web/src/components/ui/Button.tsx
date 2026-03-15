@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { ButtonHTMLAttributes, forwardRef } from 'react';
+import { ButtonHTMLAttributes, CSSProperties, forwardRef } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
@@ -7,39 +7,30 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean;
 }
 
+const variantConfig: Record<string, { bg: string; hoverBg: string; color: string; border?: string; hoverColor?: string }> = {
+  primary:   { bg: 'var(--color-accent)', hoverBg: 'var(--color-accent-hover)', color: '#ffffff' },
+  secondary: { bg: 'var(--color-btn-secondary-bg)', hoverBg: 'var(--color-btn-secondary-hover)', color: 'var(--color-btn-secondary-text)', border: '1px solid var(--color-btn-secondary-border)' },
+  ghost:     { bg: 'transparent', hoverBg: 'var(--color-btn-ghost-hover-bg)', color: 'var(--color-btn-ghost-text)', hoverColor: 'var(--color-btn-ghost-hover-text)' },
+  danger:    { bg: 'var(--color-danger)', hoverBg: 'var(--color-danger-hover)', color: '#ffffff' },
+};
+
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', loading, children, className, disabled, ...props }, ref) => {
-    const variantStyles: Record<string, React.CSSProperties> = {
-      primary: { background: 'var(--color-accent)', color: '#ffffff' },
-      secondary: { background: 'var(--color-btn-secondary-bg)', color: 'var(--color-btn-secondary-text)', border: '1px solid var(--color-btn-secondary-border)' },
-      ghost: { background: 'transparent', color: 'var(--color-btn-ghost-text)' },
-      danger: { background: 'var(--color-danger)', color: '#ffffff' },
-    };
-    const hoverHandlers = {
-      primary: {
-        onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-accent-hover)'; },
-        onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-accent)'; },
-      },
-      secondary: {
-        onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-btn-secondary-hover)'; },
-        onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-btn-secondary-bg)'; },
-      },
-      ghost: {
-        onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-btn-ghost-hover-bg)'; e.currentTarget.style.color = 'var(--color-btn-ghost-hover-text)'; },
-        onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-btn-ghost-text)'; },
-      },
-      danger: {
-        onMouseEnter: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-danger-hover)'; },
-        onMouseLeave: (e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--color-danger)'; },
-      },
-    };
-    const handlers = hoverHandlers[variant] ?? {};
+  ({ variant = 'primary', size = 'md', loading, children, className, disabled, style, ...props }, ref) => {
+    const cfg = variantConfig[variant] ?? variantConfig.primary;
+    const cssVars = {
+      '--btn-bg': cfg.bg,
+      '--btn-hover-bg': cfg.hoverBg,
+      '--btn-color': cfg.color,
+      '--btn-hover-color': cfg.hoverColor ?? cfg.color,
+    } as CSSProperties;
+
     return (
       <button
         ref={ref}
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed',
+          'bg-[var(--btn-bg)] text-[var(--btn-color)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-color)]',
           {
             'px-2.5 py-1.5 text-sm': size === 'sm',
             'px-4 py-2 text-sm': size === 'md',
@@ -47,8 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           },
           className,
         )}
-        style={variantStyles[variant]}
-        {...handlers}
+        style={{ ...cssVars, border: cfg.border, ...style }}
         {...props}
       >
         {loading && (

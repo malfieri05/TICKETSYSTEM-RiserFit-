@@ -86,14 +86,13 @@ export default function NotificationsPage() {
               <div
                 key={notif.id}
                 onClick={() => handleNotificationClick(notif)}
-                className="flex items-start gap-3 px-4 py-3 transition-colors"
+                data-clickable={notif.ticketId ? 'true' : undefined}
+                className="flex items-start gap-3 px-4 py-3 transition-colors [&[data-clickable='true']]:hover:bg-[var(--color-bg-surface)]"
                 style={{
                   background: !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent',
                   borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined,
                   cursor: notif.ticketId ? 'pointer' : 'default',
                 }}
-                onMouseEnter={(e) => { if (notif.ticketId) e.currentTarget.style.background = 'var(--color-bg-surface)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = !notif.isRead ? 'rgba(52,120,196,0.06)' : 'transparent'; }}
               >
                 <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: !notif.isRead ? 'var(--color-accent)' : 'transparent' }} />
                 <div className="flex-1 min-w-0">

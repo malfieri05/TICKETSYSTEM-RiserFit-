@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { MessageCircle, Search } from 'lucide-react';
@@ -31,6 +31,8 @@ export default function PortalTicketsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleClose = useCallback(() => setSelectedId(null), []);
 
   useEffect(() => {
     if (studioIdFromUrl !== undefined) {
@@ -210,10 +212,8 @@ export default function PortalTicketsPage() {
                       <tr
                         key={ticket.id}
                         onClick={() => router.push(`/tickets/${ticket.id}`)}
-                        className="cursor-pointer transition-colors"
+                        className="cursor-pointer transition-colors hover:bg-[var(--color-bg-surface)]"
                         style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--color-bg-surface)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{topicLabel}</td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
@@ -279,7 +279,7 @@ export default function PortalTicketsPage() {
           )}
         </div>
       </div>
-      <TicketDrawer ticketId={selectedId} onClose={() => setSelectedId(null)} />
+      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
     </div>
   );
 }
