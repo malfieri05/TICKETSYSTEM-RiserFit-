@@ -127,6 +127,18 @@ export interface TicketFormResponseItem {
   value: string;
 }
 
+export interface LeaseIqResult {
+  id: string;
+  suggestedResponsibility: 'LIKELY_LANDLORD' | 'LIKELY_TENANT' | 'NEEDS_HUMAN_REVIEW';
+  internalResultState?: 'RESOLVED' | 'AMBIGUOUS' | 'NO_MATCH' | 'NO_RULES_CONFIGURED' | null;
+  confidence: string;
+  matchedRuleIds: string[];
+  matchedTerms: string[];
+  explanation: string;
+  evaluatedAt: string;
+  evaluationTrigger: string;
+}
+
 export interface TicketDetail extends TicketListItem {
   description?: string;
   resolvedAt?: string;
@@ -137,6 +149,7 @@ export interface TicketDetail extends TicketListItem {
   watchers: { userId: string; user: { displayName: string; email: string } }[];
   tags: { tag: { id: string; name: string } }[];
   formResponses?: TicketFormResponseItem[];
+  leaseIqResult?: LeaseIqResult | null;
 }
 
 export interface Comment {

@@ -9,6 +9,7 @@ import { PolicyModule } from '../../policy/policy.module';
 import { TicketFormsModule } from '../ticket-forms/ticket-forms.module';
 import { SubtaskWorkflowModule } from '../subtask-workflow/subtask-workflow.module';
 import { CommentsModule } from '../comments/comments.module';
+import { LeaseIQModule } from '../lease-iq/lease-iq.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { CommentsModule } from '../comments/comments.module';
     SubtaskWorkflowModule,
     PolicyModule,
     forwardRef(() => CommentsModule),
+    LeaseIQModule,
   ],
   controllers: [TicketsController],
   providers: [TicketsService],

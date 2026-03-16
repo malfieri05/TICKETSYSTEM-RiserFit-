@@ -87,6 +87,10 @@ export const ticketsApi = {
   watch: (id: string) => api.post(`/tickets/${id}/watch`),
   unwatch: (id: string) => api.delete(`/tickets/${id}/watch`),
   history: (id: string) => api.get<import('@/types').AuditEntry[]>(`/tickets/${id}/history`),
+  getLeaseIqResult: (id: string) =>
+    api.get<import('@/types').LeaseIqResult | null>(`/tickets/${id}/lease-iq-result`),
+  reEvaluateLeaseIq: (id: string) =>
+    api.post<import('@/types').LeaseIqResult>(`/tickets/${id}/lease-iq/evaluate`),
 };
 
 // Shared helper: invalidate all major ticket list surfaces after mutations
@@ -604,6 +608,172 @@ export const adminApi = {
         }[];
       }[];
     }>('/admin/system/services'),
+};
+
+// ─── Email Automation (admin) ───────────────────────────────────────────────
+
+const EMAIL_AUTOMATION_PREFIX = '/admin/email-automation';
+
+export const emailAutomationApi = {
+  getConfig: () => api.get<{
+    id: string;
+    gmailLabel: string | null;
+    gmailPollWindowHours: number;
+    gmailConnectedEmail: string | null;
+    assemblyCategoryId: string | null;
+    systemRequesterId: string | null;
+    minOrderNumberConfidence: number;
+    minAddressConfidence: number;
+    minItemConfidence: number;
+    isEnabled: boolean;
+    updatedAt: string;
+    createdAt: string;
+  }>(`${EMAIL_AUTOMATION_PREFIX}/config`),
+  getGmailAuthUrl: () =>
+    api.get<{ url: string }>(`${EMAIL_AUTOMATION_PREFIX}/gmail/auth-url`),
+  gmailDisconnect: () =>
+    api.post<{ ok: boolean }>(`${EMAIL_AUTOMATION_PREFIX}/gmail/disconnect`),
+  updateConfig: (data: {
+    gmailLabel?: string | null;
+    gmailPollWindowHours?: number;
+    assemblyCategoryId?: string | null;
+    systemRequesterId?: string | null;
+    minOrderNumberConfidence?: number;
+    minAddressConfidence?: number;
+    minItemConfidence?: number;
+    isEnabled?: boolean;
+  }) => api.patch(`${EMAIL_AUTOMATION_PREFIX}/config`, data),
+  runIngest: () =>
+    api.post<{ fetched: number; stored: number; skipped: number }>(`${EMAIL_AUTOMATION_PREFIX}/ingest/run`),
+
+  listAssemblyItems: () =>
+    api.get<{ id: string; keywordOrPhrase: string; displayName: string | null; matchMode: string; isActive: boolean; sortOrder: number }[]>(
+      `${EMAIL_AUTOMATION_PREFIX}/assembly-items`,
+    ),
+  createAssemblyItem: (data: { keywordOrPhrase: string; displayName?: string | null; matchMode?: string; isActive?: boolean; sortOrder?: number }) =>
+    api.post(`${EMAIL_AUTOMATION_PREFIX}/assembly-items`, data),
+  updateAssemblyItem: (id: string, data: { keywordOrPhrase?: string; displayName?: string | null; matchMode?: string; isActive?: boolean; sortOrder?: number }) =>
+    api.patch(`${EMAIL_AUTOMATION_PREFIX}/assembly-items/${id}`, data),
+  deleteAssemblyItem: (id: string) => api.delete(`${EMAIL_AUTOMATION_PREFIX}/assembly-items/${id}`),
+
+  listNormalizedAddresses: () =>
+    api.get<{ id: string; studioId: string; normalizedAddress: string; studio: { id: string; name: string } }[]>(
+      `${EMAIL_AUTOMATION_PREFIX}/normalized-addresses`,
+    ),
+  refreshNormalizedAddresses: () =>
+    api.post<{ updated: number }>(`${EMAIL_AUTOMATION_PREFIX}/normalized-addresses/refresh`),
+
+  listEmails: (params?: { page?: number; limit?: number; classification?: string }) =>
+    api.get(`${EMAIL_AUTOMATION_PREFIX}/emails`, { params }),
+  getEmail: (id: string) => api.get(`${EMAIL_AUTOMATION_PREFIX}/emails/${id}`),
+  reprocessEmail: (id: string) =>
+    api.post<{ classification: string; outcome: string }>(`${EMAIL_AUTOMATION_PREFIX}/emails/${id}/reprocess`),
+
+  listReviewQueue: (params?: { reason?: string; status?: string; page?: number; limit?: number }) =>
+    api.get(`${EMAIL_AUTOMATION_PREFIX}/review-queue`, { params }),
+  resolveReviewItem: (id: string, resolvedBy?: string) =>
+    api.patch(`${EMAIL_AUTOMATION_PREFIX}/review-queue/${id}/resolve`, { resolvedBy }),
+  dismissReviewItem: (id: string) =>
+    api.patch(`${EMAIL_AUTOMATION_PREFIX}/review-queue/${id}/dismiss`),
+
+  listEvents: (params?: { emailId?: string; eventType?: string; page?: number; limit?: number }) =>
+    api.get(`${EMAIL_AUTOMATION_PREFIX}/events`, { params }),
+
+  /** Paste raw email, get classification + extracted fields + assembly match + studio match (no persist). */
+  emailPatternPlayground: (data: { rawEmail: string; subject?: string; body?: string }) =>
+    api.post<{
+      classification: { type: string; confidence: number };
+      extractedOrder?: {
+        orderNumber: string;
+        vendorIdentifier: string;
+        vendorDomain: string | null;
+        shippingAddressRaw: string | null;
+        lineItems: { itemName: string; quantity: number }[];
+        orderNumberConfidence: number;
+        addressConfidence: number;
+        itemConfidence: number;
+      };
+      extractedDelivery?: {
+        orderNumber: string;
+        vendorDomain: string | null;
+        deliveryTimestamp: string | null;
+        lineItems: { itemName: string; quantity: number }[];
+        orderNumberConfidence: number;
+        itemConfidence: number;
+      };
+      assemblyMatch?: { matched: boolean; matchedKeywords: string[]; matchedLineItemNames: string[] };
+      studioMatch?: { kind: 'single'; studioId: string } | { kind: 'none' } | { kind: 'ambiguous'; studioIds: string[] };
+    }>(`${EMAIL_AUTOMATION_PREFIX}/email-pattern-playground`, data),
+};
+
+// ─── Lease IQ (admin) ─────────────────────────────────────────────────────
+
+const LEASE_IQ_PREFIX = '/admin/lease-iq';
+
+export const leaseIqApi = {
+  listSources: (studioId: string) =>
+    api.get<{ id: string; sourceType: string; originalFileName: string | null; uploadedAt: string; uploadedByUserId: string | null }[]>(
+      `${LEASE_IQ_PREFIX}/studios/${studioId}/sources`,
+    ),
+  uploadSource: (studioId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  pasteSource: (studioId: string, pastedText: string) =>
+    api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/paste`, { pastedText }),
+  parse: (studioId: string) =>
+    api.post<{ rulesetId: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/parse`),
+  listRulesets: (studioId: string) =>
+    api.get<{ id: string; status: string; createdAt: string; _count: { rules: number } }[]>(
+      `${LEASE_IQ_PREFIX}/studios/${studioId}/rulesets`,
+    ),
+  getRuleset: (rulesetId: string) =>
+    api.get<{
+      id: string;
+      status: string;
+      rules: Array<{
+        id: string;
+        ruleType: string;
+        categoryScope: string | null;
+        clauseReference: string | null;
+        notes: string | null;
+        priority: number;
+        terms: Array<{ id: string; term: string; termType: string }>;
+      }>;
+    }>(`${LEASE_IQ_PREFIX}/rulesets/${rulesetId}`),
+  updateRules: (
+    rulesetId: string,
+    rules: Array<{
+      ruleType: string;
+      categoryScope?: string | null;
+      clauseReference?: string | null;
+      notes?: string | null;
+      priority?: number;
+      terms: Array<{ term: string; termType: string }>;
+    }>,
+  ) =>
+    api.patch(`${LEASE_IQ_PREFIX}/rulesets/${rulesetId}/rules`, { rules }),
+  publish: (studioId: string, rulesetId: string) =>
+    api.post(`${LEASE_IQ_PREFIX}/studios/${studioId}/publish`, { rulesetId }),
+  playground: (data: {
+    studioId: string;
+    maintenanceCategoryId?: string | null;
+    title: string;
+    description: string;
+  }) =>
+    api.post<{
+      suggestedResponsibility: string;
+      confidence: string;
+      matchedRuleIds: string[];
+      matchedTerms: string[];
+      explanation: string;
+      ruleSetId: string | null;
+    }>(`${LEASE_IQ_PREFIX}/playground`, data),
+  copyPrompt: () =>
+    api.get<{ text: string }>(`${LEASE_IQ_PREFIX}/copy-prompt`),
 };
 
 export const usersApi = {

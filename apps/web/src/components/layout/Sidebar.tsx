@@ -19,6 +19,8 @@ import {
   Moon,
   Activity,
   ChevronRight,
+  Mail,
+  Bot,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
@@ -85,6 +87,8 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
     label: 'Content / Tools',
     items: [
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+      { href: '/admin/email-automation', label: 'Email Automation', icon: Mail },
+      { href: '/admin/lease-iq', label: 'Lease IQ', icon: BookMarked },
       { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },
     ],
   },
@@ -254,6 +258,22 @@ export function Sidebar() {
           </Link>
         )}
 
+        {isAdmin && (
+          <Link
+            href="/assistant"
+            data-active={pathname === '/assistant' ? 'true' : undefined}
+            className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
+            style={{
+              background: pathname === '/assistant' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+              color: pathname === '/assistant' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              borderLeft: `4px solid ${pathname === '/assistant' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
+            }}
+          >
+            <Bot className="h-4 w-4 shrink-0" />
+            AI Assistant
+          </Link>
+        )}
+
         {user?.studioId && (
           <Link
             href="/handbook"
@@ -306,6 +326,23 @@ export function Sidebar() {
               </div>
             ))}
           </>
+        )}
+
+        {/* AI Assistant — last nav item for non-admin users (admins see it below Actionable) */}
+        {!isAdmin && (
+          <Link
+            href="/assistant"
+            data-active={pathname === '/assistant' ? 'true' : undefined}
+            className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
+            style={{
+              background: pathname === '/assistant' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
+              color: pathname === '/assistant' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              borderLeft: `4px solid ${pathname === '/assistant' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
+            }}
+          >
+            <Bot className="h-4 w-4 shrink-0" />
+            AI Assistant
+          </Link>
         )}
       </nav>
 

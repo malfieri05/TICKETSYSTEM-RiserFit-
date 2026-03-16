@@ -13,12 +13,14 @@ import {
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { CommentsService } from '../comments/comments.service';
+import { LeaseEvaluationService } from '../lease-iq/services/lease-evaluation.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { Role } from '@prisma/client';
+import { EvaluationTrigger } from '@prisma/client';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
@@ -31,6 +33,7 @@ export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,
     private readonly commentsService: CommentsService,
+    private readonly leaseEvaluation: LeaseEvaluationService,
   ) {}
 
   // POST /api/tickets
@@ -73,6 +76,29 @@ export class TicketsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.ticketsService.findAll(filters, user);
+  }
+
+  // GET /api/tickets/:id/lease-iq-result
+  @Get(':id/lease-iq-result')
+  async getLeaseIqResult(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.ticketsService.findById(id, user);
+    return this.leaseEvaluation.getResultForTicket(id);
+  }
+
+  // POST /api/tickets/:id/lease-iq/evaluate — manual re-evaluate (ADMIN)
+  @Post(':id/lease-iq/evaluate')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async reEvaluateLeaseIq(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    await this.ticketsService.findById(id, user);
+    await this.leaseEvaluation.evaluate(id, EvaluationTrigger.MANUAL);
+    return this.leaseEvaluation.getResultForTicket(id);
   }
 
   // GET /api/tickets/:ticketId/mentionable-users?search=...

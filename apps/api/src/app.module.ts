@@ -27,6 +27,8 @@ import { TicketFormsModule } from './modules/ticket-forms/ticket-forms.module';
 import { SubtaskWorkflowModule } from './modules/subtask-workflow/subtask-workflow.module';
 import { WorkflowAnalyticsModule } from './modules/workflow-analytics/workflow-analytics.module';
 import { PolicyModule } from './policy/policy.module';
+import { EmailAutomationModule } from './modules/email-automation/email-automation.module';
+import { LeaseIQModule } from './modules/lease-iq/lease-iq.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -95,6 +97,12 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
     SubtaskWorkflowModule,
     WorkflowAnalyticsModule,
     PolicyModule,
+
+    // ── Email automation (assembly ticket from delivery emails) ─────────────────
+    EmailAutomationModule,
+
+    // ── Lease IQ (per-studio lease responsibility rules + ticket evaluation) ─
+    LeaseIQModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,

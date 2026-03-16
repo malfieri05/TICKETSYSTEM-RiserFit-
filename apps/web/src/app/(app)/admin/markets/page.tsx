@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
+import { MaintenanceCountWithTooltip } from '@/components/ui/MaintenanceCountWithTooltip';
 import dynamic from 'next/dynamic';
 
 const LocationsMap = dynamic(
@@ -18,7 +19,13 @@ const LocationsMap = dynamic(
 );
 
 interface MarketWithStudios extends Market {
-  studios: (Studio & { formattedAddress?: string | null; latitude?: number | null; longitude?: number | null })[];
+  studios: (Studio & {
+    formattedAddress?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    activeMaintenanceCount?: number;
+    activeMaintenanceCategoryNames?: string[];
+  })[];
 }
 
 interface NearbyStudio {
@@ -27,6 +34,8 @@ interface NearbyStudio {
   formattedAddress: string | null;
   marketName: string;
   distanceMiles: number;
+  activeMaintenanceCount?: number;
+  activeMaintenanceCategoryNames?: string[];
 }
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
@@ -35,6 +44,8 @@ type FlatLocation = Studio & {
   formattedAddress?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  activeMaintenanceCount?: number;
+  activeMaintenanceCategoryNames?: string[];
   marketId: string;
   marketName: string;
 };
@@ -52,6 +63,8 @@ export default function AdminMarketsPage() {
     marketName: string;
     latitude?: number | null;
     longitude?: number | null;
+    activeMaintenanceCount?: number;
+    activeMaintenanceCategoryNames?: string[];
   } | null>(null);
   const [editingStudio, setEditingStudio] = useState<{
     id: string;
@@ -295,6 +308,8 @@ export default function AdminMarketsPage() {
                     marketName: loc.marketName,
                     latitude: loc.latitude ?? null,
                     longitude: loc.longitude ?? null,
+                    activeMaintenanceCount: loc.activeMaintenanceCount ?? 0,
+                    activeMaintenanceCategoryNames: loc.activeMaintenanceCategoryNames ?? [],
                   });
                 }}
               />
@@ -316,10 +331,12 @@ export default function AdminMarketsPage() {
                         marketName: loc.marketName,
                         latitude: loc.latitude ?? null,
                         longitude: loc.longitude ?? null,
+                        activeMaintenanceCount: loc.activeMaintenanceCount ?? 0,
+                        activeMaintenanceCategoryNames: loc.activeMaintenanceCategoryNames ?? [],
                       })
                     }
                   >
-                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{loc.name}</span>
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{loc.name} <MaintenanceCountWithTooltip count={loc.activeMaintenanceCount ?? 0} categoryNames={loc.activeMaintenanceCategoryNames ?? []} /></span>
                     {loc.formattedAddress && (
                       <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{loc.formattedAddress}</span>
                     )}
@@ -379,7 +396,7 @@ export default function AdminMarketsPage() {
               ) : (
                 <>
                   <div>
-                    <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{selectedStudio.name}</p>
+                    <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{selectedStudio.name} <MaintenanceCountWithTooltip count={selectedStudio.activeMaintenanceCount ?? 0} categoryNames={selectedStudio.activeMaintenanceCategoryNames ?? []} /></div>
                     {selectedStudio.formattedAddress && (
                       <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>{selectedStudio.formattedAddress}</p>
                     )}
@@ -439,7 +456,7 @@ export default function AdminMarketsPage() {
                         <ul className="space-y-1.5">
                           {nearbyStudios.map((s) => (
                             <li key={s.id} className="text-sm" style={{ color: 'var(--color-text-primary)' }}>
-                              {s.name} ({s.marketName}) — {s.distanceMiles} mi
+                              {s.name} <MaintenanceCountWithTooltip count={s.activeMaintenanceCount ?? 0} categoryNames={s.activeMaintenanceCategoryNames ?? []} /> ({s.marketName}) — {s.distanceMiles} mi
                             </li>
                           ))}
                         </ul>

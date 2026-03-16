@@ -10,6 +10,8 @@ import { AiModule } from '../modules/ai/ai.module';
 import { PermissionsModule } from '../common/permissions/permissions.module';
 import { QUEUES } from '../common/queue/queue.constants';
 import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.processor';
+import { EmailAutomationModule } from '../modules/email-automation/email-automation.module';
+import { EmailIngestProcessor } from './processors/email-ingest.processor';
 
 @Module({
   imports: [
@@ -18,17 +20,20 @@ import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.pr
       { name: QUEUES.NOTIFICATION_DISPATCH },
       { name: QUEUES.SCHEDULED },
       { name: QUEUES.KNOWLEDGE_INGESTION },
+      { name: QUEUES.EMAIL_INGEST },
     ),
     NotificationsModule,
     SlaModule,
     AiModule,
     PermissionsModule,
+    EmailAutomationModule,
   ],
   providers: [
     NotificationFanoutProcessor,
     NotificationDispatchProcessor,
     StaleTicketProcessor,
     KnowledgeIngestionProcessor,
+    EmailIngestProcessor,
     SchedulerService,
   ],
 })

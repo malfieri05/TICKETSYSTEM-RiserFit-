@@ -177,6 +177,7 @@ export default function DispatchPage() {
               value={filters.createdAfter ?? ''}
               onChange={(e) => setFilter('createdAfter', e.target.value)}
               className="w-[7.25rem] min-w-0 shrink-0"
+              style={{ color: 'var(--color-text-muted)' }}
             />
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -186,6 +187,7 @@ export default function DispatchPage() {
               value={filters.createdBefore ?? ''}
               onChange={(e) => setFilter('createdBefore', e.target.value)}
               className="w-[7.25rem] min-w-0 shrink-0"
+              style={{ color: 'var(--color-text-muted)' }}
             />
           </div>
           {(filters.studioId || filters.marketId || filters.maintenanceCategoryId || filters.createdAfter || filters.createdBefore) && (

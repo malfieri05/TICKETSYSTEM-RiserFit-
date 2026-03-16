@@ -16,11 +16,12 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { assertValidTransition } from './ticket-state-machine';
 import { generateTicketTitle } from './title-generator';
-import { Role, TicketStatus, Prisma } from '@prisma/client';
+import { Role, TicketStatus, Prisma, EvaluationTrigger } from '@prisma/client';
 import { SlaService } from '../sla/sla.service';
 import { TicketFormsService } from '../ticket-forms/ticket-forms.service';
 import { SubtaskWorkflowService } from '../subtask-workflow/subtask-workflow.service';
 import { PolicyService } from '../../policy/policy.service';
+import { LeaseEvaluationService } from '../lease-iq/services/lease-evaluation.service';
 import {
   TICKET_ASSIGN_OWNER,
   TICKET_CREATE,
@@ -151,6 +152,7 @@ const TICKET_DETAIL_SELECT = {
     select: { fieldKey: true, value: true },
     orderBy: { fieldKey: 'asc' as const },
   },
+  leaseIqResult: true,
 } satisfies Prisma.TicketSelect;
 
 @Injectable()
@@ -167,6 +169,7 @@ export class TicketsService {
     private ticketForms: TicketFormsService,
     private subtaskWorkflow: SubtaskWorkflowService,
     private policy: PolicyService,
+    private leaseEvaluation: LeaseEvaluationService,
   ) {}
 
   /**
@@ -514,6 +517,13 @@ export class TicketsService {
           ownerId: s.ownerId,
         },
       });
+    }
+
+    // Lease IQ: evaluate maintenance tickets with studio (await so result is persisted before client sees ticket)
+    try {
+      await this.leaseEvaluation.evaluate(ticket.id, EvaluationTrigger.CREATE);
+    } catch {
+      // Do not fail ticket create if evaluation errors
     }
 
     return ticket;

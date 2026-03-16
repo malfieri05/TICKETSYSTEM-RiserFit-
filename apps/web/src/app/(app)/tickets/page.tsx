@@ -303,7 +303,7 @@ export default function TicketsPage() {
                   value={filters.createdAfter ? filters.createdAfter.slice(0, 10) : ''}
                   onChange={(e) => setDateFilter('createdAfter', e.target.value)}
                   className="rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                   title="From date"
                 />
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>–</span>
@@ -312,7 +312,7 @@ export default function TicketsPage() {
                   value={filters.createdBefore ? filters.createdBefore.slice(0, 10) : ''}
                   onChange={(e) => setDateFilter('createdBefore', e.target.value)}
                   className="rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                   title="To date"
                 />
               </div>

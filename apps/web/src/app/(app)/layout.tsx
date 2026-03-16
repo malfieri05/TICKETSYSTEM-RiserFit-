@@ -37,7 +37,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <NotificationsPanelProvider>
       <div className="flex h-screen overflow-hidden">
         <NotificationStreamInit />
-        <Sidebar />
+        <div data-theme="dark" className="shrink-0">
+          <Sidebar />
+        </div>
         <main className="ml-[260px] flex-1 overflow-y-auto" style={{ background: 'var(--color-bg-page)' }}>{children}</main>
         <AiChatWidget />
       </div>

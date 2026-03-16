@@ -507,13 +507,65 @@ export class AdminService {
 
   // ─── Markets ─────────────────────────────────────────────────────────────
 
+  /** Open maintenance tickets per studio (status not RESOLVED/CLOSED, ticket class MAINTENANCE). Returns count and category names per studio. */
+  private async getActiveMaintenanceByStudio(
+    studioIds: string[],
+  ): Promise<Map<string, { count: number; categoryNames: string[] }>> {
+    const empty = (): { count: number; categoryNames: string[] } => ({
+      count: 0,
+      categoryNames: [],
+    });
+    if (studioIds.length === 0) return new Map();
+    const maintenanceClass = await this.prisma.ticketClass.findFirst({
+      where: { code: 'MAINTENANCE' },
+      select: { id: true },
+    });
+    const map = new Map<string, { count: number; categoryNames: string[] }>();
+    for (const id of studioIds) map.set(id, empty());
+    if (!maintenanceClass) return map;
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        studioId: { in: studioIds },
+        status: { notIn: ['RESOLVED', 'CLOSED'] },
+        ticketClassId: maintenanceClass.id,
+      },
+      select: {
+        studioId: true,
+        maintenanceCategory: { select: { name: true } },
+      },
+    });
+    for (const t of tickets) {
+      if (t.studioId == null) continue;
+      const cur = map.get(t.studioId) ?? empty();
+      cur.count += 1;
+      cur.categoryNames.push(
+        t.maintenanceCategory?.name ?? 'Uncategorized',
+      );
+      map.set(t.studioId, cur);
+    }
+    return map;
+  }
+
   async listMarkets() {
-    return this.prisma.market.findMany({
+    const markets = await this.prisma.market.findMany({
       orderBy: { name: 'asc' },
       include: {
         studios: { orderBy: { name: 'asc' } },
       },
     });
+    const studioIds = markets.flatMap((m) => m.studios.map((s) => s.id));
+    const data = await this.getActiveMaintenanceByStudio(studioIds);
+    return markets.map((m) => ({
+      ...m,
+      studios: m.studios.map((s) => {
+        const d = data.get(s.id) ?? { count: 0, categoryNames: [] };
+        return {
+          ...s,
+          activeMaintenanceCount: d.count,
+          activeMaintenanceCategoryNames: d.categoryNames,
+        };
+      }),
+    }));
   }
 
   async createMarket(dto: CreateMarketDto) {
@@ -645,6 +697,8 @@ export class AdminService {
       formattedAddress: string | null;
       marketName: string;
       distanceMiles: number;
+      activeMaintenanceCount: number;
+      activeMaintenanceCategoryNames: string[];
     }[]
   > {
     const target = await this.prisma.studio.findUnique({
@@ -696,6 +750,15 @@ export class AdminService {
       }
     }
     results.sort((a, b) => a.distanceMiles - b.distanceMiles);
-    return results.slice(0, 50);
+    const top = results.slice(0, 50);
+    const data = await this.getActiveMaintenanceByStudio(top.map((r) => r.id));
+    return top.map((r) => {
+      const d = data.get(r.id) ?? { count: 0, categoryNames: [] };
+      return {
+        ...r,
+        activeMaintenanceCount: d.count,
+        activeMaintenanceCategoryNames: d.categoryNames,
+      };
+    });
   }
 }

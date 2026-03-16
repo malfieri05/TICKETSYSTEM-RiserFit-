@@ -95,6 +95,88 @@ enum AuditAction {
   SUBTASK_COMPLETED
 }
 
+// Email-triggered assembly automation (Stage 1+)
+enum VendorOrderState {
+  ORDER_CONFIRMED
+  REVIEW_REQUIRED
+}
+
+enum DeliveryEventStatus {
+  DELIVERY_RECORDED
+  ASSEMBLY_TRIGGERED
+  COMPLETE_NO_ASSEMBLY
+  REVIEW_REQUIRED
+}
+
+enum AssemblyTriggerMatchMode {
+  SUBSTRING
+  EXACT_OR_FUZZY_ALIAS
+}
+
+enum EmailAutomationReviewReason {
+  PENDING_ORDER_MATCH
+  NO_STUDIO_MATCH
+  LOW_CONFIDENCE
+  AMBIGUOUS_ADDRESS
+  TICKET_CREATE_FAILED
+  OTHER
+}
+
+enum EmailAutomationReviewStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+// Lease IQ (V1) — per-studio lease responsibility rules and ticket evaluation
+enum LeaseRuleSetStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum LeaseSourceType {
+  UPLOADED_PDF
+  PASTED_EXTRACTION
+}
+
+enum LeaseRuleType {
+  LANDLORD_RESPONSIBILITY
+  TENANT_RESPONSIBILITY
+  SHARED_OR_AMBIGUOUS
+}
+
+enum LeaseRuleTermType {
+  KEYWORD
+  PHRASE
+  ALIAS
+}
+
+enum SuggestedResponsibility {
+  LIKELY_LANDLORD
+  LIKELY_TENANT
+  NEEDS_HUMAN_REVIEW
+}
+
+enum LeaseIQResultState {
+  RESOLVED
+  AMBIGUOUS
+  NO_MATCH
+  NO_RULES_CONFIGURED
+}
+
+enum LeaseIQConfidence {
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum EvaluationTrigger {
+  CREATE
+  MANUAL
+  RULESET_UPDATE
+}
+
 // ============================================================
 // ORGANIZATION STRUCTURE
 // ============================================================
@@ -125,10 +207,13 @@ model Studio {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  market      Market            @relation(fields: [marketId], references: [id])
-  tickets     Ticket[]
-  users       User[]
-  studioScopes UserStudioScope[]
+  market                   Market                    @relation(fields: [marketId], references: [id])
+  tickets                  Ticket[]
+  users                    User[]
+  studioScopes             UserStudioScope[]
+  studioAddressNormalized  StudioAddressNormalized[]
+  leaseSources             LeaseSource[]
+  leaseRuleSets            LeaseRuleSet[]
 
   @@unique([name, marketId])
   @@index([marketId])
@@ -303,6 +388,7 @@ model MaintenanceCategory {
   tickets            Ticket[]
   formSchemas        TicketFormSchema[]
   workflowTemplates  SubtaskWorkflowTemplate[]
+  leaseRules         LeaseRule[]
 
   @@map("maintenance_categories")
 }
@@ -428,6 +514,7 @@ model Ticket {
   notifications Notification[]
   auditLogs     AuditLog[]
   formResponses TicketFormResponse[]
+  leaseIqResult TicketLeaseIqResult?
 
   @@index([status])
   @@index([ownerId])
@@ -874,4 +961,291 @@ model AuditLog {
   @@index([actorId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================
+// EMAIL AUTOMATION (Assembly ticket automation V1 — Stage 1)
+// ============================================================
+
+model InboundEmail {
+  id                    String    @id @default(cuid())
+  messageId             String    @unique // Gmail message id for dedupe
+  threadId              String?
+  historyId             String?
+  subject               String?
+  fromAddress           String?
+  receivedAt            DateTime
+  bodyPlain             String?
+  bodyHtml              String?
+  rawStorageRef         String?   // optional external storage ref for very large bodies
+  classification        String?   // ORDER_CONFIRMATION | DELIVERY_CONFIRMATION | OTHER (filled in Stage 2+)
+  classificationConfidence Float?
+  processedAt           DateTime?
+  createdAt             DateTime  @default(now())
+
+  vendorOrderRecords    VendorOrderRecord[]
+  deliveryEvents        DeliveryEvent[]
+  reviewItems           EmailAutomationReviewItem[]
+  automationEvents      EmailAutomationEvent[]
+
+  @@index([receivedAt])
+  @@index([processedAt])
+  @@map("inbound_emails")
+}
+
+model VendorOrderRecord {
+  id                      String           @id @default(cuid())
+  orderNumber             String
+  vendorIdentifier        String
+  vendorDomain            String?          // e.g. amazon.com, petra.com
+  shippingAddressRaw      String?
+  shippingAddressNormalized String?
+  emailId                 String
+  state                   VendorOrderState  @default(ORDER_CONFIRMED)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  email       InboundEmail      @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  lineItems   OrderLineItem[]
+  deliveryEvents DeliveryEvent[]
+  reviewItems EmailAutomationReviewItem[]
+
+  @@unique([orderNumber, vendorIdentifier])
+  @@index([state])
+  @@map("vendor_order_records")
+}
+
+model OrderLineItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  itemName   String
+  quantity   Int      @default(1)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  order VendorOrderRecord @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_line_items")
+}
+
+model DeliveryEvent {
+  id                String              @id @default(cuid())
+  orderId           String?             // null when PENDING_ORDER_MATCH
+  emailId           String
+  deliveryTimestamp DateTime?
+  deliverySource    String?             // e.g. carrier or "email"
+  deliveryStatus    DeliveryEventStatus @default(DELIVERY_RECORDED)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  order  VendorOrderRecord? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  email  InboundEmail      @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  reviewItems EmailAutomationReviewItem[]
+
+  @@index([orderId])
+  @@index([emailId])
+  @@index([deliveryStatus])
+  @@map("delivery_events")
+}
+
+model StudioAddressNormalized {
+  id               String   @id @default(cuid())
+  studioId         String
+  normalizedAddress String  // Street→St, lowercase, punctuation stripped
+  createdAt        DateTime @default(now())
+
+  studio Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@index([studioId])
+  @@map("studio_address_normalized")
+}
+
+model AssemblyTriggerItem {
+  id              String                 @id @default(cuid())
+  keywordOrPhrase String
+  displayName     String?
+  matchMode       AssemblyTriggerMatchMode @default(SUBSTRING)
+  isActive        Boolean                @default(true)
+  sortOrder       Int                    @default(0)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([isActive])
+  @@map("assembly_trigger_items")
+}
+
+model EmailAutomationReviewItem {
+  id              String                     @id @default(cuid())
+  emailId         String
+  orderId         String?
+  deliveryEventId String?
+  reason          EmailAutomationReviewReason
+  extractedPayload Json?
+  status          EmailAutomationReviewStatus @default(PENDING)
+  resolvedAt      DateTime?
+  resolvedBy      String?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  email  InboundEmail       @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  order  VendorOrderRecord? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  deliveryEvent DeliveryEvent? @relation(fields: [deliveryEventId], references: [id], onDelete: SetNull)
+
+  @@index([emailId])
+  @@index([orderId])
+  @@index([status])
+  @@index([reason])
+  @@map("email_automation_review_items")
+}
+
+model EmailAutomationEvent {
+  id              String   @id @default(cuid())
+  eventType       String
+  emailId         String
+  orderId         String?
+  deliveryEventId String?
+  payload         Json?
+  createdAt       DateTime @default(now())
+
+  email InboundEmail @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+  @@index([orderId])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("email_automation_events")
+}
+
+model EmailAutomationTicketCreated {
+  orderNumber      String
+  vendorIdentifier String
+  ticketId         String
+  createdAt        DateTime @default(now())
+
+  @@id([orderNumber, vendorIdentifier])
+  @@map("email_automation_ticket_created")
+}
+
+model EmailAutomationLock {
+  id            String   @id @default(cuid())
+  lockKey       String   @unique // orderNumber + vendor (e.g. "12345|amazon.com")
+  acquiredAt    DateTime @default(now())
+  expiresAt     DateTime
+  releasedAt    DateTime?
+
+  @@index([lockKey])
+  @@index([expiresAt])
+  @@map("email_automation_locks")
+}
+
+model EmailAutomationConfig {
+  id                      String   @id @default(cuid())
+  gmailLabel              String?  // e.g. INBOX or label name
+  gmailPollWindowHours    Int      @default(24)
+  gmailRefreshToken       String?  // OAuth2 refresh token (any @gmail.com; no Workspace required)
+  gmailConnectedEmail     String?  // Email of connected Gmail account (for display)
+  assemblyCategoryId      String?  // MaintenanceCategory id (for ticket create in later stage)
+  systemRequesterId       String?  // User id (for ticket create in later stage)
+  minOrderNumberConfidence Float   @default(0.8)
+  minAddressConfidence    Float   @default(0.8)
+  minItemConfidence       Float   @default(0.8)
+  isEnabled               Boolean  @default(false)
+  updatedAt               DateTime @updatedAt
+  createdAt               DateTime @default(now())
+
+  @@map("email_automation_config")
+}
+
+// ============================================================
+// LEASE IQ (V1) — lease responsibility rules and ticket evaluation
+// ============================================================
+
+model LeaseSource {
+  id               String         @id @default(cuid())
+  studioId         String
+  sourceType       LeaseSourceType
+  rawText          String?         // extracted text for PDF; pasted text for PASTED_EXTRACTION
+  fileStoragePath  String?
+  originalFileName String?
+  uploadedAt       DateTime       @default(now())
+  uploadedByUserId String?
+
+  studio Studio          @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  ruleSets LeaseRuleSet[]
+
+  @@index([studioId, sourceType, uploadedAt])
+  @@map("lease_sources")
+}
+
+model LeaseRuleSet {
+  id                String            @id @default(cuid())
+  studioId          String
+  sourceId          String?           // FK to lease_sources; null for manually created rulesets
+  status            LeaseRuleSetStatus
+  createdAt         DateTime         @default(now())
+  publishedAt       DateTime?
+  publishedByUserId String?
+
+  studio  Studio?       @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  source  LeaseSource?  @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  rules   LeaseRule[]
+  ticketResults TicketLeaseIqResult[]
+
+  @@index([studioId, status])
+  @@map("lease_rule_sets")
+}
+
+model LeaseRule {
+  id              String        @id @default(cuid())
+  ruleSetId       String
+  ruleType        LeaseRuleType
+  categoryScope  String?       // maintenanceCategoryId or null = general
+  clauseReference String?
+  notes           String?
+  priority        Int           @default(0) // higher = higher precedence
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  ruleSet         LeaseRuleSet        @relation(fields: [ruleSetId], references: [id], onDelete: Cascade)
+  maintenanceCategory MaintenanceCategory? @relation(fields: [categoryScope], references: [id], onDelete: SetNull)
+  terms          LeaseRuleTerm[]
+
+  @@index([ruleSetId, ruleType, categoryScope])
+  @@map("lease_rules")
+}
+
+model LeaseRuleTerm {
+  id        String           @id @default(cuid())
+  ruleId    String
+  term      String
+  termType  LeaseRuleTermType
+  createdAt DateTime        @default(now())
+
+  rule LeaseRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@map("lease_rule_terms")
+}
+
+model TicketLeaseIqResult {
+  id                    String                 @id @default(cuid())
+  ticketId              String                 @unique
+  ruleSetId             String?
+  suggestedResponsibility SuggestedResponsibility
+  internalResultState   LeaseIQResultState?
+  confidence            LeaseIQConfidence
+  matchedRuleIds       String[]               // array of lease_rules.id
+  matchedTerms         String[]              // matched term strings for display
+  matchedCategory      String?                // maintenanceCategoryId if category-scoped match
+  explanation          String
+  evaluatedAt           DateTime              @default(now())
+  evaluationTrigger     EvaluationTrigger
+
+  ticket  Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ruleSet LeaseRuleSet? @relation(fields: [ruleSetId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([ruleSetId])
+  @@map("ticket_lease_iq_result")
 }

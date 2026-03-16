@@ -63,9 +63,9 @@
   --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.12);
   --color-scrollbar-thumb: #c4c4c4;
   --color-scrollbar-thumb-hover: #a3a3a3;
-  /* Sidebar liquid glass + nav states */
-  --sidebar-glass-bg: rgba(255, 255, 255, 0.72);
-  --sidebar-glass-border: rgba(224, 224, 224, 0.85);
+  /* Sidebar: rich gray for contrast with blue accent */
+  --sidebar-glass-bg: #dce0e4;
+  --sidebar-glass-border: #c8ccd2;
   --sidebar-nav-hover: rgba(40, 104, 184, 0.08);
   --sidebar-nav-active-bg: rgba(40, 104, 184, 0.16);
   --sidebar-nav-active-border: var(--color-accent);

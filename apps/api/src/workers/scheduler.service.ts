@@ -11,6 +11,7 @@ import { QUEUES } from '../common/queue/queue.constants';
  *
  * Jobs registered here:
  * - stale-ticket-check: runs every hour, checks for SLA breaches + sends escalations
+ * - email-ingest-run: runs every 20 min, polls Gmail and stores raw emails (when enabled in config)
  */
 @Injectable()
 export class SchedulerService implements OnModuleInit {
@@ -22,13 +23,19 @@ export class SchedulerService implements OnModuleInit {
     10,
   );
 
+  // Gmail ingest: every 20 minutes (config.isEnabled controls whether ingest actually fetches)
+  private readonly emailIngestIntervalMs = 20 * 60 * 1000;
+
   constructor(
     @InjectQueue(QUEUES.SCHEDULED)
     private scheduledQueue: Queue,
+    @InjectQueue(QUEUES.EMAIL_INGEST)
+    private emailIngestQueue: Queue,
   ) {}
 
   async onModuleInit() {
     await this.ensureStaleTicketJob();
+    await this.ensureEmailIngestJob();
   }
 
   private async ensureStaleTicketJob() {
@@ -62,6 +69,37 @@ export class SchedulerService implements OnModuleInit {
     } catch (err) {
       // Non-fatal: the API boots fine even if cron registration fails (e.g. Redis down)
       this.logger.error(`Failed to register stale-ticket cron: ${err}`);
+    }
+  }
+
+  private async ensureEmailIngestJob() {
+    try {
+      const existingJobs = await this.emailIngestQueue.getRepeatableJobs();
+      const alreadyRegistered = existingJobs.some(
+        (j) => j.name === 'email-ingest-run',
+      );
+
+      if (alreadyRegistered) {
+        this.logger.log('Email ingest cron job already registered — skipping');
+        return;
+      }
+
+      await this.emailIngestQueue.add(
+        'email-ingest-run',
+        {},
+        {
+          repeat: { every: this.emailIngestIntervalMs },
+          jobId: 'email-ingest-run-repeatable',
+          removeOnComplete: 10,
+          removeOnFail: 50,
+        },
+      );
+
+      this.logger.log(
+        `Email ingest cron registered — runs every ${this.emailIngestIntervalMs / 1000 / 60} minutes`,
+      );
+    } catch (err) {
+      this.logger.error(`Failed to register email ingest cron: ${err}`);
     }
   }
 }

@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
-  Plus, User, CheckCircle2,
+  Plus, User, CheckCircle2, RefreshCw, Scale,
 } from 'lucide-react';
 import { ticketsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus } from '@/types';
@@ -180,6 +180,11 @@ export default function TicketDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
   });
 
+  const reEvaluateLeaseIqMut = useMutation({
+    mutationFn: () => ticketsApi.reEvaluateLeaseIq(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['ticket', id] }),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full" style={{ background: 'var(--color-bg-page)' }}>
@@ -270,6 +275,63 @@ export default function TicketDetailPage() {
                 <span className="text-xs tabular-nums" style={{ color: POLISH_THEME.metaDim }}>
                   {subtaskDone}/{subtaskTotal} subtasks
                 </span>
+              </div>
+            )}
+
+            {/* Lease IQ (maintenance tickets with location) */}
+            {ticket.leaseIqResult != null && (
+              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${POLISH_THEME.listBorder}` }}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Scale className="h-4 w-4" style={{ color: POLISH_THEME.metaDim }} />
+                  <span className="text-xs font-medium" style={{ color: POLISH_THEME.metaSecondary }}>Lease IQ</span>
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded"
+                    style={{
+                      background:
+                        ticket.leaseIqResult.suggestedResponsibility === 'LIKELY_LANDLORD'
+                          ? 'rgba(34,197,94,0.15)'
+                          : ticket.leaseIqResult.suggestedResponsibility === 'LIKELY_TENANT'
+                            ? 'rgba(234,179,8,0.15)'
+                            : 'rgba(148,163,184,0.2)',
+                      color: 'var(--color-text-primary)',
+                    }}
+                  >
+                    {ticket.leaseIqResult.suggestedResponsibility.replace(/_/g, ' ')}
+                  </span>
+                  <span className="text-xs" style={{ color: POLISH_THEME.metaDim }}>
+                    ({ticket.leaseIqResult.confidence} confidence)
+                  </span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => reEvaluateLeaseIqMut.mutate()}
+                      disabled={reEvaluateLeaseIqMut.isPending}
+                      className="text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                      style={{ color: POLISH_THEME.metaDim }}
+                    >
+                      {reEvaluateLeaseIqMut.isPending ? (
+                        <span className="animate-spin">↻</span>
+                      ) : (
+                        <RefreshCw className="h-3 w-3" />
+                      )}
+                      Re-evaluate
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
+                  {ticket.leaseIqResult.explanation}
+                  {ticket.leaseIqResult.internalResultState === 'NO_RULES_CONFIGURED' && (
+                    <span> Configure lease rules in Admin → Lease IQ for this location.</span>
+                  )}
+                </p>
+                {ticket.leaseIqResult.matchedTerms?.length > 0 && (
+                  <p className="text-xs mt-0.5" style={{ color: POLISH_THEME.metaDim }}>
+                    Matched terms: {ticket.leaseIqResult.matchedTerms.join(', ')}
+                  </p>
+                )}
+                <p className="text-[10px] mt-1 italic" style={{ color: POLISH_THEME.metaDim }}>
+                  This suggestion is not legal advice. Final responsibility determination is yours.
+                </p>
               </div>
             )}
           </div>

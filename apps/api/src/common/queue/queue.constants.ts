@@ -4,6 +4,7 @@ export const QUEUES = {
   DEAD_LETTER: 'dead-letter',
   SCHEDULED: 'scheduled-jobs',
   KNOWLEDGE_INGESTION: 'knowledge-ingestion',
+  EMAIL_INGEST: 'email-ingest',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -57,4 +58,11 @@ export const KNOWLEDGE_INGESTION_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 5_000 },
   removeOnComplete: 100,
   removeOnFail: 200,
+};
+
+export const EMAIL_INGEST_JOB_OPTIONS = {
+  attempts: 2,
+  backoff: { type: 'exponential' as const, delay: 30_000 },
+  removeOnComplete: 50,
+  removeOnFail: 100,
 };

@@ -6,6 +6,7 @@ import { Pencil, MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { ComboBox } from '@/components/ui/ComboBox';
 import { usersApi, adminApi } from '@/lib/api';
 import type { UserRole, Department, User } from '@/types';
 
@@ -18,10 +19,16 @@ const DEPARTMENT_OPTIONS: { value: Department; label: string }[] = [
   { value: 'MARKETING', label: 'Marketing' },
 ];
 
-function roleDisplayLabel(role: string, departmentLabel?: string | null): string {
+function roleDisplayLabel(role: string, departments: Department[] | null): string {
   if (role === 'ADMIN') return 'Admin';
   if (role === 'STUDIO_USER') return 'Studio User';
-  if (role === 'DEPARTMENT_USER') return departmentLabel ?? 'Unassigned Department';
+  if (role === 'DEPARTMENT_USER') {
+    if (!departments || departments.length === 0) return 'Unassigned Department';
+    const labels = departments
+      .map((d) => DEPARTMENT_OPTIONS.find((o) => o.value === d)?.label ?? d)
+      .join(', ');
+    return `Department User (${labels})`;
+  }
   return role;
 }
 
@@ -36,7 +43,7 @@ export default function AdminUsersPage() {
   const { data, isLoading } = useQuery({ queryKey: ['users'], queryFn: () => usersApi.list() });
   const users = data?.data ?? [];
   const [roleDrafts, setRoleDrafts] = useState<Record<string, UserRole>>({});
-  const [departmentDrafts, setDepartmentDrafts] = useState<Record<string, Department | ''>>({});
+  const [departmentDrafts, setDepartmentDrafts] = useState<Record<string, Department[]>>({});
   const [editableRows, setEditableRows] = useState<Record<string, boolean>>({});
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({});
   const [rowMessages, setRowMessages] = useState<Record<string, string>>({});
@@ -44,10 +51,10 @@ export default function AdminUsersPage() {
   useEffect(() => {
     if (users.length === 0) return;
     const nextRoles: Record<string, UserRole> = {};
-    const nextDepts: Record<string, Department | ''> = {};
+    const nextDepts: Record<string, Department[]> = {};
     users.forEach((u) => {
       nextRoles[u.id] = u.role;
-      nextDepts[u.id] = u.departments?.[0] ?? (u.teamName === 'HR' || u.teamName === 'Operations' || u.teamName === 'Marketing' ? (u.teamName === 'Operations' ? 'OPERATIONS' : u.teamName === 'Marketing' ? 'MARKETING' : 'HR') : '');
+      nextDepts[u.id] = u.departments ?? [];
     });
     setRoleDrafts(nextRoles);
     setDepartmentDrafts(nextDepts);
@@ -75,28 +82,45 @@ export default function AdminUsersPage() {
   const [locationsModalUserId, setLocationsModalUserId] = useState<string | null>(null);
   const [deactivateConfirmUserId, setDeactivateConfirmUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('');
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
 
   const filteredUsers = useMemo(() => {
+    let list = users;
+    if (roleFilter) {
+      list = list.filter((u) => u.role === roleFilter);
+    }
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => {
-      const name = (u.displayName ?? '').toLowerCase();
-      const email = (u.email ?? '').toLowerCase();
-      const dept = u.departments?.[0];
-      const departmentLabel = dept ? DEPARTMENT_OPTIONS.find((d) => d.value === dept)?.label ?? null : null;
-      const roleLabel = roleDisplayLabel(u.role, departmentLabel).toLowerCase();
-      const defaultLocation = (u.studio?.name ?? '').toLowerCase();
-      return name.includes(q) || email.includes(q) || roleLabel.includes(q) || defaultLocation.includes(q);
-    });
-  }, [users, searchQuery]);
+    if (q) {
+      list = list.filter((u) => {
+        const name = (u.displayName ?? '').toLowerCase();
+        const email = (u.email ?? '').toLowerCase();
+        const roleLabel = roleDisplayLabel(u.role, u.departments ?? null).toLowerCase();
+        const defaultLocation = (u.studio?.name ?? '').toLowerCase();
+        const deptLabels = (u.departments ?? [])
+          .map((d) => DEPARTMENT_OPTIONS.find((o) => o.value === d)?.label ?? d)
+          .join(' ')
+          .toLowerCase();
+        return name.includes(q) || email.includes(q) || roleLabel.includes(q) || defaultLocation.includes(q) || deptLabels.includes(q);
+      });
+    }
+    if (roleFilter === 'DEPARTMENT_USER' && departmentFilter) {
+      list = list.filter((u) => (u.departments ?? []).includes(departmentFilter as Department));
+    }
+    return list;
+  }, [users, searchQuery, roleFilter, departmentFilter]);
 
   const handleSave = async (userId: string) => {
     const role = roleDrafts[userId];
-    const department = departmentDrafts[userId];
+    const departmentsToSet = departmentDrafts[userId] ?? [];
     if (!role) {
       setRowMessages((prev) => ({ ...prev, [userId]: 'Role is required.' }));
+      return;
+    }
+    if (role === 'DEPARTMENT_USER' && departmentsToSet.length === 0) {
+      setRowMessages((prev) => ({ ...prev, [userId]: 'Select at least one department.' }));
       return;
     }
 
@@ -105,7 +129,6 @@ export default function AdminUsersPage() {
     try {
       await roleMut.mutateAsync({ id: userId, role });
       if (role === 'DEPARTMENT_USER') {
-        const departmentsToSet: Department[] = department ? [department as Department] : ['MARKETING'];
         await departmentsMut.mutateAsync({ id: userId, departments: departmentsToSet });
       }
       setEditableRows((prev) => ({ ...prev, [userId]: false }));
@@ -126,7 +149,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="Users" />
+      <Header title={isLoading ? 'Users' : `Users (${users.length})`} />
       {/* Add new user modal (demo only — no backend) */}
       {addUserModalOpen && (
         <div
@@ -178,13 +201,42 @@ export default function AdminUsersPage() {
         </div>
       )}
       <div className="p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <Input
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-sm"
-          />
+        <div className="mb-4 flex items-center gap-4 flex-wrap justify-between">
+          <div className="flex items-center gap-4 flex-wrap">
+            <Input
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-sm"
+            />
+            <ComboBox
+              options={[
+                { value: '', label: 'All types' },
+                { value: 'ADMIN', label: 'Admin' },
+                { value: 'DEPARTMENT_USER', label: 'Department level' },
+                { value: 'STUDIO_USER', label: 'Studio level' },
+              ]}
+              value={roleFilter}
+              onChange={(v) => {
+                setRoleFilter(v);
+                if (v !== 'DEPARTMENT_USER') setDepartmentFilter('');
+              }}
+              placeholder="User type"
+              className="min-w-[160px]"
+            />
+            {roleFilter === 'DEPARTMENT_USER' && (
+              <ComboBox
+                options={[
+                  { value: '', label: 'All departments' },
+                  ...DEPARTMENT_OPTIONS.map((d) => ({ value: d.value, label: d.label })),
+                ]}
+                value={departmentFilter}
+                onChange={setDepartmentFilter}
+                placeholder="Department"
+                className="min-w-[160px]"
+              />
+            )}
+          </div>
           <Button size="sm" onClick={() => { setAddUserModalOpen(true); setInviteEmail(''); }}>
             <Plus className="h-4 w-4" />
             Add new user
@@ -214,10 +266,7 @@ export default function AdminUsersPage() {
               <tbody>
                 {filteredUsers.map((u, i) => {
                   const draftRole = roleDrafts[u.id] ?? u.role;
-                  const draftDepartment = departmentDrafts[u.id] ?? '';
-                  const departmentLabel = draftDepartment
-                    ? DEPARTMENT_OPTIONS.find((d) => d.value === draftDepartment)?.label ?? draftDepartment
-                    : null;
+                  const draftDepartments = departmentDrafts[u.id] ?? [];
                   const deptUserNeedsDepartment = draftRole === 'DEPARTMENT_USER';
                   const isEditable = editableRows[u.id] ?? false;
                   const isSaving = savingRows[u.id] ?? false;
@@ -233,18 +282,18 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
                         <span className="text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
-                          {roleDisplayLabel(draftRole, departmentLabel)}
+                          {roleDisplayLabel(draftRole, draftDepartments.length ? draftDepartments : null)}
                         </span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Select
                             value={draftRole}
                             onChange={(e) => {
                               const nextRole = e.target.value as UserRole;
                               setRoleDrafts((prev) => ({ ...prev, [u.id]: nextRole }));
                               if (nextRole !== 'DEPARTMENT_USER') {
-                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: '' }));
+                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: [] }));
                               } else {
-                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: prev[u.id] || 'MARKETING' }));
+                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: draftDepartments.length ? draftDepartments : ['MARKETING'] }));
                               }
                               setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
                             }}
@@ -256,25 +305,29 @@ export default function AdminUsersPage() {
                             <option value="ADMIN">Admin</option>
                           </Select>
                           {deptUserNeedsDepartment && (
-                            <Select
-                              value={draftDepartment}
-                              onChange={(e) => {
-                                const department = e.target.value as Department;
-                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: department }));
-                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
-                              }}
-                              className="w-40"
-                              disabled={!isEditable || isSaving}
-                            >
-                              <option value="" disabled>
-                                Select department
-                              </option>
-                              {DEPARTMENT_OPTIONS.map((d) => (
-                                <option key={d.value} value={d.value}>
-                                  {d.label}
-                                </option>
-                              ))}
-                            </Select>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1" title="Check all that apply">
+                              {DEPARTMENT_OPTIONS.map((d) => {
+                                const checked = draftDepartments.includes(d.value);
+                                return (
+                                  <label key={d.value} className="inline-flex items-center gap-1.5 cursor-pointer text-sm" style={{ color: 'var(--color-text-primary)' }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => {
+                                        const next = checked
+                                          ? draftDepartments.filter((x) => x !== d.value)
+                                          : [...draftDepartments, d.value];
+                                        setDepartmentDrafts((prev) => ({ ...prev, [u.id]: next }));
+                                        setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                                      }}
+                                      disabled={!isEditable || isSaving}
+                                      className="rounded border-gray-300"
+                                    />
+                                    {d.label}
+                                  </label>
+                                );
+                              })}
+                            </div>
                           )}
                           <Button
                             variant="ghost"

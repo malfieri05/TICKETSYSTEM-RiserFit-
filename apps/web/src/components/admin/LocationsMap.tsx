@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import type { LatLngExpression } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { MaintenanceCountWithTooltip } from '@/components/ui/MaintenanceCountWithTooltip';
 
 type LocationForMap = {
   id: string;
@@ -12,6 +13,8 @@ type LocationForMap = {
   formattedAddress?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  activeMaintenanceCount?: number;
+  activeMaintenanceCategoryNames?: string[];
 };
 
 interface LocationsMapProps {
@@ -117,7 +120,7 @@ export function LocationsMap({ locations, onLocationClick }: LocationsMapProps) 
             }}
           >
             <Popup>
-              <div className="text-sm font-medium">{loc.name}</div>
+              <div className="text-sm font-medium">{loc.name} <MaintenanceCountWithTooltip count={loc.activeMaintenanceCount ?? 0} categoryNames={loc.activeMaintenanceCategoryNames ?? []} /></div>
               {loc.formattedAddress && (
                 <div className="text-xs mt-1">{loc.formattedAddress}</div>
               )}
