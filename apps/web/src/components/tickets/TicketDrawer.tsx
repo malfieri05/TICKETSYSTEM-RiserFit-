@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -160,14 +160,40 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] })?.formResponses ?? [];
 
-  const tabIndex = TAB_ORDER.indexOf(activeTab);
-
   const TABS = useMemo(() => [
     { key: 'subtasks' as const,   label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`,   icon: CheckSquare },
     { key: 'comments' as const,   label: `Comments${ticket ? ` (${(ticket.comments ?? []).reduce((n: number, c: any) => n + 1 + (c.replies?.length ?? 0), 0)})` : ''}`, icon: MessageSquare },
     { key: 'submission' as const, label: 'Ticket Submission', icon: User },
     { key: 'history' as const,    label: 'History',           icon: Clock },
   ], [ticket]);
+
+  const tabIndex = TAB_ORDER.indexOf(activeTab);
+  const tabNavRef = useRef<HTMLElement | null>(null);
+  const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [tabBubble, setTabBubble] = useState({ left: 0, top: 0, width: 0, height: 0 });
+
+  const updateTabBubble = useCallback(() => {
+    const nav = tabNavRef.current;
+    const btn = tabBtnRefs.current[tabIndex];
+    if (!nav || !btn) return;
+    const n = nav.getBoundingClientRect();
+    const b = btn.getBoundingClientRect();
+    setTabBubble({
+      left: b.left - n.left + nav.scrollLeft,
+      top: b.top - n.top + nav.scrollTop,
+      width: b.width,
+      height: b.height,
+    });
+  }, [tabIndex]);
+
+  useLayoutEffect(() => {
+    updateTabBubble();
+  }, [updateTabBubble, activeTab, TABS]);
+
+  useEffect(() => {
+    window.addEventListener('resize', updateTabBubble);
+    return () => window.removeEventListener('resize', updateTabBubble);
+  }, [updateTabBubble]);
 
   return (
     <div
@@ -198,17 +224,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
       {/* ── Loading skeleton ───────────────────────────────────────────────────── */}
       {isLoading && (
-        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-page)' }}>
+        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-drawer-canvas)' }}>
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
       )}
 
       {/* ── Main content ──────────────────────────────────────────────────────── */}
       {open && ticket && !isLoading && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
+        <div className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--color-bg-drawer-canvas)' }}>
 
-          {/* ── Panel header (chrome band — same tier as Active/Completed on list) ─ */}
-          <div className="px-6 pt-4 pb-3 shrink-0" style={{ background: 'var(--color-bg-chrome)' }}>
+          {/* ── Header + tab strip: single chrome surface; shadow only under tabs ─ */}
+          <div className="shrink-0 rounded-b-2xl z-[11]" style={{ background: 'var(--color-bg-chrome)' }}>
+          <div className="px-6 pt-4 pb-3">
             {/* Primary: title (editable when canManage) */}
             {isEditingTitle ? (
               <div className="flex flex-col gap-2">
@@ -420,27 +447,60 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             />
           </div>
 
-          {/* ── Tab bar (sticky, shrink-0) ─────────────────────────────────────── */}
+          <div className="shrink-0 px-10 sm:px-14 pb-1" aria-hidden>
+            <div
+              className="h-px w-full"
+              style={{
+                background:
+                  'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--color-border-default) 32%, transparent) 14%, color-mix(in srgb, var(--color-border-default) 32%, transparent) 86%, transparent 100%)',
+              }}
+            />
+          </div>
+
           <div
-            className="sticky top-0 z-[11] shrink-0 flex items-center justify-between rounded-b-2xl px-5"
-            style={{
-              background: 'var(--color-bg-page)',
-              boxShadow: POLISH_THEME.drawerTabBarShadow,
-            }}
+            className="sticky top-0 z-[11] shrink-0 flex items-center justify-between px-5 pb-2 pt-1"
+            style={{ boxShadow: POLISH_THEME.drawerTabBarShadow }}
           >
-            <nav className="flex gap-0.5 py-2">
-              {TABS.map(({ key, label, icon: Icon }) => {
+            <nav
+              ref={tabNavRef}
+              className="relative flex flex-wrap gap-1 py-2 min-w-0 flex-1"
+            >
+              {tabBubble.width > 0 && (
+                <div
+                  aria-hidden
+                  className="absolute z-0 rounded-[var(--radius-md)] pointer-events-none"
+                  style={{
+                    left: tabBubble.left,
+                    top: tabBubble.top,
+                    width: tabBubble.width,
+                    height: tabBubble.height,
+                    border: '2px solid var(--color-accent)',
+                    background: 'var(--color-bg-surface)',
+                    boxShadow: POLISH_THEME.shadowCard,
+                    transition:
+                      'left 280ms cubic-bezier(0.4, 0, 0.2, 1), top 280ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), height 280ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                />
+              )}
+              {TABS.map(({ key, label, icon: Icon }, i) => {
                 const active = activeTab === key;
                 return (
                   <button
                     key={key}
+                    type="button"
+                    ref={(el) => {
+                      tabBtnRefs.current[i] = el;
+                    }}
                     onClick={() => setActiveTab(key)}
-                    className={`focus-ring flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-all ${!active ? 'hover:text-[var(--color-text-secondary)]' : ''}`}
+                    className={`focus-ring relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-colors duration-150 ${
+                      active
+                        ? ''
+                        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]'
+                    }`}
                     style={{
-                      background: active ? 'var(--color-bg-surface)' : 'transparent',
-                      color: active ? POLISH_THEME.accent : 'var(--color-text-muted)',
-                      border: active ? `1px solid ${POLISH_THEME.listBorder}` : '1px solid transparent',
-                      boxShadow: active ? POLISH_THEME.shadowCard : 'none',
+                      color: active ? POLISH_THEME.accent : undefined,
+                      background: 'transparent',
+                      border: '2px solid transparent',
                     }}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -465,9 +525,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </button>
             )}
           </div>
+          </div>
 
           {/* ── Sliding tab content (page canvas — matches TicketFeedLayout gutter) ─ */}
-          <div className="flex-1 overflow-hidden" style={{ background: 'var(--color-bg-page)' }}>
+          <div className="flex-1 overflow-hidden" style={{ background: 'var(--color-bg-drawer-canvas)' }}>
             <div
               style={{
                 display: 'flex',
@@ -485,7 +546,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 <div
                   className="rounded-[var(--radius-lg)] px-3.5 py-3 flex items-center justify-between"
                   style={{
-                    background: POLISH_THEME.listBg,
+                    background: 'var(--color-bg-surface)',
                     border: `1px solid ${POLISH_THEME.listBorder}`,
                     borderTop: `1px solid var(--color-feed-accent-border)`,
                     boxShadow: POLISH_THEME.listContainerShadow,
@@ -534,8 +595,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       key={s.id}
                       className="rounded-[var(--radius-lg)] p-3.5 flex items-center gap-3 transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-accent)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-px"
                       style={{
-                        background: isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg,
+                        /* Elevated card on drawer canvas; not listBg, which blended in light mode */
+                        background: isComplete
+                          ? 'color-mix(in srgb, var(--color-bg-surface) 88%, var(--color-bg-surface-inset))'
+                          : 'var(--color-bg-surface)',
                         border: `1px solid ${POLISH_THEME.listBorder}`,
+                        boxShadow: POLISH_THEME.shadowCard,
                       }}
                     >
                       <div className="flex-1 min-w-0">
@@ -577,7 +642,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   <div
                     className="rounded-[var(--radius-lg)] p-3 flex gap-2"
                     style={{
-                      background: POLISH_THEME.listBg,
+                      background: 'var(--color-bg-surface)',
                       border: `1px solid ${POLISH_THEME.listBorder}`,
                       borderTop: `1px solid var(--color-feed-accent-border)`,
                       boxShadow: POLISH_THEME.listContainerShadow,

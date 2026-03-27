@@ -47,6 +47,8 @@
   /* Feed table header — same tier as main surface in dark */
   --color-bg-table-header: #111111;
   --color-bg-chrome: #0a0a0a;
+  /* Under rounded drawer chrome: midpoint chrome/page — corner cutouts match scroll body */
+  --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 50%, var(--color-bg-page) 50%);
   --color-feed-accent-border: rgba(52, 120, 196, 0.22);
   /* Sticky page header — slightly above page black, soft lift */
   --color-bg-app-header: #141414;
@@ -56,8 +58,8 @@
     0 4px 16px rgba(0, 0, 0, 0.42);
   /* Ticket drawer / slide-over — depth from the main canvas */
   --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.55), -4px 0 16px rgba(0, 0, 0, 0.35);
-  /* Drawer tab strip — floats above page content below */
-  --shadow-drawer-tabbar: 0 8px 28px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.35);
+  /* Drawer tab strip — depth only below (no halo above; flush with header chrome) */
+  --shadow-drawer-tabbar: 0 14px 36px -12px rgba(0, 0, 0, 0.55), 0 6px 16px -10px rgba(0, 0, 0, 0.4);
 }
 
 [data-theme="light"] {
@@ -103,19 +105,21 @@
   --sidebar-nav-active-border: var(--color-accent);
   --sidebar-text: #171717;
   --sidebar-text-secondary: #525252;
-  /* Cool band above ticket rows — reads as a toolbar strip, not flat white */
-  --color-bg-table-header: #eceff3;
+  /* Ticket thead: midpoint between prior #eceff3 and #cfd8e6 — visible edge, not too heavy */
+  --color-bg-table-header: #dee4ec;
   /* Tab / secondary chrome lane (e.g. Active | Completed on tickets page) */
   --color-bg-chrome: #e8ebf0;
+  --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 50%, var(--color-bg-page) 50%);
   --color-feed-accent-border: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  /* Sticky page header — bright plane over gray page + chrome; accent hairline at bottom */
-  --color-bg-app-header: #ffffff;
+  /* Sticky page header — same family as table header, ~10% lighter (toward white) */
+  --color-bg-app-header: color-mix(in srgb, var(--color-bg-table-header) 90%, white);
   --shadow-app-header:
     0 1px 0 0 color-mix(in srgb, var(--color-accent) 20%, transparent),
     0 2px 8px rgba(0, 0, 0, 0.05),
     0 8px 24px -8px rgba(0, 0, 0, 0.08);
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12), -2px 0 12px rgba(0, 0, 0, 0.06);
-  --shadow-drawer-tabbar: 0 6px 20px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
+  /* Downward-biased only — separates tab strip from scroll body, not from header above */
+  --shadow-drawer-tabbar: 0 12px 28px -10px rgba(16, 24, 40, 0.14), 0 4px 12px -8px rgba(16, 24, 40, 0.08);
 }
 
 * {

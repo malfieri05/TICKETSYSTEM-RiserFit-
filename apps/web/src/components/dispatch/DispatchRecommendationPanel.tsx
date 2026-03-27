@@ -32,7 +32,6 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
   const [groupNotes, setGroupNotes] = useState('');
 
   const isMaintenance = ticket?.ticketClass?.code === 'MAINTENANCE';
-  if (!isMaintenance) return null;
 
   const { data: recData, isLoading: recLoading } = useQuery({
     queryKey: ['dispatch-recommendations', ticketId],
@@ -63,6 +62,10 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
     },
   });
 
+  if (!isMaintenance) return null;
+
+  const panelBorder = `1px solid ${POLISH_THEME.listBorder}`;
+
   const handleCreateGroup = () => {
     const tradeType = ticket.dispatchTradeType;
     if (!tradeType) return;
@@ -78,8 +81,6 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
       return next;
     });
   };
-
-  const panelBorder = `1px solid ${POLISH_THEME.listBorder}`;
 
   return (
     <div className="mt-3 pt-3" style={{ borderTop: panelBorder }}>
