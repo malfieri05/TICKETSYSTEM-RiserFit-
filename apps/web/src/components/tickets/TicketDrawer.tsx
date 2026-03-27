@@ -8,7 +8,7 @@ import {
   X, MessageSquare, CheckSquare,
   Clock, Plus, User, CheckCircle2, Maximize2, Pencil, Scale, RefreshCw,
 } from 'lucide-react';
-import { ticketsApi, subtasksApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, subtasksApi, invalidateTicketLists, dispatchApi } from '@/lib/api';
 import type { SubtaskStatus } from '@/types';
 import { StatusBadge, SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,6 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
 import { CommentThread } from '@/components/tickets/CommentThread';
+import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
+import { LocationLink } from '@/components/ui/LocationLink';
 
 interface Props {
   ticketId: string | null;
@@ -172,21 +174,22 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       className="fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-300 ease-out"
       style={{
         width: 'min(828px, 68vw)',
-        background: 'var(--color-bg-surface-raised)',
+        background: 'var(--color-bg-page)',
         borderLeft: `1px solid ${POLISH_THEME.listBorder}`,
+        borderTop: `1px solid var(--color-feed-accent-border)`,
         transform: open ? 'translateX(0)' : 'translateX(100%)',
-        boxShadow: open ? '-4px 0 24px rgba(0,0,0,0.18), var(--shadow-raised)' : 'none',
+        boxShadow: open ? POLISH_THEME.drawerShadow : 'none',
       }}
     >
-      {/* ── Top bar: close button ──────────────────────────────────────────────── */}
+      {/* ── Top bar: close — chrome to match title strip (no white band) ───────── */}
       <div
         className="flex items-center justify-end px-5 h-11 shrink-0"
-        style={{ background: 'var(--color-bg-surface)', borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}
+        style={{ background: 'var(--color-bg-chrome)' }}
       >
         <button
           onClick={onClose}
           aria-label="Close ticket panel"
-          className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
+          className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
           style={{ color: 'var(--color-text-muted)' }}
         >
           <X className="h-4.5 w-4.5" />
@@ -195,17 +198,17 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
       {/* ── Loading skeleton ───────────────────────────────────────────────────── */}
       {isLoading && (
-        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-surface-raised)' }}>
+        <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-page)' }}>
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
       )}
 
       {/* ── Main content ──────────────────────────────────────────────────────── */}
-      {ticket && !isLoading && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--color-bg-surface)' }}>
+      {open && ticket && !isLoading && (
+        <div className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
 
-          {/* ── Panel header ──────────────────────────────────────────────────── */}
-          <div className="px-6 pt-4 pb-3 shrink-0" style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}>
+          {/* ── Panel header (chrome band — same tier as Active/Completed on list) ─ */}
+          <div className="px-6 pt-4 pb-3 shrink-0" style={{ background: 'var(--color-bg-chrome)' }}>
             {/* Primary: title (editable when canManage) */}
             {isEditingTitle ? (
               <div className="flex flex-col gap-2">
@@ -213,7 +216,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   type="text"
                   value={editTitleValue}
                   onChange={(e) => setEditTitleValue(e.target.value)}
-                  className="text-lg font-bold leading-snug w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                  className="focus-ring text-lg font-bold leading-snug w-full px-3 py-2 rounded-[var(--radius-md)] border focus:outline-none"
                   style={{
                     color: 'var(--color-text-primary)',
                     letterSpacing: '-0.01em',
@@ -265,7 +268,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       setEditTitleValue(ticket.title);
                       setIsEditingTitle(true);
                     }}
-                    className="p-1.5 rounded-lg shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
+                    className="focus-ring p-1.5 rounded-[var(--radius-md)] shrink-0 transition-colors focus:outline-none hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                     style={{ color: 'var(--color-text-muted)' }}
                     aria-label="Edit ticket title"
                   >
@@ -311,12 +314,22 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             </div>
 
             {/* Tertiary: created, requester, location */}
-            <p className="text-xs mt-2" style={{ color: POLISH_THEME.metaSecondary }}>
-              Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-              {ticket.requester?.displayName ? ` · ${ticket.requester.displayName}` : ''}
-              {(ticket.studio?.name ?? ticket.market?.name)
-                ? ` · ${[ticket.studio?.name, ticket.market?.name].filter(Boolean).join(' / ')}`
-                : ''}
+            <p className="text-xs mt-2 flex items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
+              <span>Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+              {ticket.requester?.displayName && <span>· {ticket.requester.displayName}</span>}
+              {ticket.studio?.id && ticket.studio?.name && (
+                <>
+                  <span>·</span>
+                  <LocationLink
+                    studioId={ticket.studio.id}
+                    studioName={ticket.studio.name}
+                    className="text-xs"
+                  />
+                </>
+              )}
+              {!ticket.studio?.id && ticket.market?.name && (
+                <span>· {ticket.market.name}</span>
+              )}
             </p>
 
             {/* Quaternary: inline progress */}
@@ -369,7 +382,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       type="button"
                       onClick={() => reEvaluateLeaseIqMut.mutate()}
                       disabled={reEvaluateLeaseIqMut.isPending}
-                      className="text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                      className="focus-ring text-xs flex items-center gap-1 px-2 py-1 rounded-[var(--radius-md)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
                       style={{ color: POLISH_THEME.metaDim }}
                     >
                       {reEvaluateLeaseIqMut.isPending ? (
@@ -397,12 +410,23 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 </p>
               </div>
             )}
+
+            {/* Dispatch Intelligence panel (maintenance tickets in drawer) */}
+            <DispatchRecommendationPanel
+              ticketId={ticket.id}
+              ticket={ticket}
+              canManage={canManage}
+              variant="drawer"
+            />
           </div>
 
           {/* ── Tab bar (sticky, shrink-0) ─────────────────────────────────────── */}
           <div
-            className="sticky top-0 z-10 px-5 shrink-0 flex items-center justify-between"
-            style={{ background: 'var(--color-bg-surface)', borderBottom: `1px solid ${POLISH_THEME.listBorder}` }}
+            className="sticky top-0 z-[11] shrink-0 flex items-center justify-between rounded-b-2xl px-5"
+            style={{
+              background: 'var(--color-bg-page)',
+              boxShadow: POLISH_THEME.drawerTabBarShadow,
+            }}
           >
             <nav className="flex gap-0.5 py-2">
               {TABS.map(({ key, label, icon: Icon }) => {
@@ -411,11 +435,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   <button
                     key={key}
                     onClick={() => setActiveTab(key)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${!active ? 'hover:text-[var(--color-text-secondary)]' : ''}`}
+                    className={`focus-ring flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-all ${!active ? 'hover:text-[var(--color-text-secondary)]' : ''}`}
                     style={{
-                      background: active ? 'var(--color-bg-surface-raised)' : 'transparent',
+                      background: active ? 'var(--color-bg-surface)' : 'transparent',
                       color: active ? POLISH_THEME.accent : 'var(--color-text-muted)',
                       border: active ? `1px solid ${POLISH_THEME.listBorder}` : '1px solid transparent',
+                      boxShadow: active ? POLISH_THEME.shadowCard : 'none',
                     }}
                   >
                     <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -431,7 +456,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   onClose();
                   router.push(`/tickets/${ticketId}`);
                 }}
-                className="p-1.5 rounded-lg transition-colors shrink-0 hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
+                className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors shrink-0 hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                 style={{ color: 'var(--color-text-muted)' }}
                 title="Open in full screen"
                 aria-label="Open in full screen"
@@ -441,8 +466,8 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             )}
           </div>
 
-          {/* ── Sliding tab content ─────────────────────────────────────────────── */}
-          <div className="flex-1 overflow-hidden">
+          {/* ── Sliding tab content (page canvas — matches TicketFeedLayout gutter) ─ */}
+          <div className="flex-1 overflow-hidden" style={{ background: 'var(--color-bg-page)' }}>
             <div
               style={{
                 display: 'flex',
@@ -458,8 +483,13 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
                 {/* Progress summary */}
                 <div
-                  className="rounded-xl px-3.5 py-3 flex items-center justify-between"
-                  style={{ background: 'var(--color-bg-surface-inset)', border: `1px solid ${POLISH_THEME.innerBorder}` }}
+                  className="rounded-[var(--radius-lg)] px-3.5 py-3 flex items-center justify-between"
+                  style={{
+                    background: POLISH_THEME.listBg,
+                    border: `1px solid ${POLISH_THEME.listBorder}`,
+                    borderTop: `1px solid var(--color-feed-accent-border)`,
+                    boxShadow: POLISH_THEME.listContainerShadow,
+                  }}
                 >
                   {(() => {
                     const total = ticket.subtasks.length;
@@ -502,10 +532,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   return (
                     <div
                       key={s.id}
-                      className="rounded-xl p-3.5 flex items-center gap-3 transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface-raised)] hover:border-[rgba(52,120,196,0.35)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1),inset_0_0_0_1px_rgba(52,120,196,0.08)] hover:-translate-y-px"
+                      className="rounded-[var(--radius-lg)] p-3.5 flex items-center gap-3 transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface-raised)] hover:border-[var(--color-accent)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] hover:-translate-y-px"
                       style={{
                         background: isComplete ? 'var(--color-bg-surface-inset)' : POLISH_THEME.listBg,
-                        border: `1px solid ${POLISH_THEME.innerBorder}`,
+                        border: `1px solid ${POLISH_THEME.listBorder}`,
                       }}
                     >
                       <div className="flex-1 min-w-0">
@@ -545,8 +575,13 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
                 {canManage && (
                   <div
-                    className="rounded-xl p-3 flex gap-2"
-                    style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}
+                    className="rounded-[var(--radius-lg)] p-3 flex gap-2"
+                    style={{
+                      background: POLISH_THEME.listBg,
+                      border: `1px solid ${POLISH_THEME.listBorder}`,
+                      borderTop: `1px solid var(--color-feed-accent-border)`,
+                      boxShadow: POLISH_THEME.listContainerShadow,
+                    }}
                   >
                     <Input
                       placeholder="Add a subtask…"
@@ -565,7 +600,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               {/* ── Panel 1: Comments ────────────────────────────────────────── */}
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
                 <CommentThread
-                  ticketId={ticketId!}
+                  ticketId={ticket.id}
                   comments={ticket.comments ?? []}
                 />
               </div>
@@ -573,12 +608,17 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               {/* ── Panel 2: Ticket Submission ───────────────────────────────── */}
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
                 <div
-                  className="rounded-xl overflow-hidden"
-                  style={{ background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.innerBorder}` }}
+                  className="rounded-[var(--radius-lg)] overflow-hidden"
+                  style={{
+                    background: POLISH_THEME.listBg,
+                    border: `1px solid ${POLISH_THEME.listBorder}`,
+                    borderTop: `1px solid var(--color-feed-accent-border)`,
+                    boxShadow: POLISH_THEME.listContainerShadow,
+                  }}
                 >
                   <div
                     className="flex items-center justify-between px-4 py-3"
-                    style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}` }}
+                    style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}`, background: POLISH_THEME.tableHeaderBg }}
                   >
                     <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaDim }}>
                       Submission data
@@ -613,7 +653,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           );
                           setIsEditingSubmission(true);
                         }}
-                        className="p-1.5 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
+                        className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors focus:outline-none hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                         style={{ color: 'var(--color-text-muted)' }}
                         aria-label="Edit submission data"
                       >
@@ -668,7 +708,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                     </>
                   )}
                 </div>
-                <TicketAttachmentsSection ticketId={ticketId!} canManage={canManage} variant="drawer" />
+                <TicketAttachmentsSection ticketId={ticket.id} canManage={canManage} variant="drawer" />
               </div>
 
               {/* ── Panel 3: History ─────────────────────────────────────────── */}

@@ -3,28 +3,37 @@
 /* Stage 31: Theme token system. Switch via html[data-theme="dark"] | [data-theme="light"]. */
 [data-theme="dark"] {
   color-scheme: dark;
-  --color-bg-page: #000000;
-  --color-bg-surface: #111111;
-  --color-bg-surface-raised: #1a1a1a;
-  --color-bg-surface-inset: #0a0a0a;
-  --color-border-default: #2a2a2a;
-  --color-border-subtle: #252525;
-  --color-text-primary: #f0f0f0;
-  --color-text-secondary: #cccccc;
-  --color-text-muted: #888888;
+  --color-bg-page: #0b0e13;
+  --color-bg-surface: #11161d;
+  --color-bg-surface-raised: #171d25;
+  --color-bg-surface-inset: #0d1218;
+  --color-border-default: #29303a;
+  --color-border-subtle: #222933;
+  --color-text-primary: #e8edf4;
+  --color-text-secondary: #c8d0dc;
+  --color-text-muted: #96a1b2;
   --color-accent: #3478c4;
   --color-accent-hover: #4a8ed4;
   --color-danger: #ef4444;
   --color-danger-hover: #dc2626;
-  --color-btn-secondary-bg: #2a2a2a;
-  --color-btn-secondary-border: #333333;
-  --color-btn-secondary-text: #e0e0e0;
-  --color-btn-secondary-hover: #333333;
-  --color-btn-ghost-text: #888888;
-  --color-btn-ghost-hover-bg: #1a1a1a;
-  --color-btn-ghost-hover-text: #e0e0e0;
-  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --color-btn-secondary-bg: #1b222c;
+  --color-btn-secondary-border: #2a3340;
+  --color-btn-secondary-text: #d8dee8;
+  --color-btn-secondary-hover: #242d39;
+  --color-btn-ghost-text: #9aa6b7;
+  --color-btn-ghost-hover-bg: #1a212b;
+  --color-btn-ghost-hover-text: #e8edf4;
+  --color-input-bg: #121923;
+  --color-input-border: #3a4658;
+  --color-input-border-hover: #4a586d;
+  --color-focus-ring: rgba(74, 142, 212, 0.4);
+  --color-row-selected: rgba(52, 120, 196, 0.18);
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --duration-fast: 140ms;
+  --duration-base: 180ms;
+  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.32), 0 8px 28px -16px rgba(0, 0, 0, 0.55);
+  --shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.4), 0 14px 34px -20px rgba(0, 0, 0, 0.7);
   --color-scrollbar-thumb: #333333;
   --color-scrollbar-thumb-hover: #555555;
   /* Sidebar liquid glass + nav states */
@@ -35,32 +44,55 @@
   --sidebar-nav-active-border: var(--color-accent);
   --sidebar-text: #ffffff;
   --sidebar-text-secondary: rgba(255, 255, 255, 0.85);
+  /* Feed table header — same tier as main surface in dark */
+  --color-bg-table-header: #111111;
+  --color-bg-chrome: #0a0a0a;
+  --color-feed-accent-border: rgba(52, 120, 196, 0.22);
+  /* Sticky page header — slightly above page black, soft lift */
+  --color-bg-app-header: #141414;
+  /* 1px accent under bar + soft lift */
+  --shadow-app-header:
+    0 1px 0 0 rgba(52, 120, 196, 0.22),
+    0 4px 16px rgba(0, 0, 0, 0.42);
+  /* Ticket drawer / slide-over — depth from the main canvas */
+  --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.55), -4px 0 16px rgba(0, 0, 0, 0.35);
+  /* Drawer tab strip — floats above page content below */
+  --shadow-drawer-tabbar: 0 8px 28px rgba(0, 0, 0, 0.45), 0 3px 10px rgba(0, 0, 0, 0.35);
 }
 
 [data-theme="light"] {
   color-scheme: light;
-  --color-bg-page: #f5f5f5;
+  --color-bg-page: #f4f6f9;
   --color-bg-surface: #ffffff;
-  --color-bg-surface-raised: #f9f9f9;
-  --color-bg-surface-inset: #f0f0f0;
-  --color-border-default: #e0e0e0;
-  --color-border-subtle: #eeeeee;
+  --color-bg-surface-raised: #f9fbfd;
+  --color-bg-surface-inset: #eff3f8;
+  --color-border-default: #d9e0ea;
+  --color-border-subtle: #e8edf3;
   --color-text-primary: #171717;
-  --color-text-secondary: #525252;
-  --color-text-muted: #737373;
+  --color-text-secondary: #475467;
+  --color-text-muted: #667085;
   --color-accent: #2868b8;
   --color-accent-hover: #3478c4;
   --color-danger: #ef4444;
   --color-danger-hover: #dc2626;
-  --color-btn-secondary-bg: #f5f5f5;
-  --color-btn-secondary-border: #e0e0e0;
-  --color-btn-secondary-text: #374151;
-  --color-btn-secondary-hover: #e5e5e5;
-  --color-btn-ghost-text: #6b7280;
-  --color-btn-ghost-hover-bg: #f3f4f6;
+  --color-btn-secondary-bg: #f5f7fb;
+  --color-btn-secondary-border: #d9e0ea;
+  --color-btn-secondary-text: #344054;
+  --color-btn-secondary-hover: #edf2f8;
+  --color-btn-ghost-text: #667085;
+  --color-btn-ghost-hover-bg: #eff3f8;
   --color-btn-ghost-hover-text: #171717;
-  --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-raised: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --color-input-bg: #ffffff;
+  --color-input-border: #c4cfdd;
+  --color-input-border-hover: #b4c1d2;
+  --color-focus-ring: rgba(40, 104, 184, 0.24);
+  --color-row-selected: rgba(40, 104, 184, 0.12);
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --duration-fast: 140ms;
+  --duration-base: 180ms;
+  --shadow-panel: 0 1px 3px rgba(16, 24, 40, 0.06), 0 10px 24px -14px rgba(16, 24, 40, 0.18);
+  --shadow-raised: 0 2px 8px rgba(16, 24, 40, 0.1), 0 20px 38px -20px rgba(16, 24, 40, 0.22);
   --color-scrollbar-thumb: #c4c4c4;
   --color-scrollbar-thumb-hover: #a3a3a3;
   /* Sidebar: rich gray for contrast with blue accent */
@@ -71,6 +103,19 @@
   --sidebar-nav-active-border: var(--color-accent);
   --sidebar-text: #171717;
   --sidebar-text-secondary: #525252;
+  /* Cool band above ticket rows — reads as a toolbar strip, not flat white */
+  --color-bg-table-header: #eceff3;
+  /* Tab / secondary chrome lane (e.g. Active | Completed on tickets page) */
+  --color-bg-chrome: #e8ebf0;
+  --color-feed-accent-border: color-mix(in srgb, var(--color-accent) 16%, transparent);
+  /* Sticky page header — bright plane over gray page + chrome; accent hairline at bottom */
+  --color-bg-app-header: #ffffff;
+  --shadow-app-header:
+    0 1px 0 0 color-mix(in srgb, var(--color-accent) 20%, transparent),
+    0 2px 8px rgba(0, 0, 0, 0.05),
+    0 8px 24px -8px rgba(0, 0, 0, 0.08);
+  --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12), -2px 0 12px rgba(0, 0, 0, 0.06);
+  --shadow-drawer-tabbar: 0 6px 20px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 * {
@@ -81,6 +126,7 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
   background: var(--color-bg-page);
   color: var(--color-text-primary);
+  line-height: 1.45;
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -101,11 +147,29 @@ body {
 
 /* Sidebar nav: faint blue hover when not selected; no transform to avoid layout glitch */
 .sidebar-nav-item {
-  transition: background-color 0.2s ease-out, color 0.2s ease-out;
+  transition: background-color var(--duration-base) ease-out, color var(--duration-base) ease-out;
 }
 .sidebar-nav-item:not([data-active="true"]):hover {
   background: var(--sidebar-nav-hover) !important;
   color: var(--sidebar-text) !important;
+}
+
+/* Vendor Dispatch: feed item hover (Overview + Ready to Dispatch tabs). Light mode = visible light blue. */
+[data-theme="light"] .dispatch-feed-item:hover {
+  background: rgba(40, 104, 184, 0.12);
+}
+[data-theme="dark"] .dispatch-feed-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Grouping Workspace: smooth dropdown height */
+.workspace-collapsible-grid {
+  transition: grid-template-rows 320ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-collapsible-grid {
+    transition: none;
+  }
 }
 
 /* Stage 4: Tab content slide-in animation (used by ticket detail page tabs) */
@@ -132,6 +196,50 @@ body {
   --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 [data-theme="light"] {
-  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.1);
-  --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 4px 18px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 1px 5px rgba(0, 0, 0, 0.08), 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Ticket feed rows: theme-aware hover (replaces flat white hover in light) */
+[data-theme="light"] tr.ticket-feed-table-row:hover {
+  background: rgba(40, 104, 184, 0.055);
+}
+[data-theme="dark"] tr.ticket-feed-table-row:hover {
+  background: var(--color-bg-surface);
+}
+[data-theme="light"] tr.ticket-feed-table-row[data-selected="true"] {
+  background: var(--color-row-selected);
+}
+[data-theme="dark"] tr.ticket-feed-table-row[data-selected="true"] {
+  background: var(--color-row-selected);
+}
+
+.surface-card {
+  background: var(--color-bg-surface-raised);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+
+.surface-inset {
+  background: var(--color-bg-surface-inset);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.focus-ring {
+  outline: none;
+  transition: box-shadow var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+
+/* Ticket feed body scroller: smooth, contained, never drags page chrome. */
+.ticket-feed-body-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }

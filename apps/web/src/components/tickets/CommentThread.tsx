@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, memo } from 'react';
+import { useState, useRef, useCallback, useEffect, memo, type ReactElement } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Send, Reply as ReplyIcon, ChevronDown, ChevronUp } from 'lucide-react';
@@ -32,7 +32,7 @@ interface CommentData {
   createdAt: string;
   editedAt?: string | null;
   parentCommentId?: string | null;
-  mentions?: { user: { id: string; name: string } }[];
+  mentions?: { mentionedUser: { id: string; displayName: string } }[];
   replies?: CommentData[];
 }
 
@@ -62,7 +62,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
       const prev = snapshot ?? { comments: [] };
       const optimisticId = `opt-${Date.now()}`;
       const optimisticAuthor: CommentAuthor | null = user
-        ? { id: user.id, name: user.name ?? null, displayName: user.displayName, avatarUrl: user.avatarUrl ?? null }
+        ? { id: user.id, displayName: user.displayName, avatarUrl: user.avatarUrl ?? null }
         : null;
       const optimisticComment: CommentData = {
         id: optimisticId,
@@ -121,7 +121,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
   }, [replyBody, commentMut]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {comments.length === 0 && (
         <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>
           {isStudioUser ? 'No updates yet.' : 'No comments yet.'}
@@ -143,7 +143,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
                   setReplyingTo(replyingTo === comment.id ? null : comment.id);
                   setReplyBody('');
                 }}
-                className="flex items-center gap-1 text-xs font-medium transition-colors cursor-pointer"
+                className="focus-ring flex items-center gap-1 rounded-[var(--radius-md)] px-1.5 py-1 text-xs font-medium transition-colors cursor-pointer"
                 style={{ color: POLISH_THEME.accent }}
               >
                 <ReplyIcon className="h-3 w-3" />
@@ -153,7 +153,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
 
             {/* Replies */}
             {visibleReplies.length > 0 && (
-              <div className="ml-6 border-l-2 pl-3 space-y-2 mt-1" style={{ borderColor: POLISH_THEME.innerBorder }}>
+              <div className="ml-6 border-l-2 pl-3.5 space-y-2.5 mt-1.5" style={{ borderColor: POLISH_THEME.innerBorder }}>
                 {visibleReplies.map((reply) => (
                   <CommentBubble key={reply.id} comment={reply} ticketId={ticketId} isReply />
                 ))}
@@ -164,7 +164,7 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
               <div className="ml-6 pl-3 mt-1">
                 <button
                   onClick={() => toggleExpand(comment.id)}
-                  className="flex items-center gap-1 text-xs font-medium cursor-pointer"
+                  className="focus-ring flex items-center gap-1 rounded-[var(--radius-md)] px-1.5 py-1 text-xs font-medium cursor-pointer"
                   style={{ color: POLISH_THEME.accent }}
                 >
                   {isExpanded ? (
@@ -230,7 +230,7 @@ const CommentBubble = memo(function CommentBubble({
 
   return (
     <div
-      className={`rounded-xl p-4 space-y-2 transition-all duration-150 ease-out hover:shadow-[0_4px_16px_rgba(0,0,0,0.1),0_1px_4px_rgba(0,0,0,0.06)] hover:border-[rgba(52,120,196,0.3)] hover:-translate-y-px ${isReply ? 'py-3' : ''}`}
+      className={`rounded-[var(--radius-lg)] p-4 space-y-2.5 transition-all duration-[var(--duration-fast)] ease-out hover:shadow-[var(--shadow-panel)] hover:border-[rgba(52,120,196,0.3)] hover:-translate-y-px ${isReply ? 'py-3' : ''}`}
       style={{
         background: POLISH_THEME.listBg,
         border: `1px solid ${POLISH_THEME.innerBorder}`,
@@ -261,7 +261,7 @@ const CommentBubble = memo(function CommentBubble({
 
 const CommentBodyRenderer = memo(function CommentBodyRenderer({ body }: { body: string }) {
   const mentionRegex = /@\[(.+?)\]\([a-zA-Z0-9_-]+\)/g;
-  const parts: (string | JSX.Element)[] = [];
+  const parts: (string | ReactElement)[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -380,7 +380,7 @@ const MentionComposer = memo(function MentionComposer({
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="rounded-[var(--radius-lg)] overflow-hidden"
       style={{
         background: POLISH_THEME.listBg,
         border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -402,17 +402,18 @@ const MentionComposer = memo(function MentionComposer({
         {mentionSearch !== null && mentionableUsers.length > 0 && (
           <div
             ref={dropdownRef}
-            className="absolute left-2 bottom-full mb-1 w-72 max-h-48 overflow-y-auto rounded-lg shadow-lg z-50"
+            className="absolute left-2 bottom-full mb-1 w-72 max-h-48 overflow-y-auto rounded-[var(--radius-md)] z-50"
             style={{
               background: 'var(--color-bg-surface-raised)',
               border: `1px solid ${POLISH_THEME.listBorder}`,
+              boxShadow: 'var(--shadow-panel)',
             }}
           >
             {mentionableUsers.map((u) => (
               <button
                 key={u.id}
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer hover:bg-[var(--color-bg-surface)]"
+                className="focus-ring w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer hover:bg-[var(--color-bg-surface)]"
                 style={{ color: 'var(--color-text-primary)' }}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -455,7 +456,7 @@ const MentionComposer = memo(function MentionComposer({
             {buttonLabel}
           </Button>
         </div>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{error}</p>}
       </div>
     </div>
   );

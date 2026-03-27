@@ -23,6 +23,8 @@ export interface TicketFeedLayoutProps {
   emptyState: ReactNode;
   pagination?: ReactNode;
   initialSkeleton?: ReactNode;
+  /** When true, keeps page chrome fixed and lets feed content manage its own scroll. */
+  fixedChrome?: boolean;
 }
 
 export function TicketFeedLayout({
@@ -37,10 +39,11 @@ export function TicketFeedLayout({
   emptyState,
   pagination,
   initialSkeleton,
+  fixedChrome = false,
 }: TicketFeedLayoutProps) {
   const mainContent = (
     <div
-      className="flex-1 overflow-y-auto p-6 space-y-4"
+      className={fixedChrome ? 'flex-1 overflow-hidden p-6 space-y-5 flex flex-col' : 'flex-1 overflow-y-auto p-6 space-y-5'}
       style={{ background: 'var(--color-bg-page)' }}
     >
       {title != null && (
@@ -59,10 +62,11 @@ export function TicketFeedLayout({
       {filters != null && <div>{filters}</div>}
 
       <div
-        className="rounded-xl overflow-hidden relative"
+        className={`rounded-[var(--radius-lg)] overflow-hidden relative ${fixedChrome ? 'flex-1 min-h-0 flex flex-col' : ''}`}
         style={{
           background: POLISH_THEME.listBg,
           border: `1px solid ${POLISH_THEME.listBorder}`,
+          borderTop: `1px solid var(--color-feed-accent-border)`,
           boxShadow: POLISH_THEME.listContainerShadow,
         }}
       >

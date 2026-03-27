@@ -6,7 +6,7 @@ import { useNotificationCount } from '@/hooks/useNotifications';
 import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
 
 interface HeaderProps {
-  title: string;
+  title: React.ReactNode;
   action?: React.ReactNode;
 }
 
@@ -17,15 +17,24 @@ export function Header({ title, action }: HeaderProps) {
   return (
     <header
       className="sticky top-0 z-30 flex h-14 items-center justify-between px-6"
-      style={{ background: 'var(--color-bg-surface-raised)', borderBottom: '1px solid var(--color-border-default)' }}
+      style={{
+        background: 'var(--color-bg-app-header)',
+        boxShadow: 'var(--shadow-app-header)',
+      }}
     >
-      <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</h1>
+      <div className="flex items-center gap-3">
+        {typeof title === 'string' ? (
+          <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</h1>
+        ) : (
+          title
+        )}
+      </div>
       <div className="flex items-center gap-2">
         {action}
         <button
           type="button"
           onClick={openNotificationsPanel}
-          className="header-nav-link relative p-2 rounded-lg transition-colors"
+          className="header-nav-link focus-ring relative rounded-[var(--radius-md)] p-2 transition-colors"
           style={{ color: 'var(--color-text-muted)' }}
           aria-label="Open notifications"
         >

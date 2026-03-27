@@ -29,6 +29,8 @@ import { WorkflowAnalyticsModule } from './modules/workflow-analytics/workflow-a
 import { PolicyModule } from './policy/policy.module';
 import { EmailAutomationModule } from './modules/email-automation/email-automation.module';
 import { LeaseIQModule } from './modules/lease-iq/lease-iq.module';
+import { DispatchModule } from './modules/dispatch/dispatch.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -103,6 +105,12 @@ import { RolesGuard } from './modules/auth/guards/roles.guard';
 
     // ── Lease IQ (per-studio lease responsibility rules + ticket evaluation) ─
     LeaseIQModule,
+
+    // ── Dispatch Intelligence (V1) ────────────────────────────────────────────
+    DispatchModule,
+
+    // ── Location Profiles ──────────────────────────────────────────────────────
+    LocationsModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,

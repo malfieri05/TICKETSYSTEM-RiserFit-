@@ -32,10 +32,12 @@ export const POLISH_THEME = {
   listBg: 'var(--color-bg-surface-raised)',
   listBorder: 'var(--color-border-default)',
   listBgHeader: 'var(--color-bg-surface)',
+  /** Feed `<thead>` band — distinct from row surface in light mode */
+  tableHeaderBg: 'var(--color-bg-table-header)',
   innerBorder: 'var(--color-border-subtle)',
   rowBorder: 'var(--color-border-default)',
   rowHover: 'var(--color-bg-surface)',
-  rowSelected: 'var(--color-bg-surface-raised)',
+  rowSelected: 'var(--color-row-selected)',
   metaSecondary: 'var(--color-text-secondary)',
   metaMuted: 'var(--color-text-muted)',
   metaDim: 'var(--color-text-muted)',
@@ -48,24 +50,28 @@ export const POLISH_THEME = {
   shadowElevated: 'var(--shadow-elevated)',
   /** Subtle card shadow for list containers. */
   shadowCard: 'var(--shadow-card)',
+  /** Slide-over ticket panel — matches theme depth */
+  drawerShadow: 'var(--shadow-drawer)',
+  /** Drawer Subtasks/Comments tab row — raised over scroll body */
+  drawerTabBarShadow: 'var(--shadow-drawer-tabbar)',
 } as const;
 
 /** Tailwind-compatible class names for consistent layout */
 export const POLISH_CLASS = {
   /** Table th/td cell padding */
-  cellPadding: 'px-4 py-3',
+  cellPadding: 'px-4 py-3.5',
   /** Table header text style */
-  tableHeader: 'text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide',
+  tableHeader: 'text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
   /** Centered table header — used for Progress, Requester, Comments columns */
-  tableHeaderCenter: 'text-center px-4 py-3 text-xs font-semibold uppercase tracking-wide',
+  tableHeaderCenter: 'text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
   /** Section vertical gap (e.g. between title and filters) */
-  sectionGap: 'space-y-4',
+  sectionGap: 'space-y-5',
   /** Block vertical gap (e.g. between major sections) */
-  blockGap: 'space-y-5',
+  blockGap: 'space-y-6',
   /** Empty state container padding */
   emptyStatePadding: 'py-16',
   /** Empty state icon size */
   emptyStateIcon: 'h-10 w-10',
   /** Row hover transition */
-  rowTransition: 'transition-colors duration-150',
+  rowTransition: 'transition-colors duration-150 ease-out',
 } as const;

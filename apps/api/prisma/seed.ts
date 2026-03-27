@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Department } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import * as bcrypt from 'bcryptjs';
@@ -37,6 +37,14 @@ const USERS = [
   { email: 'ashley.kim@riserfitness.dev',    name: 'Ashley Kim',        role: 'STUDIO_USER'     as const },
 ];
 
+// AI department accounts (demo assignees in workflow templates; no login)
+const AI_DEPARTMENT_USERS: { email: string; name: string; department: Department }[] = [
+  { email: 'ai-hr@internal.demo', name: 'AI - HR', department: 'HR' },
+  { email: 'ai-operations@internal.demo', name: 'AI - OPERATIONS', department: 'OPERATIONS' },
+  { email: 'ai-marketing@internal.demo', name: 'AI - MARKETING', department: 'MARKETING' },
+  { email: 'ai-retail@internal.demo', name: 'AI - RETAIL', department: 'RETAIL' },
+];
+
 // Stage 2 taxonomy: stable ids aligned with migration for idempotent upsert
 const TICKET_CLASSES = [
   { id: 'tclass_support', code: 'SUPPORT', name: 'Support', sortOrder: 0 },
@@ -73,6 +81,21 @@ async function main() {
       create: { email: u.email, name: u.name, role: u.role, passwordHash: hash },
     });
     console.log(`✅ User: ${user.name} <${user.email}> [${user.role}]`);
+  }
+
+  // AI department accounts (DEPARTMENT_USER, no password — for workflow template assignee demo)
+  for (const u of AI_DEPARTMENT_USERS) {
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: { name: u.name, role: 'DEPARTMENT_USER', passwordHash: null, isActive: true },
+      create: { email: u.email, name: u.name, role: 'DEPARTMENT_USER', passwordHash: null, isActive: true },
+    });
+    await prisma.userDepartment.upsert({
+      where: { userId_department: { userId: user.id, department: u.department } },
+      update: {},
+      create: { userId: user.id, department: u.department },
+    });
+    console.log(`✅ AI account: ${user.name} <${user.email}> [${user.role}] → ${u.department}`);
   }
 
   // Stage 2: Taxonomy (idempotent; migration may have already populated)
@@ -202,6 +225,9 @@ async function main() {
     }
   }
   console.log('📋 Form fields: maintenance (common schema per category)');
+
+  // Studio profiles: run `npm run import:studio-profiles` after copying the master sheet to
+  // docs/studio-master-data.csv (or set STUDIO_MASTER_CSV). Uses same Studio keys as seed:locations.
 
   console.log('\n✅ Seed complete!');
   console.log(`\n🔑 All accounts use password: ${DEFAULT_PASSWORD}`);

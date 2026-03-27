@@ -6,7 +6,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { Priority } from '@prisma/client';
+import { Priority, DispatchTradeType, DispatchReadiness } from '@prisma/client';
 
 export class UpdateTicketDto {
   @IsOptional()
@@ -46,6 +46,14 @@ export class UpdateTicketDto {
   @IsOptional()
   @IsEnum(Priority)
   priority?: Priority;
+
+  @IsOptional()
+  @IsEnum(DispatchTradeType)
+  dispatchTradeType?: DispatchTradeType;
+
+  @IsOptional()
+  @IsEnum(DispatchReadiness)
+  dispatchReadiness?: DispatchReadiness;
 
   /** Key-value map of form response field keys to values. Upserts each key. */
   @IsOptional()

@@ -46,7 +46,7 @@ function RequesterAvatar({ displayName }: { displayName: string }) {
         {initials}
       </div>
       <div
-        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20"
+        className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-[70]"
         style={{
           background: 'var(--color-bg-surface-raised)',
           border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -126,8 +126,9 @@ function TicketTableRowComponent({
       onClick={() => onSelect(id)}
       role="button"
       tabIndex={0}
+      data-selected={isSelected ? 'true' : 'false'}
       onKeyDown={(e) => e.key === 'Enter' && onSelect(id)}
-      className={`cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)] hover:bg-[var(--color-bg-surface)]`}
+      className={`ticket-feed-table-row cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)]`}
       style={{
         borderBottom: rowBorder,
         background: isSelected ? POLISH_THEME.rowSelected : undefined,

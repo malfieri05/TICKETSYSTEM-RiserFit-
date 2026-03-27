@@ -273,7 +273,7 @@ export class IngestionService {
         data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
       });
       this.logger.log(
-        `Ingestion complete: documentId=${documentId}, chunks=${chunks.length}`,
+        `Ingestion complete: documentId=${documentId}, chunks=${chunksWithPos.length}`,
       );
     } catch (err) {
       await this.prisma.knowledgeDocument.update({

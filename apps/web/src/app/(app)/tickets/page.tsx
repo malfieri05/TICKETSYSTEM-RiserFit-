@@ -27,6 +27,8 @@ const FILTER_KEYS: (keyof TicketFilters)[] = [
   'createdAfter', 'createdBefore',
 ];
 
+const FEED_COLGROUP_WIDTHS = ['10%', '38%', '13%', '12%', '11%', '10%', '8%', '8%'] as const;
+
 export default function TicketsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -186,7 +188,9 @@ export default function TicketsPage() {
     setFilters((f) => ({ ...f, [kind]: value, page: 1 }));
   };
 
-  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
 
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
@@ -215,6 +219,30 @@ export default function TicketsPage() {
     isFetching,
   } = useTicketListQuery('list', listParams);
 
+  const countParamsBase = {
+    page: 1,
+    limit: 1,
+    search: debouncedSearch || undefined,
+    departmentId: filters.departmentId,
+    status: filters.status,
+    ticketClass: filters.ticketClass,
+    supportTopicId: filters.supportTopicId,
+    maintenanceCategoryId: filters.maintenanceCategoryId,
+    studioId: filters.studioId,
+    state: filters.state,
+    createdAfter: filters.createdAfter,
+    createdBefore: filters.createdBefore,
+  };
+
+  const { total: activeTotal } = useTicketListQuery('list', {
+    ...countParamsBase,
+    statusGroup: 'active',
+  });
+  const { total: completedTotal } = useTicketListQuery('list', {
+    ...countParamsBase,
+    statusGroup: 'completed',
+  });
+
   const currentPage = filters.page ?? 1;
   useEffect(() => {
     listContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -222,42 +250,53 @@ export default function TicketsPage() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="Tickets" />
-
-      <div className="flex items-center gap-1 px-6 py-2.5" style={{ background: 'var(--color-bg-page)', borderBottom: '1px solid var(--color-border-default)' }}>
-        {([
-          { key: 'active' as ViewTab, label: 'Active' },
-          { key: 'completed' as ViewTab, label: 'Completed' },
-        ]).map(({ key, label }) => {
-          const active = viewTab === key;
-          return (
-            <button
-              key={key}
-              onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
-              data-active={active}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all [&:not([data-active])]:hover:text-[var(--color-text-secondary)]"
-              style={{
-                background: active ? 'var(--color-bg-surface)' : 'transparent',
-                color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-                border: active ? '1px solid var(--color-border-default)' : '1px solid transparent',
-              }}
+      <Header
+        title={
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Tickets</h1>
+            <div
+              className="relative inline-flex items-center rounded-[var(--radius-md)] border p-1"
+              style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-chrome)' }}
             >
-              {label}
-              {total > 0 && active && (
-                <span
-                  className="text-xs font-semibold px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'var(--color-bg-surface-raised)', color: 'var(--color-text-primary)' }}
-                >
-                  {total}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+              <div
+                className="absolute top-1 bottom-1 w-[136px] rounded-[calc(var(--radius-md)-2px)] border transition-transform duration-[var(--duration-base)] ease-out"
+                style={{
+                  transform: viewTab === 'active' ? 'translateX(0)' : 'translateX(136px)',
+                  background: 'var(--color-bg-surface)',
+                  borderColor: 'var(--color-border-default)',
+                }}
+              />
+              {([
+                { key: 'active' as ViewTab, label: 'Active', count: activeTotal },
+                { key: 'completed' as ViewTab, label: 'Completed', count: completedTotal },
+              ]).map(({ key, label, count }) => {
+                const active = viewTab === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
+                    data-active={active}
+                    className="focus-ring relative z-10 inline-flex w-[136px] items-center justify-center gap-1.5 px-3 py-1 text-sm font-medium transition-colors"
+                    style={{ color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}
+                  >
+                    <span>{label}:</span>
+                    <span
+                      className="text-sm font-medium tabular-nums"
+                      style={{ color: active ? '#22c55e' : 'var(--color-text-primary)' }}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        }
+      />
 
       <div ref={listContainerRef} className="flex-1 flex flex-col overflow-hidden">
         <TicketFeedLayout
+          fixedChrome
           filters={
             <div className="flex flex-wrap gap-3 items-end">
               <div className="relative">
@@ -266,7 +305,7 @@ export default function TicketsPage() {
                   placeholder="Search tickets or paste ID..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-64 pl-9"
+                  className="w-64 pl-9 shadow-[var(--shadow-panel)]"
                 />
               </div>
               <ComboBox
@@ -327,37 +366,53 @@ export default function TicketsPage() {
           isFetching={isFetching}
           hasTickets={tickets.length > 0}
           ticketList={
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
-                  {CANONICAL_FEED_HEADERS.map((h) => (
-                    <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+            <div className="flex-1 min-h-0 flex flex-col">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>
+                  {FEED_COLGROUP_WIDTHS.map((w, idx) => (
+                    <col key={`thead-col-${idx}`} style={{ width: w }} />
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket) => {
-                  const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-                  const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-                  return (
-                    <TicketTableRow
-                      key={ticket.id}
-                      id={ticket.id}
-                      title={ticket.title}
-                      status={ticket.status}
-                      priority={ticket.priority}
-                      createdAt={ticket.createdAt}
-                      commentCount={ticket._count?.comments ?? 0}
-                      completedSubtasks={completedSubtasks}
-                      totalSubtasks={totalSubtasks}
-                      requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
-                      isSelected={selectedId === ticket.id}
-                      onSelect={handleSelect}
-                    />
-                  );
-                })}
-              </tbody>
-            </table>
+                </colgroup>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
+                    {CANONICAL_FEED_HEADERS.map((h) => (
+                      <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
+                    ))}
+                  </tr>
+                </thead>
+              </table>
+              <div className="ticket-feed-body-scroll flex-1 min-h-0 overflow-y-auto">
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    {FEED_COLGROUP_WIDTHS.map((w, idx) => (
+                      <col key={`tbody-col-${idx}`} style={{ width: w }} />
+                    ))}
+                  </colgroup>
+                  <tbody>
+                    {tickets.map((ticket) => {
+                      const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+                      const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+                      return (
+                        <TicketTableRow
+                          key={ticket.id}
+                          id={ticket.id}
+                          title={ticket.title}
+                          status={ticket.status}
+                          priority={ticket.priority}
+                          createdAt={ticket.createdAt}
+                          commentCount={ticket._count?.comments ?? 0}
+                          completedSubtasks={completedSubtasks}
+                          totalSubtasks={totalSubtasks}
+                          requesterDisplayName={ticket.requester.displayName || ticket.requester.email || '—'}
+                          isSelected={selectedId === ticket.id}
+                          onSelect={handleSelect}
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           }
           emptyState={
             <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-3`} style={{ color: POLISH_THEME.theadText }}>
@@ -390,7 +445,7 @@ export default function TicketsPage() {
           pagination={
             totalPages > 1 ? (
               <div
-                className="flex items-center justify-between px-4 py-3"
+                className="flex items-center justify-between px-4 py-3 pr-24"
                 style={{ borderTop: '1px solid var(--color-border-default)' }}
               >
                 <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -420,7 +475,7 @@ export default function TicketsPage() {
           initialSkeleton={
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
                   {CANONICAL_FEED_HEADERS.map((h) => (
                     <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
                   ))}

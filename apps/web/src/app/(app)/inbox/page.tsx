@@ -113,7 +113,7 @@ export default function InboxPage() {
   const ticketList = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
             <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}
@@ -134,7 +134,7 @@ export default function InboxPage() {
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}
-              requesterDisplayName={ticket.requester.displayName ?? ticket.requester.name ?? '—'}
+              requesterDisplayName={ticket.requester.displayName || ticket.requester.email || '—'}
               isSelected={selectedId === ticket.id}
               onSelect={handleSelect}
             />
@@ -147,7 +147,7 @@ export default function InboxPage() {
   const initialSkeleton = (
     <table className="w-full text-sm">
       <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.listBgHeader }}>
+        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
             <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
           ))}

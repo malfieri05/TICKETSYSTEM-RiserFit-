@@ -128,6 +128,33 @@ enum EmailAutomationReviewStatus {
   DISMISSED
 }
 
+// Dispatch Intelligence (V1) — dispatch trade type, readiness, group lifecycle
+enum DispatchTradeType {
+  HANDYMAN
+  PLUMBER
+  HVAC
+  ELECTRICIAN
+  LOCKSMITH
+  GENERAL_MAINTENANCE
+}
+
+enum DispatchReadiness {
+  NOT_READY
+  READY_FOR_DISPATCH
+  WAITING_ON_DELIVERY
+  WAITING_ON_APPROVAL
+}
+
+enum DispatchGroupStatus {
+  DRAFT
+  READY_TO_SEND
+  SENT_TO_VENDOR
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 // Lease IQ (V1) — per-studio lease responsibility rules and ticket evaluation
 enum LeaseRuleSetStatus {
   DRAFT
@@ -214,10 +241,54 @@ model Studio {
   studioAddressNormalized  StudioAddressNormalized[]
   leaseSources             LeaseSource[]
   leaseRuleSets            LeaseRuleSet[]
+  dispatchGroupTemplatesAnchor DispatchGroupTemplate[]
+  profile                  StudioProfile?
 
   @@unique([name, marketId])
   @@index([marketId])
   @@map("studios")
+}
+
+model StudioProfile {
+  id        String   @id @default(cuid())
+  studioId  String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Operational attributes (public to all roles with access to the location page)
+  district          String?
+  status            String?
+  maturity          String?
+  studioSize        Int?
+  priceTier         Int?
+  openType          String?
+  studioOpenDate    DateTime?
+  rfSoftOpenDate    DateTime?
+
+  // Ownership / team (restricted)
+  dm                String?
+  gm                String?
+  agm               String?
+  edc               String?
+  li                String?
+
+  // Contact info (restricted)
+  studioEmail      String?
+  gmEmail          String?
+  gmTeams          String?
+  liEmail          String?
+
+  // Naming / system (restricted internal identifiers)
+  studioCode       String?
+  netsuiteName     String?
+  ikismetName      String?
+  crName           String?
+  crId             String?
+  paycomCode       String?
+
+  studio Studio @relation(fields: [studioId], references: [id], onDelete: Cascade)
+
+  @@map("studio_profiles")
 }
 
 model Team {
@@ -274,6 +345,8 @@ model User {
   agentActionLogs      AgentActionLog[]
   departments          UserDepartment[]
   studioScopes         UserStudioScope[]
+  dispatchGroupsCreated     DispatchGroup[]
+  dispatchGroupTemplatesCreated DispatchGroupTemplate[]
 
   @@index([email])
   @@index([role])
@@ -389,6 +462,7 @@ model MaintenanceCategory {
   formSchemas        TicketFormSchema[]
   workflowTemplates  SubtaskWorkflowTemplate[]
   leaseRules         LeaseRule[]
+  dispatchGroupTemplates DispatchGroupTemplate[]
 
   @@map("maintenance_categories")
 }
@@ -492,6 +566,8 @@ model Ticket {
   marketId             String?
   requesterId          String
   ownerId              String?
+  dispatchTradeType    DispatchTradeType?
+  dispatchReadiness    DispatchReadiness?
   resolvedAt           DateTime?
   closedAt             DateTime?
   createdAt            DateTime     @default(now())
@@ -506,15 +582,16 @@ model Ticket {
   requester            User                @relation("TicketRequester", fields: [requesterId], references: [id])
   owner                User?               @relation("TicketOwner", fields: [ownerId], references: [id])
 
-  comments      TicketComment[]
-  attachments   TicketAttachment[]
-  subtasks      Subtask[]
-  tags          TicketTag[]
-  watchers      TicketWatcher[]
-  notifications Notification[]
-  auditLogs     AuditLog[]
-  formResponses TicketFormResponse[]
-  leaseIqResult TicketLeaseIqResult?
+  comments           TicketComment[]
+  attachments        TicketAttachment[]
+  subtasks           Subtask[]
+  tags               TicketTag[]
+  watchers           TicketWatcher[]
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+  formResponses      TicketFormResponse[]
+  leaseIqResult      TicketLeaseIqResult?
+  dispatchGroupItems DispatchGroupItem[]
 
   @@index([status])
   @@index([ownerId])
@@ -531,7 +608,73 @@ model Ticket {
   @@index([requesterId, status])
   @@index([updatedAt])
   @@index([resolvedAt])
+  @@index([studioId, dispatchTradeType, dispatchReadiness, status])
   @@map("tickets")
+}
+
+// ============================================================
+// DISPATCH GROUPS (Dispatch Intelligence V1)
+// ============================================================
+
+model DispatchGroup {
+  id         String              @id @default(cuid())
+  tradeType  DispatchTradeType
+  createdBy  String
+  status     DispatchGroupStatus @default(DRAFT)
+  targetDate DateTime?
+  notes      String?
+  vendorId   String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  creator User              @relation(fields: [createdBy], references: [id])
+  items   DispatchGroupItem[]
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("dispatch_groups")
+}
+
+model DispatchGroupItem {
+  id                      String   @id @default(cuid())
+  dispatchGroupId         String
+  ticketId                String
+  stopOrder               Int      @default(0)
+  estimatedDurationMinutes Int?
+  createdAt               DateTime @default(now())
+
+  group  DispatchGroup @relation(fields: [dispatchGroupId], references: [id], onDelete: Cascade)
+  ticket Ticket        @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+
+  @@unique([dispatchGroupId, ticketId])
+  @@index([dispatchGroupId])
+  @@index([ticketId])
+  @@map("dispatch_group_items")
+}
+
+// ============================================================
+// DISPATCH GROUP TEMPLATES (Grouping Workspace — rule-only, no ticket IDs)
+// ============================================================
+
+model DispatchGroupTemplate {
+  id                    String             @id @default(cuid())
+  name                  String
+  createdBy             String
+  dispatchTradeType     DispatchTradeType
+  maintenanceCategoryId String?
+  anchorStudioId        String?
+  radiusMiles           Float
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  creator              User                 @relation(fields: [createdBy], references: [id])
+  maintenanceCategory  MaintenanceCategory? @relation(fields: [maintenanceCategoryId], references: [id], onDelete: SetNull)
+  anchorStudio         Studio?              @relation(fields: [anchorStudioId], references: [id], onDelete: SetNull)
+
+  @@index([createdBy])
+  @@index([dispatchTradeType])
+  @@map("dispatch_group_templates")
 }
 
 // ============================================================

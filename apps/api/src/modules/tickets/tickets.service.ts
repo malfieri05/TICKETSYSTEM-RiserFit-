@@ -49,6 +49,8 @@ const TICKET_LIST_SELECT = {
   requesterId: true,
   ownerId: true,
   studioId: true,
+  dispatchTradeType: true,
+  dispatchReadiness: true,
   createdAt: true,
   updatedAt: true,
   resolvedAt: true,
@@ -84,6 +86,8 @@ const TICKET_LIST_SELECT_LIGHT = {
   requesterId: true,
   ownerId: true,
   studioId: true,
+  dispatchTradeType: true,
+  dispatchReadiness: true,
   createdAt: true,
   updatedAt: true,
   resolvedAt: true,
@@ -836,6 +840,19 @@ export class TicketsService {
       );
     }
 
+    // Dispatch fields are only valid for maintenance tickets — reject with 400 for non-maintenance
+    if (dto.dispatchTradeType !== undefined || dto.dispatchReadiness !== undefined) {
+      const ticketClass = await this.prisma.ticketClass.findUnique({
+        where: { id: ticket.ticketClassId },
+        select: { code: true },
+      });
+      if (ticketClass?.code !== 'MAINTENANCE') {
+        throw new BadRequestException(
+          'Dispatch fields (dispatchTradeType, dispatchReadiness) are only valid for maintenance tickets',
+        );
+      }
+    }
+
     if (
       dto.ticketClassId != null ||
       dto.departmentId !== undefined ||
@@ -897,6 +914,12 @@ export class TicketsService {
           ...(dto.studioId !== undefined && { studioId: dto.studioId }),
           ...(dto.marketId !== undefined && { marketId: dto.marketId }),
           ...(dto.priority && { priority: dto.priority }),
+          ...(dto.dispatchTradeType !== undefined && {
+            dispatchTradeType: dto.dispatchTradeType,
+          }),
+          ...(dto.dispatchReadiness !== undefined && {
+            dispatchReadiness: dto.dispatchReadiness,
+          }),
         },
         select: TICKET_LIST_SELECT,
       });

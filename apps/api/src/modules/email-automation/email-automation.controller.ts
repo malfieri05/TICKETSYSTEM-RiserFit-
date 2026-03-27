@@ -46,7 +46,7 @@ export class EmailAutomationController {
   @Get('config')
   async getConfig() {
     const config = await this.configService.getConfigOrCreateDefault();
-    const { gmailRefreshToken: _, ...safe } = config as Record<string, unknown>;
+    const { gmailRefreshToken: _, ...safe } = config as unknown as Record<string, unknown>;
     return safe;
   }
 

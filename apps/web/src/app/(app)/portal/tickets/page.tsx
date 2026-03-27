@@ -13,7 +13,9 @@ import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
+import { LocationLink } from '@/components/ui/LocationLink';
 import { useAuth } from '@/hooks/useAuth';
+import { POLISH_THEME } from '@/lib/polish';
 
 const PAGE_SIZE = 20;
 
@@ -190,7 +192,7 @@ export default function PortalTicketsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: POLISH_THEME.tableHeaderBg }}>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Topic / Category</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Created</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Title</th>
@@ -212,7 +214,7 @@ export default function PortalTicketsPage() {
                       <tr
                         key={ticket.id}
                         onClick={() => router.push(`/tickets/${ticket.id}`)}
-                        className="cursor-pointer transition-colors hover:bg-[var(--color-bg-surface)]"
+                        className="ticket-feed-table-row cursor-pointer transition-colors"
                         style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
                       >
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{topicLabel}</td>
@@ -232,7 +234,9 @@ export default function PortalTicketsPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                          {ticket.studio?.name ?? '—'}
+                          {ticket.studio?.id ? (
+                            <LocationLink studioId={ticket.studio.id} studioName={ticket.studio.name} className="text-xs" />
+                          ) : '—'}
                         </td>
                         <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
                         <td className="px-4 py-3">

@@ -29,12 +29,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed',
+          'inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-[var(--duration-fast)] ease-out',
+          'focus-ring focus:outline-none active:translate-y-[0.5px] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:translate-y-0',
           'bg-[var(--btn-bg)] text-[var(--btn-color)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-color)]',
           {
-            'px-2.5 py-1.5 text-sm': size === 'sm',
-            'px-4 py-2 text-sm': size === 'md',
-            'px-5 py-2.5 text-base': size === 'lg',
+            'px-2.5 h-8 text-sm': size === 'sm',
+            'px-4 h-9 text-sm': size === 'md',
+            'px-5 h-10 text-base': size === 'lg',
           },
           className,
         )}

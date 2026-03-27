@@ -213,6 +213,12 @@ export interface PaginatedResponse<T> {
   limit: number;
 }
 
+/** GET /notifications — paginated list plus badge count. */
+export interface NotificationListResponse extends PaginatedResponse<Notification> {
+  unreadCount: number;
+  totalPages?: number;
+}
+
 export interface TicketFilters {
   status?: TicketStatus;
   /** Convenience filter: 'active' = not RESOLVED/CLOSED; 'completed' = RESOLVED/CLOSED. Overrides status. */
@@ -397,6 +403,74 @@ export interface WorkflowTemplateListItemDto {
   supportTopic: { id: string; name: string } | null;
   maintenanceCategory: { id: string; name: string } | null;
   _count: { subtaskTemplates: number };
+}
+
+// ─── Location Profile (V1) ──────────────────────────────────────────────────
+
+export interface StudioIdentity {
+  id: string;
+  name: string;
+  formattedAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  externalCode: string | null;
+  isActive: boolean;
+  market: { id: string; name: string };
+}
+
+export type LocationMetadataAvailability = 'full' | 'missing';
+
+export interface OperationalPublic {
+  district: string | null;
+  status: string | null;
+  maturity: string | null;
+  studioSize: number | null;
+  priceTier: number | null;
+  openType: string | null;
+  studioOpenDate: string | null; // YYYY-MM-DD
+  rfSoftOpenDate: string | null; // YYYY-MM-DD
+}
+
+export interface OwnershipTeamRestricted {
+  dm: string | null;
+  gm: string | null;
+  agm: string | null;
+  edc: string | null;
+  li: string | null;
+}
+
+export interface ContactInfoRestricted {
+  studioEmail: string | null;
+  gmEmail: string | null;
+  gmTeams: string | null;
+  liEmail: string | null;
+}
+
+export interface InternalIdentifiersRestricted {
+  studioCode: string | null;
+  netsuiteName: string | null;
+  ikismetName: string | null;
+  crName: string | null;
+  crId: string | null;
+  paycomCode: string | null;
+}
+
+export interface LocationProfileResponse {
+  studio: StudioIdentity;
+  profile: {
+    metadataAvailability: LocationMetadataAvailability;
+    public: OperationalPublic;
+    restricted: {
+      ownership: OwnershipTeamRestricted;
+      contact: ContactInfoRestricted;
+      identifiers: InternalIdentifiersRestricted;
+    } | null;
+  };
+  visibility: {
+    showOwnership: boolean;
+    showContact: boolean;
+    showIdentifiers: boolean;
+  };
 }
 
 /** Stage 7A: workflow execution visibility — GET /subtask-workflow/templates/:id/stats */

@@ -78,8 +78,17 @@ export const ticketsApi = {
         teamId?: string;
         ownerId?: string;
       }) => api.post<import('@/types').TicketDetail>('/tickets', data),
-  update: (id: string, data: { title?: string; description?: string; priority?: import('@/types').TicketPriority; formResponses?: Record<string, string> }) =>
-    api.patch<import('@/types').TicketDetail>(`/tickets/${id}`, data),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      description?: string;
+      priority?: import('@/types').TicketPriority;
+      formResponses?: Record<string, string>;
+      dispatchTradeType?: import('@ticketing/types').DispatchTradeType | string;
+      dispatchReadiness?: import('@ticketing/types').DispatchReadiness | string;
+    },
+  ) => api.patch<import('@/types').TicketDetail>(`/tickets/${id}`, data),
   assign: (id: string, ownerId: string | null) =>
     api.patch<import('@/types').TicketDetail>(`/tickets/${id}/assign`, { ownerId }),
   transition: (id: string, status: import('@/types').TicketStatus) =>
@@ -144,7 +153,7 @@ export const subtasksApi = {
 
 export const notificationsApi = {
   list: (params?: { page?: number; limit?: number; unreadOnly?: boolean }) =>
-    api.get<import('@/types').PaginatedResponse<import('@/types').Notification>>('/notifications', { params }),
+    api.get<import('@/types').NotificationListResponse>('/notifications', { params }),
   markRead: (id: string) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.post('/notifications/read-all'),
 };
@@ -774,6 +783,80 @@ export const leaseIqApi = {
     }>(`${LEASE_IQ_PREFIX}/playground`, data),
   copyPrompt: () =>
     api.get<{ text: string }>(`${LEASE_IQ_PREFIX}/copy-prompt`),
+};
+
+// ─── Dispatch Intelligence ─────────────────────────────────────────────────
+
+export const dispatchApi = {
+  getRecommendations: (ticketId: string, params?: { radiusMiles?: number; tradeType?: string }) =>
+    api.get<{
+      primaryTicket: any;
+      sameLocationCandidates: any[];
+      nearbyLocationCandidates: any[];
+      summary: { sameLocationCount: number; nearbyCount: number; message?: string };
+    }>(`/dispatch/recommendations/${ticketId}`, { params }),
+
+  getSuggestedTradeType: (maintenanceCategoryId: string) =>
+    api.get<{ suggestedDispatchTradeType: string | null }>(
+      `/dispatch/classification/suggest/${maintenanceCategoryId}`,
+    ),
+
+  getReadyTickets: (params?: { tradeType?: string; studioId?: string; marketId?: string; page?: number; limit?: number }) =>
+    api.get<{ data: any[]; total: number; page: number; limit: number; totalPages: number }>(
+      '/dispatch/ready',
+      { params },
+    ),
+
+  listGroups: (params?: { status?: string; tradeType?: string; page?: number; limit?: number }) =>
+    api.get<{ data: any[]; total: number; page: number; limit: number; totalPages: number }>(
+      '/dispatch/groups',
+      { params },
+    ),
+
+  getGroup: (id: string) => api.get<any>(`/dispatch/groups/${id}`),
+
+  createGroup: (data: { tradeType: string; ticketIds: string[]; notes?: string; targetDate?: string }) =>
+    api.post<any>('/dispatch/groups', data),
+
+  updateGroup: (id: string, data: { notes?: string; targetDate?: string; status?: string }) =>
+    api.patch<any>(`/dispatch/groups/${id}`, data),
+
+  addItem: (groupId: string, ticketId: string) =>
+    api.post<any>(`/dispatch/groups/${groupId}/items`, { ticketId }),
+
+  removeItem: (groupId: string, itemId: string) =>
+    api.delete(`/dispatch/groups/${groupId}/items/${itemId}`),
+
+  reorderItems: (groupId: string, order: { itemId: string; stopOrder: number }[]) =>
+    api.patch(`/dispatch/groups/${groupId}/items/reorder`, { order }),
+
+  getWorkspaceNearby: (params: { anchorTicketId: string; radiusMiles: number }) =>
+    api.get<{ anchor: any; nearby: any[]; message?: string }>('/dispatch/workspace/nearby', { params }),
+
+  listTemplates: () => api.get<any[]>('/dispatch/templates'),
+  getTemplate: (id: string) => api.get<any>(`/dispatch/templates/${id}`),
+  createTemplate: (data: {
+    name: string;
+    dispatchTradeType: string;
+    maintenanceCategoryId?: string;
+    anchorStudioId?: string;
+    radiusMiles: number;
+  }) => api.post<any>('/dispatch/templates', data),
+  updateTemplate: (id: string, data: {
+    name?: string;
+    dispatchTradeType?: string;
+    maintenanceCategoryId?: string | null;
+    anchorStudioId?: string | null;
+    radiusMiles?: number;
+  }) => api.patch<any>(`/dispatch/templates/${id}`, data),
+  deleteTemplate: (id: string) => api.delete(`/dispatch/templates/${id}`),
+};
+
+// ─── Location Profiles ──────────────────────────────────────────────────────
+
+export const locationsApi = {
+  getProfile: (studioId: string) =>
+    api.get<import('@/types').LocationProfileResponse>(`/locations/${studioId}/profile`),
 };
 
 export const usersApi = {

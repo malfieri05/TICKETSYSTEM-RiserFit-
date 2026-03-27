@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
 import { MaintenanceCountWithTooltip } from '@/components/ui/MaintenanceCountWithTooltip';
+import { LocationLink } from '@/components/ui/LocationLink';
 import dynamic from 'next/dynamic';
 
 const LocationsMap = dynamic(
@@ -191,21 +192,21 @@ export default function AdminMarketsPage() {
           className="p-6 space-y-4 overflow-auto flex-shrink-0 flex flex-col"
           style={viewMode === 'map' ? { flex: 1 } : { maxWidth: '40rem' }}
         >
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Input
               placeholder="Search locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-sm flex-1 min-w-[200px]"
+              className="max-w-sm flex-1 min-w-[200px] h-9"
             />
             <MarketSearchSelect
               markets={markets.map((m) => ({ id: m.id, name: m.name }))}
               value={selectedMarketId ?? ''}
               onChange={(id) => setSelectedMarketId(id === '' ? null : id)}
-              className="min-w-[160px]"
+              className="min-w-[160px] h-9"
             />
             {!showAddForm && (
-              <Button size="sm" variant="secondary" onClick={openAddForm} className="w-fit shrink-0">
+              <Button size="md" variant="secondary" onClick={openAddForm} className="w-fit shrink-0">
                 <Plus className="h-4 w-4" />
                 Add Location
               </Button>
@@ -244,11 +245,11 @@ export default function AdminMarketsPage() {
             <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
               View:
             </span>
-            <div className="inline-flex rounded-lg border text-xs" style={{ borderColor: 'var(--color-border-default)' }}>
+            <div className="inline-flex h-9 items-center rounded-[var(--radius-md)] border text-sm" style={{ borderColor: 'var(--color-border-default)' }}>
               <button
                 type="button"
                 onClick={() => setViewMode('list')}
-                className="px-3 py-1.5 rounded-l-lg transition-colors duration-150"
+                className="h-full px-3 rounded-l-[var(--radius-md)] transition-colors duration-150"
                 style={{
                   background: viewMode === 'list' ? 'var(--color-bg-surface-raised)' : 'transparent',
                   color: viewMode === 'list' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
@@ -260,7 +261,7 @@ export default function AdminMarketsPage() {
               <button
                 type="button"
                 onClick={() => setViewMode('map')}
-                className="px-3 py-1.5 rounded-r-lg transition-colors duration-150"
+                className="h-full px-3 rounded-r-[var(--radius-md)] transition-colors duration-150"
                 style={{
                   background: viewMode === 'map' ? 'var(--color-bg-surface-raised)' : 'transparent',
                   color: viewMode === 'map' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
@@ -396,7 +397,14 @@ export default function AdminMarketsPage() {
               ) : (
                 <>
                   <div>
-                    <div className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{selectedStudio.name} <MaintenanceCountWithTooltip count={selectedStudio.activeMaintenanceCount ?? 0} categoryNames={selectedStudio.activeMaintenanceCategoryNames ?? []} /></div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                      <LocationLink
+                        studioId={selectedStudio.id}
+                        studioName={selectedStudio.name}
+                        className="text-sm font-medium"
+                      />
+                      <MaintenanceCountWithTooltip count={selectedStudio.activeMaintenanceCount ?? 0} categoryNames={selectedStudio.activeMaintenanceCategoryNames ?? []} />
+                    </div>
                     {selectedStudio.formattedAddress && (
                       <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>{selectedStudio.formattedAddress}</p>
                     )}

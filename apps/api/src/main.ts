@@ -14,6 +14,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // CORS — allow frontend dev server (any localhost port) + production domain
+  const isDev = process.env.NODE_ENV !== 'production';
   const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3002',
@@ -33,9 +34,14 @@ async function bootstrap() {
         /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
       )
         return cb(null, true);
+      // In development, allow any localhost-like origin (e.g. 0.0.0.0, host.docker.internal)
+      if (isDev && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|[\w-]+\.local)(:\d+)?$/.test(origin))
+        return cb(null, true);
       cb(null, false);
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
   // Global validation pipe — auto-validates all DTOs

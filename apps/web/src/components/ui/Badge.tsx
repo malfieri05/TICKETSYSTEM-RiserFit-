@@ -41,7 +41,7 @@ const subtaskStyles: Record<SubtaskStatus, BadgeStyle> = {
 function ThemeBadge({ style: s, children }: { style: BadgeStyle; children: React.ReactNode }) {
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium"
+      className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]"
       style={{ background: s.bg, color: s.text, boxShadow: `inset 0 0 0 1px ${s.ring}` }}
     >
       {children}

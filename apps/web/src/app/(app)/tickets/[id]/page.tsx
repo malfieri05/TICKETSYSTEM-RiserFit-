@@ -8,7 +8,7 @@ import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
   Plus, User, CheckCircle2, RefreshCw, Scale,
 } from 'lucide-react';
-import { ticketsApi, subtasksApi, usersApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, subtasksApi, usersApi, invalidateTicketLists, dispatchApi } from '@/lib/api';
 import type { TicketStatus, SubtaskStatus } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { SubtaskStatusBadge, StatusBadge } from '@/components/ui/Badge';
@@ -19,6 +19,8 @@ import { cn } from '@/lib/utils';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
 import { CommentThread } from '@/components/tickets/CommentThread';
+import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
+import { LocationLink } from '@/components/ui/LocationLink';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -252,12 +254,19 @@ export default function TicketDetailPage() {
             </div>
 
             {/* Tertiary: created, requester, location */}
-            <p className="text-xs mt-2" style={{ color: POLISH_THEME.metaSecondary }}>
-              Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
-              {` · Requested by ${ticket.requester.displayName}`}
-              {(ticket as { studio?: { name: string } }).studio?.name
-                ? ` · ${(ticket as { studio: { name: string } }).studio.name}`
-                : ''}
+            <p className="text-xs mt-2 flex items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
+              <span>Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+              <span>· Requested by {ticket.requester.displayName}</span>
+              {(ticket as { studio?: { id: string; name: string } }).studio?.id && (
+                <>
+                  <span>·</span>
+                  <LocationLink
+                    studioId={(ticket as { studio: { id: string; name: string } }).studio.id}
+                    studioName={(ticket as { studio: { id: string; name: string } }).studio.name}
+                    className="text-xs"
+                  />
+                </>
+              )}
             </p>
 
             {/* Progress inline bar */}
@@ -334,6 +343,14 @@ export default function TicketDetailPage() {
                 </p>
               </div>
             )}
+
+            {/* Dispatch Intelligence panel (maintenance tickets only) */}
+            <DispatchRecommendationPanel
+              ticketId={id}
+              ticket={ticket}
+              canManage={canManage}
+              variant="detail"
+            />
           </div>
 
           {/* Tabs: Subtasks, Comments, Ticket Submission, History — sticky on scroll */}
