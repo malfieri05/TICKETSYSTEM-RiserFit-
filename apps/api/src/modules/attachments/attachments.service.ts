@@ -2,6 +2,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ServiceUnavailableException,
+  Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -20,26 +22,47 @@ const DOWNLOAD_URL_TTL = 900; // 15 minutes — presigned download URL lifetime
 
 @Injectable()
 export class AttachmentsService {
-  private s3: S3Client;
-  private bucket: string;
+  private readonly logger = new Logger(AttachmentsService.name);
+  private readonly s3: S3Client | null;
+  private readonly bucket: string;
 
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    const endpoint = this.config.get<string>('S3_ENDPOINT');
+    const accessKeyId = this.config.get<string>('S3_ACCESS_KEY_ID')?.trim();
+    const secretAccessKey = this.config
+      .get<string>('S3_SECRET_ACCESS_KEY')
+      ?.trim();
+    const bucket = this.config.get<string>('S3_BUCKET')?.trim();
+    const endpoint = this.config.get<string>('S3_ENDPOINT')?.trim();
 
-    this.s3 = new S3Client({
-      region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
-      credentials: {
-        accessKeyId: this.config.getOrThrow<string>('S3_ACCESS_KEY_ID'),
-        secretAccessKey: this.config.getOrThrow<string>('S3_SECRET_ACCESS_KEY'),
-      },
-      // Optional: Cloudflare R2 / MinIO endpoint override
-      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-    });
+    if (accessKeyId && secretAccessKey && bucket) {
+      this.s3 = new S3Client({
+        region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
+        credentials: {
+          accessKeyId,
+          secretAccessKey,
+        },
+        ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+      });
+      this.bucket = bucket;
+    } else {
+      this.s3 = null;
+      this.bucket = '';
+      this.logger.warn(
+        'S3 is not configured (missing S3_BUCKET and/or keys). Ticket attachments and KB file storage are disabled until env vars are set.',
+      );
+    }
+  }
 
-    this.bucket = this.config.getOrThrow<string>('S3_BUCKET');
+  private getS3OrThrow(): { client: S3Client; bucket: string } {
+    if (!this.s3 || !this.bucket) {
+      throw new ServiceUnavailableException(
+        'File storage is not configured. Set S3_BUCKET, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY (and optional S3_REGION / S3_ENDPOINT).',
+      );
+    }
+    return { client: this.s3, bucket: this.bucket };
   }
 
   // ── Step 1: Client requests a presigned upload URL ────────────────────────
@@ -48,6 +71,7 @@ export class AttachmentsService {
     dto: RequestUploadUrlDto,
     uploadedById: string,
   ) {
+    const { client, bucket } = this.getS3OrThrow();
     if (dto.sizeBytes > MAX_SIZE_BYTES) {
       throw new BadRequestException('File exceeds 25 MB limit');
     }
@@ -64,13 +88,13 @@ export class AttachmentsService {
 
     // Generate presigned PUT URL — client uploads directly to S3
     const command = new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: bucket,
       Key: s3Key,
       ContentType: dto.mimeType,
       ContentLength: dto.sizeBytes,
     });
 
-    const uploadUrl = await getSignedUrl(this.s3, command, {
+    const uploadUrl = await getSignedUrl(client, command, {
       expiresIn: UPLOAD_URL_TTL,
     });
 
@@ -88,6 +112,7 @@ export class AttachmentsService {
     dto: RequestUploadUrlDto,
     uploadedById: string,
   ) {
+    const { bucket } = this.getS3OrThrow();
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
     });
@@ -101,7 +126,7 @@ export class AttachmentsService {
         mimeType: dto.mimeType,
         sizeBytes: dto.sizeBytes,
         s3Key,
-        s3Bucket: this.bucket,
+        s3Bucket: bucket,
       },
       include: {
         uploadedBy: { select: { id: true, name: true } },
@@ -124,6 +149,7 @@ export class AttachmentsService {
 
   // ── Get a presigned download URL for a specific attachment ────────────────
   async getDownloadUrl(attachmentId: string) {
+    const { client } = this.getS3OrThrow();
     const attachment = await this.prisma.ticketAttachment.findUnique({
       where: { id: attachmentId },
     });
@@ -136,7 +162,7 @@ export class AttachmentsService {
       ResponseContentDisposition: `attachment; filename="${attachment.filename}"`,
     });
 
-    const downloadUrl = await getSignedUrl(this.s3, command, {
+    const downloadUrl = await getSignedUrl(client, command, {
       expiresIn: DOWNLOAD_URL_TTL,
     });
 
@@ -153,9 +179,10 @@ export class AttachmentsService {
     buffer: Buffer,
     contentType: string,
   ): Promise<void> {
-    await this.s3.send(
+    const { client, bucket } = this.getS3OrThrow();
+    await client.send(
       new PutObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
         Body: buffer,
         ContentType: contentType,
@@ -165,9 +192,10 @@ export class AttachmentsService {
 
   /** Get object body from S3 as Buffer. Used e.g. by ingestion worker to fetch PDF. */
   async getObjectBuffer(key: string): Promise<Buffer> {
-    const response = await this.s3.send(
+    const { client, bucket } = this.getS3OrThrow();
+    const response = await client.send(
       new GetObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
       }),
     );
@@ -182,9 +210,10 @@ export class AttachmentsService {
 
   /** Delete an object by key (e.g. when deleting a knowledge document). */
   async deleteObjectByKey(key: string): Promise<void> {
-    await this.s3.send(
+    const { client, bucket } = this.getS3OrThrow();
+    await client.send(
       new DeleteObjectCommand({
-        Bucket: this.bucket,
+        Bucket: bucket,
         Key: key,
       }),
     );
@@ -192,6 +221,7 @@ export class AttachmentsService {
 
   // ── Delete an attachment ──────────────────────────────────────────────────
   async deleteAttachment(attachmentId: string, requesterId: string) {
+    const { client } = this.getS3OrThrow();
     const attachment = await this.prisma.ticketAttachment.findUnique({
       where: { id: attachmentId },
     });
@@ -199,7 +229,7 @@ export class AttachmentsService {
       throw new NotFoundException(`Attachment ${attachmentId} not found`);
 
     // Delete from S3
-    await this.s3.send(
+    await client.send(
       new DeleteObjectCommand({
         Bucket: attachment.s3Bucket,
         Key: attachment.s3Key,
