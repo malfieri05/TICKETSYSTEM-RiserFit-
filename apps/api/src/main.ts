@@ -5,6 +5,20 @@ import { AppModule } from './app.module';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const compression = require('compression');
 
+/** Normalize origin for comparison (browsers never send a trailing slash on Origin). */
+function normalizeOrigin(url: string): string {
+  return url.replace(/\/$/, '');
+}
+
+/** Split comma-separated env (e.g. prod + Vercel preview URLs). */
+function originsFromEnv(value: string | undefined): string[] {
+  if (!value?.trim()) return [];
+  return value
+    .split(',')
+    .map((s) => normalizeOrigin(s.trim()))
+    .filter(Boolean);
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
@@ -17,20 +31,21 @@ async function bootstrap() {
 
   // CORS — allow frontend dev server (any localhost port) + production domain
   const isDev = process.env.NODE_ENV !== 'production';
-  const allowedOrigins = [
+  const allowedOrigins = new Set<string>([
     'http://localhost:3000',
     'http://localhost:3002',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:3002',
-    process.env.FRONTEND_URL,
-  ].filter(Boolean);
+    ...originsFromEnv(process.env.FRONTEND_URL),
+    ...originsFromEnv(process.env.CORS_EXTRA_ORIGINS),
+  ]);
   app.enableCors({
     origin: (
       origin: string | undefined,
       cb: (err: Error | null, allow?: boolean) => void,
     ) => {
       if (!origin) return cb(null, true);
-      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (allowedOrigins.has(normalizeOrigin(origin))) return cb(null, true);
       if (
         /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
         /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
