@@ -10,8 +10,10 @@ async function bootstrap() {
 
   app.use(compression());
 
-  // Global prefix — all routes are /api/...
-  app.setGlobalPrefix('api');
+  // Global prefix — all routes are /api/... except bare GET / (see RootController)
+  app.setGlobalPrefix('api', {
+    exclude: [''],
+  });
 
   // CORS — allow frontend dev server (any localhost port) + production domain
   const isDev = process.env.NODE_ENV !== 'production';

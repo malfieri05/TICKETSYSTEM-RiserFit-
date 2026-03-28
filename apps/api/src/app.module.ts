@@ -34,8 +34,10 @@ import { LocationsModule } from './modules/locations/locations.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
+import { RootController } from './root.controller';
 
 @Module({
+  controllers: [RootController],
   imports: [
     // ── Config ────────────────────────────────────────────────────────────────
     ConfigModule.forRoot({
