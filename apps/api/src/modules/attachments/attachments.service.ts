@@ -20,6 +20,34 @@ const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 const UPLOAD_URL_TTL = 300; // 5 minutes — presigned upload URL lifetime
 const DOWNLOAD_URL_TTL = 900; // 15 minutes — presigned download URL lifetime
 
+/** Strip quotes / paste junk so R2 endpoint survives bad .env lines (e.g. `- https://...`). */
+function normalizeS3Endpoint(raw: string | undefined): string | undefined {
+  if (raw == null) return undefined;
+  let e = String(raw).trim();
+  if (!e) return undefined;
+  e = e.replace(/^["']|["']$/g, '');
+  e = e.replace(/^\s*[=:-]+\s*/, '');
+  e = e.replace(/^\s*-\s+/, '');
+  if (!/^https?:\/\//i.test(e)) {
+    e = `https://${e}`;
+  }
+  try {
+    const url = new URL(e);
+    if (!url.hostname) return undefined;
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function isCloudflareR2Endpoint(endpoint: string): boolean {
+  try {
+    return /\.r2\.cloudflarestorage\.com$/i.test(new URL(endpoint).hostname);
+  } catch {
+    return false;
+  }
+}
+
 @Injectable()
 export class AttachmentsService {
   private readonly logger = new Logger(AttachmentsService.name);
@@ -35,18 +63,48 @@ export class AttachmentsService {
       .get<string>('S3_SECRET_ACCESS_KEY')
       ?.trim();
     const bucket = this.config.get<string>('S3_BUCKET')?.trim();
-    const endpoint = this.config.get<string>('S3_ENDPOINT')?.trim();
+    const rawEndpoint = this.config.get<string>('S3_ENDPOINT')?.trim();
+    const endpoint = normalizeS3Endpoint(rawEndpoint);
+    if (rawEndpoint && !endpoint) {
+      this.logger.warn(
+        'S3_ENDPOINT is set but is not a valid URL. Fix it (e.g. https://<ACCOUNT_ID>.r2.cloudflarestorage.com with no leading dash or spaces).',
+      );
+    }
+
+    // Empty string in .env becomes "" — ?? 'us-east-1' does not run; R2 needs "auto" per Cloudflare docs.
+    const rawRegion = this.config.get<string>('S3_REGION')?.trim();
+    const region =
+      rawRegion && rawRegion.length > 0
+        ? rawRegion
+        : endpoint
+          ? 'auto'
+          : 'us-east-1';
 
     if (accessKeyId && secretAccessKey && bucket) {
+      const isR2 = endpoint ? isCloudflareR2Endpoint(endpoint) : false;
+      // R2 and some S3-compatible providers reject default AWS SDK v3.729+ checksum headers.
+      // Cloudflare's aws-sdk-js-v3 example uses virtual-hosted style (no forcePathStyle); MinIO etc. need path-style.
       this.s3 = new S3Client({
-        region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
+        region,
         credentials: {
           accessKeyId,
           secretAccessKey,
         },
-        ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
+        ...(endpoint
+          ? {
+              endpoint,
+              ...(isR2 ? {} : { forcePathStyle: true as const }),
+            }
+          : {}),
       });
       this.bucket = bucket;
+      if (endpoint) {
+        this.logger.log(
+          `S3 client: custom endpoint host=${new URL(endpoint).hostname} region=${region} pathStyle=${!isR2}`,
+        );
+      }
     } else {
       this.s3 = null;
       this.bucket = '';

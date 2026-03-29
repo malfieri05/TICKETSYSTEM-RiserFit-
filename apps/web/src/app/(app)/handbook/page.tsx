@@ -11,7 +11,13 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  sources?: Array<{ documentId: string; title: string; excerpt: string; pageNumber?: number | null }>;
+  sources?: Array<{
+    documentId: string;
+    title: string;
+    excerpt: string;
+    pageNumber?: number | null;
+    pagesLabel?: string;
+  }>;
   usedContext?: boolean;
 }
 
@@ -121,12 +127,14 @@ export default function HandbookPage() {
                   <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--color-border-default)' }}>
                     <p className="text-xs mb-1" style={{ color: 'var(--color-text-muted)' }}>Sources:</p>
                     <ul className="text-xs space-y-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                      {m.sources.map((s, i) => (
-                        <li key={i}>
+                      {m.sources.map((s) => (
+                        <li key={s.documentId}>
                           {s.title}
-                          {s.pageNumber != null && (
+                          {s.pagesLabel ? (
+                            <> — {s.pagesLabel}</>
+                          ) : s.pageNumber != null ? (
                             <> — Page {s.pageNumber}</>
-                          )}
+                          ) : null}
                         </li>
                       ))}
                     </ul>

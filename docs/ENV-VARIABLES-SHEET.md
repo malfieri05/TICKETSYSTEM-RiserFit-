@@ -4,6 +4,17 @@ Use this as the single reference for **what** to set and **where** (exact file p
 
 ---
 
+## 0. Production URLs (Riser Fitness — reference)
+
+| Role | URL |
+|------|-----|
+| **Web** (Next.js) | `https://riser.quantumindustries.ai` |
+| **API** (Nest) | `https://riser-api.quantumindustries.ai` |
+
+**Vercel:** Web → `NEXT_PUBLIC_API_URL=https://riser-api.quantumindustries.ai`. API → `FRONTEND_URL` includes `https://riser.quantumindustries.ai` (comma-separated if you use more origins).
+
+---
+
 ## 1. API — `apps/api/.env`
 
 **File path:** `TicketingSystem-CLAUDE/apps/api/.env`  
@@ -24,15 +35,17 @@ REDIS_PORT=6379
 REDIS_PASSWORD=your-redis-password
 REDIS_TLS=true
 
-# ─── Required: S3-compatible storage (attachments) ────────────────────────
-S3_BUCKET=your-bucket-name
-S3_REGION=us-east-1
-S3_ACCESS_KEY_ID=your-access-key
-S3_SECRET_ACCESS_KEY=your-secret-key
+# ─── Required: S3-compatible storage (ticket attachments, KB PDFs, etc.) ────
+# Cloudflare R2: fill every line below. AWS S3: set S3_ENDPOINT empty, use a real AWS region.
+S3_BUCKET=
+S3_REGION=auto
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
 S3_ENDPOINT=
+# R2 needs S3_ENDPOINT + S3_REGION=auto. If debugging AWS SDK v3 checksum issues outside the app, try AWS_REQUEST_CHECKSUM_CALCULATION=WHEN_REQUIRED (the API sets this for PutObject where needed).
 
-# ─── Optional: S3_ENDPOINT — leave blank for AWS; set for R2/MinIO ─────────
-# S3_ENDPOINT=https://....
+# Optional: link shown in Admin → System Monitoring (paste Cloudflare R2 bucket URL if you want)
+# S3_DASHBOARD_URL=https://dash.cloudflare.com/.../r2/default/buckets/your-bucket
 
 # ─── Optional: Email (Postmark) ────────────────────────────────────────────
 # POSTMARK_API_TOKEN=...
@@ -86,6 +99,33 @@ RISER_POLICY_IDS=75,99,100,101,150,200,201,250,251,300
 - **RISER_API_KEY** — Your RiserU API key (sent as `x-api-key` header). Keep this secret; do not commit it.
 - **RISER_POLICY_IDS** — Comma-separated **policy** IDs (not manual IDs). **Manual IDs** from GET `/v1/opdocs/manuals/all` (e.g. 5, 6, 7, 8…) are **not** valid; they return "policy ID invalid". **Policy IDs** are a different set (e.g. 75, 99, 100, 150, 200…). Use the RiserU dashboard to find policy IDs, or use the sample list above (verified working).
 
+### S3 / Cloudflare R2 — variable names to paste your values into
+
+Put these in **`apps/api/.env`** (same file as the block above). Only the **left side** (before `=`) is fixed; you paste secrets on the right.
+
+| Variable | You paste… |
+|----------|------------|
+| **`S3_BUCKET`** | Your R2 **bucket name** exactly as shown in Cloudflare (e.g. `riser-tickets-dev`). |
+| **`S3_REGION`** | For R2 use **`auto`**. For AWS S3 use a real region (e.g. `us-east-1`). |
+| **`S3_ACCESS_KEY_ID`** | R2 **Access Key ID** from **Manage R2 API Tokens** (after creating the token). |
+| **`S3_SECRET_ACCESS_KEY`** | R2 **Secret Access Key** from the same screen (often shown only once). |
+| **`S3_ENDPOINT`** | R2 S3 API URL: `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` — replace `<ACCOUNT_ID>` with your **Account ID** from the R2 overview. **Leave empty** if you use real **AWS S3** (no custom endpoint). |
+| **`S3_DASHBOARD_URL`** | *(Optional)* Link to open the bucket in Cloudflare (for admin “System Monitoring” only). |
+
+**Copy-paste template (R2) — replace nothing on the left; only fill the right side:**
+
+```env
+S3_BUCKET=riser-fit-dev
+S3_REGION=auto
+S3_ACCESS_KEY_ID=4000ae6c3970741ef823719ce4915db9
+S3_SECRET_ACCESS_KEY=b35ff0201614275496591dc186733510d5dae1a70a7744787ef13edc4be9ad84
+S3_ENDPOINT=https://70351b4d20e2e5074b453851f6fe1d80.r2.cloudflarestorage.com
+
+
+Example shape for **`S3_ENDPOINT`** (use your real Account ID): `https://70351b4d20e2e5074b453851f6fe1d80.r2.cloudflarestorage.com`
+
+**Browser uploads:** In Cloudflare **R2 → your bucket → Settings → CORS**, allow your web origin (e.g. `http://localhost:3000` and your production URL) with methods **GET**, **PUT**, **HEAD**.
+
 ---
 
 ## 2. Web (Next.js) — `apps/web/.env.local`
@@ -113,8 +153,9 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 | `DATABASE_URL` | `apps/api/.env` | Yes |
 | `JWT_SECRET` | `apps/api/.env` | Yes |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` | `apps/api/.env` | Yes (for workers/SSE) |
-| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | `apps/api/.env` | Yes (attachments) |
-| `S3_ENDPOINT` | `apps/api/.env` | No (blank for AWS) |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | `apps/api/.env` | Yes (attachments / KB PDFs) |
+| `S3_ENDPOINT` | `apps/api/.env` | Required for **R2** / MinIO; **blank** for AWS S3 |
+| `S3_DASHBOARD_URL` | `apps/api/.env` | No (admin dashboard link only) |
 | `OPENAI_API_KEY` | `apps/api/.env` | No (needed for AI assistant + Riser ingestion) |
 | `RISER_API_BASE_URL`, `RISER_API_KEY`, `RISER_POLICY_IDS` | `apps/api/.env` | No (needed for Riser policy sync) |
 | `TEAMS_WEBHOOK_URL` | `apps/api/.env` | No |

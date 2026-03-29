@@ -33,7 +33,12 @@ export interface AgentResponse {
   content: string;
   actionPlan?: ActionPlan & { requires_confirmation: true };
   toolResults?: Array<{ tool: string; result: unknown }>;
-  sources?: Array<{ title: string; text: string }>;
+  sources?: Array<{
+    documentId: string;
+    title: string;
+    text: string;
+    pagesLabel?: string;
+  }>;
 }
 
 /** OpenAI tool call with function payload (narrows union for type safety). */
@@ -42,6 +47,55 @@ type ToolCallWithFunction = {
   type: 'function';
   function: { name: string; arguments: string };
 };
+
+/** One citation per knowledge document, merged page list in retrieval order. */
+function aggregateKnowledgeSources(
+  chunks: Array<{
+    documentId: string;
+    title: string;
+    text: string;
+    pageNumber: number | null;
+  }>,
+): Array<{
+  documentId: string;
+  title: string;
+  text: string;
+  pagesLabel?: string;
+}> {
+  const order: string[] = [];
+  const byDoc = new Map<
+    string,
+    { title: string; text: string; pages: Set<number> }
+  >();
+
+  for (const c of chunks) {
+    if (!byDoc.has(c.documentId)) {
+      order.push(c.documentId);
+      byDoc.set(c.documentId, {
+        title: c.title,
+        text: c.text,
+        pages: new Set(),
+      });
+    }
+    const row = byDoc.get(c.documentId)!;
+    if (c.pageNumber != null && c.pageNumber > 0) {
+      row.pages.add(Math.floor(c.pageNumber));
+    }
+  }
+
+  return order.map((id) => {
+    const r = byDoc.get(id)!;
+    const sorted = [...r.pages].sort((a, b) => a - b);
+    return {
+      documentId: id,
+      title: r.title,
+      text: r.text,
+      ...(sorted.length > 0
+        ? { pagesLabel: `Pages ${sorted.join(', ')}` }
+        : {}),
+    };
+  });
+}
 
 const SYSTEM_PROMPT = `You are an AI assistant for an internal ticketing system used by ~500 employees.
 
@@ -70,7 +124,7 @@ TOOL USAGE:
 - "How many [urgent/high/medium/low] tickets?" → ALWAYS use get_ticket_metrics with group_by: "priority". Optionally pass priority: ["URGENT"] (or HIGH, etc.) to filter. Then answer with the number(s) from the returned counts.
 - "How many tickets by status/category/market?" → use get_ticket_metrics with the right group_by.
 - To look up specific tickets: use search_tickets or get_ticket.
-- Policy/process questions: use knowledge_search.
+- Handbook, policy, retail tips, HR, procedures, or "what does the company say about…": use knowledge_search first.
 - Create/modify tickets: use the appropriate mutation tool.
 - Find categories or assignees: use list_categories or list_users.
 
@@ -446,14 +500,27 @@ export class AgentService {
       ? 'DO'
       : 'ASK';
 
-    // Detect knowledge search sources
+    // Knowledge search: one citation per document, with merged PDF page numbers
     const knowledgeResults = results.find((r) => r.tool === 'knowledge_search');
-    const sources = knowledgeResults
-      ? ((knowledgeResults.result as any)?.chunks ?? []).map((c: any) => ({
-          title: c.title,
-          text: c.text,
-        }))
-      : undefined;
+    const raw = (knowledgeResults?.result as { chunks?: unknown } | undefined)
+      ?.chunks;
+    const rawChunks = Array.isArray(raw)
+      ? raw.filter(
+          (c): c is {
+            documentId: string;
+            title: string;
+            text: string;
+            pageNumber: number | null;
+          } =>
+            typeof c === 'object' &&
+            c !== null &&
+            typeof (c as { documentId?: unknown }).documentId === 'string' &&
+            typeof (c as { title?: unknown }).title === 'string' &&
+            typeof (c as { text?: unknown }).text === 'string',
+        )
+      : [];
+    const sources =
+      rawChunks.length > 0 ? aggregateKnowledgeSources(rawChunks) : undefined;
 
     const saved = await this.prisma.agentMessage.create({
       data: {

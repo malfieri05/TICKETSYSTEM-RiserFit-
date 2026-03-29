@@ -12,7 +12,9 @@ import {
   Prisma,
 } from '@prisma/client';
 
-const DISTANCE_THRESHOLD = 0.4;
+/** Match AiService RAG — agent was using 0.4 and dropped almost all handbook hits. */
+const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.78;
+const RAG_FALLBACK_TOP_K = 8;
 
 interface ToolResult {
   success: boolean;
@@ -542,9 +544,15 @@ export class ToolRouterService {
 
   // ── knowledge_search ────────────────────────────────────────────────────────
 
+  private getRagDistanceThreshold(): number {
+    const v = this.config.get<string>('RAG_DISTANCE_THRESHOLD');
+    const n = v != null ? parseFloat(v) : RAG_DISTANCE_THRESHOLD_DEFAULT;
+    return Number.isFinite(n) ? n : RAG_DISTANCE_THRESHOLD_DEFAULT;
+  }
+
   private async knowledgeSearch(args: Record<string, unknown>) {
     const query = String(args.query);
-    const limit = Math.min(Number(args.limit) || 5, 10);
+    const limit = Math.min(Number(args.limit) || 8, 12);
 
     let embedding: number[];
     try {
@@ -553,28 +561,75 @@ export class ToolRouterService {
       return { chunks: [], note: 'Embedding service unavailable' };
     }
 
-    const chunks = await this.prisma.$queryRaw<
+    const embLiteral = `[${embedding.join(',')}]`;
+    const threshold = this.getRagDistanceThreshold();
+
+    const docScope = Prisma.sql`
+        AND (
+          kd."documentType" != 'handbook'
+          OR kd."upstreamProvider" = 'riser'
+          OR (
+            kd."documentType" = 'handbook'
+            AND (kd."upstreamProvider" IS NULL OR kd."upstreamProvider" = '')
+          )
+        )`;
+
+    let chunks = await this.prisma.$queryRaw<
       Array<{
         id: string;
         content: string;
+        document_id: string;
         document_title: string;
+        page_number: number | null;
         distance: number;
       }>
     >`
-      SELECT dc.id, dc.content, kd.title AS document_title,
-             dc.embedding <=> ${`[${embedding.join(',')}]`}::vector AS distance
+      SELECT dc.id, dc.content, kd.id AS document_id, kd.title AS document_title,
+             dc."pageNumber" AS page_number,
+             dc.embedding <=> ${embLiteral}::vector AS distance
       FROM "document_chunks" dc
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
-      WHERE kd."isActive" = true AND dc.embedding IS NOT NULL
-        AND dc.embedding <=> ${`[${embedding.join(',')}]`}::vector < ${DISTANCE_THRESHOLD}
+      WHERE kd."isActive" = true
+        AND dc.embedding IS NOT NULL
+        ${docScope}
+        AND dc.embedding <=> ${embLiteral}::vector < ${threshold}
       ORDER BY distance ASC
       LIMIT ${limit}
     `;
 
+    if (chunks.length === 0) {
+      this.logger.debug(
+        `knowledge_search: no chunks under threshold ${threshold}; using nearest-neighbor fallback`,
+      );
+      chunks = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          content: string;
+          document_id: string;
+          document_title: string;
+          page_number: number | null;
+          distance: number;
+        }>
+      >`
+        SELECT dc.id, dc.content, kd.id AS document_id, kd.title AS document_title,
+               dc."pageNumber" AS page_number,
+               dc.embedding <=> ${embLiteral}::vector AS distance
+        FROM "document_chunks" dc
+        JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
+        WHERE kd."isActive" = true
+          AND dc.embedding IS NOT NULL
+          ${docScope}
+        ORDER BY distance ASC
+        LIMIT ${Math.max(limit, RAG_FALLBACK_TOP_K)}
+      `;
+    }
+
     return {
       chunks: chunks.map((c) => ({
+        documentId: c.document_id,
         title: c.document_title,
         text: c.content.slice(0, 500),
+        pageNumber: c.page_number,
       })),
     };
   }

@@ -130,7 +130,11 @@ export default function KnowledgeBasePage() {
         setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       } else if (mode === 'pdf') {
         const res = await aiApi.ingestPdf(title.trim(), pdfFile!);
-        setIngestResult({ ok: true, message: res.data.message ?? `✓ Uploaded "${title}". Indexing in progress.` });
+        const isQueueFail = res.data.status === 'uploaded_queue_failed';
+        setIngestResult({
+          ok: !isQueueFail,
+          message: res.data.message ?? `✓ Uploaded "${title}". Indexing in progress.`,
+        });
       } else {
         const res = await aiApi.ingestFile(title.trim(), file!);
         setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
@@ -139,8 +143,20 @@ export default function KnowledgeBasePage() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (pdfInputRef.current) pdfInputRef.current.value = '';
       qc.invalidateQueries({ queryKey: ['ai-documents'] });
-    } catch {
-      setIngestResult({ ok: false, message: 'Ingestion failed. Check the API logs for details.' });
+    } catch (e: unknown) {
+      const data = (
+        e as { response?: { data?: { message?: string | string[] } } }
+      ).response?.data;
+      let serverMsg: string | undefined;
+      if (typeof data?.message === 'string') serverMsg = data.message;
+      else if (Array.isArray(data?.message)) {
+        serverMsg = data.message.filter((m): m is string => typeof m === 'string').join(', ');
+      }
+      setIngestResult({
+        ok: false,
+        message:
+          serverMsg ?? 'Ingestion failed. Check the API logs for details.',
+      });
     } finally {
       setIngesting(false);
     }

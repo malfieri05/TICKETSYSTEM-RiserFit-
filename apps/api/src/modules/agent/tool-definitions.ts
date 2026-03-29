@@ -264,7 +264,7 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'knowledge_search',
       description:
-        'Search the company knowledge base (RiserU docs, internal docs). Use this to answer policy or process questions.',
+        'Search the company knowledge base (Riser policies, handbook PDFs, pasted docs). Use for ANY question about company rules, HR, retail/operations tips, audits, leave, scheduling, or procedures — not only formal "policies".',
       parameters: {
         type: 'object',
         properties: {
@@ -274,7 +274,7 @@ export const AGENT_TOOLS: ToolDef[] = [
           },
           limit: {
             type: 'number',
-            description: 'Max chunks to retrieve (default 5)',
+            description: 'Max chunks to retrieve (default 8, max 12)',
           },
         },
         required: ['query'],

@@ -5,16 +5,16 @@ import { Queue } from 'bullmq';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { QUEUES, KNOWLEDGE_INGESTION_JOB_OPTIONS } from '../../common/queue/queue.constants';
 import {
-  QUEUES,
-  KnowledgeIngestionJobData,
-  KNOWLEDGE_INGESTION_JOB_OPTIONS,
-} from '../../common/queue/queue.constants';
+  chunkKnowledgeText,
+  chunkKnowledgeTextWithPositions,
+  DEFAULT_CHUNK_OVERLAP_CHARS,
+  DEFAULT_CHUNK_TARGET_CHARS,
+  KNOWLEDGE_CHUNK_PIPELINE_VERSION,
+  KnowledgeChunkOptions,
+} from './knowledge-chunking';
 
-// How many characters per chunk (~300 tokens ≈ 1200 chars for English text)
-const CHUNK_SIZE = 1200;
-// Overlap between consecutive chunks to preserve context at boundaries
-const CHUNK_OVERLAP = 150;
 // OpenAI text-embedding-3-small: 1536 dimensions, cheap & accurate
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
@@ -49,6 +49,32 @@ export class IngestionService {
     return this._openai;
   }
 
+  private getChunkOptions(): KnowledgeChunkOptions {
+    const t = parseInt(
+      this.config.get<string>('KNOWLEDGE_CHUNK_TARGET_CHARS') ?? '',
+      10,
+    );
+    const o = parseInt(
+      this.config.get<string>('KNOWLEDGE_CHUNK_OVERLAP_CHARS') ?? '',
+      10,
+    );
+    const targetChars =
+      Number.isFinite(t) && t >= 400 ? t : DEFAULT_CHUNK_TARGET_CHARS;
+    const overlapChars =
+      Number.isFinite(o) && o >= 40 && o < targetChars
+        ? o
+        : DEFAULT_CHUNK_OVERLAP_CHARS;
+    return { targetChars, overlapChars };
+  }
+
+  /** Extract plain text from a PDF buffer (shared by S3 ingestion and Riser embedded PDF). */
+  async extractPlainTextFromPdfBuffer(buffer: Buffer): Promise<string> {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(buffer);
+    return (data?.text ?? '').trim();
+  }
+
   // ── Public API ─────────────────────────────────────────────────────────────
 
   /** Ingest raw text content into the knowledge base */
@@ -79,7 +105,8 @@ export class IngestionService {
       },
     });
 
-    const chunks = this.splitIntoChunks(content);
+    const chunkOpts = this.getChunkOptions();
+    const chunks = chunkKnowledgeText(content, chunkOpts);
     this.logger.log(`Ingesting "${title}" → ${chunks.length} chunks`);
 
     // Embed in batches of 20 (stay well within OpenAI rate limits)
@@ -111,7 +138,12 @@ export class IngestionService {
 
     await this.prisma.knowledgeDocument.update({
       where: { id: doc.id },
-      data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
+      data: {
+        ingestionStatus: 'indexed',
+        lastIndexedAt: new Date(),
+        chunkPipelineVersion: KNOWLEDGE_CHUNK_PIPELINE_VERSION,
+        sizeBytes: Buffer.byteLength(content, 'utf8'),
+      },
     });
     this.logger.log(
       `Ingestion complete: docId=${doc.id}, chunks=${chunks.length}`,
@@ -133,7 +165,8 @@ export class IngestionService {
       throw new Error(`KnowledgeDocument ${documentId} not found`);
     }
 
-    const chunks = this.splitIntoChunks(content);
+    const chunkOpts = this.getChunkOptions();
+    const chunks = chunkKnowledgeText(content, chunkOpts);
     this.logger.log(
       `Re-ingesting existing document ${documentId} ("${title}") → ${chunks.length} chunks`,
     );
@@ -172,6 +205,8 @@ export class IngestionService {
         ingestionStatus: 'indexed',
         documentType: opts.documentType ?? doc.documentType ?? 'general',
         lastIndexedAt: new Date(),
+        chunkPipelineVersion: KNOWLEDGE_CHUNK_PIPELINE_VERSION,
+        sizeBytes: Buffer.byteLength(content, 'utf8'),
       },
     });
   }
@@ -221,10 +256,20 @@ export class IngestionService {
 
       await this.prisma.documentChunk.deleteMany({ where: { documentId } });
 
-      const chunksWithPos = this.splitIntoChunksWithPositions(text);
+      const chunkOpts = this.getChunkOptions();
+      const chunksWithPos = chunkKnowledgeTextWithPositions(text, chunkOpts);
       this.logger.log(
         `Ingesting document ${documentId} → ${chunksWithPos.length} chunks`,
       );
+      if (chunksWithPos.length === 0) {
+        await this.prisma.knowledgeDocument.update({
+          where: { id: documentId },
+          data: { ingestionStatus: 'failed' },
+        });
+        throw new Error(
+          'Extracted text produced zero chunks after splitting; try paste-text ingest or a different PDF export.',
+        );
+      }
 
       const BATCH = 20;
       const numPages: number =
@@ -238,19 +283,18 @@ export class IngestionService {
         const batch = chunksWithPos.slice(i, i + BATCH);
         const embeddings = await this.embedBatch(batch.map((b) => b.content));
         await Promise.all(
-          batch.map(
-            (chunk, j) => {
-              const absoluteIndex = chunkIndex + j;
-              let pageNumber: number | null = null;
-              if (numPages > 0 && charsPerPage > 0) {
-                const approxPage =
-                  Math.floor(chunk.start / charsPerPage) + 1;
-                pageNumber = Math.min(
-                  numPages,
-                  Math.max(1, approxPage),
-                );
-              }
-              this.prisma.$executeRaw`
+          batch.map((chunk, j) => {
+            const absoluteIndex = chunkIndex + j;
+            let pageNumber: number | null = null;
+            if (numPages > 0 && charsPerPage > 0) {
+              const approxPage =
+                Math.floor(chunk.start / charsPerPage) + 1;
+              pageNumber = Math.min(
+                numPages,
+                Math.max(1, approxPage),
+              );
+            }
+            return this.prisma.$executeRaw`
               INSERT INTO "document_chunks" ("id", "documentId", "chunkIndex", "content", "embedding", "tokenCount", "createdAt", "pageNumber")
               VALUES (
                 ${this.generateId()},
@@ -262,18 +306,36 @@ export class IngestionService {
                 NOW(),
                 ${pageNumber}
               )
-            `},
-          ),
+            `;
+          }),
         );
         chunkIndex += batch.length;
       }
 
+      const storedChunks = await this.prisma.documentChunk.count({
+        where: { documentId },
+      });
+      if (storedChunks === 0) {
+        await this.prisma.knowledgeDocument.update({
+          where: { id: documentId },
+          data: { ingestionStatus: 'failed' },
+        });
+        throw new Error(
+          'Chunk rows were not persisted after PDF ingestion (zero count). Re-index after fixing the server.',
+        );
+      }
+
       await this.prisma.knowledgeDocument.update({
         where: { id: documentId },
-        data: { ingestionStatus: 'indexed', lastIndexedAt: new Date() },
+        data: {
+          ingestionStatus: 'indexed',
+          lastIndexedAt: new Date(),
+          chunkPipelineVersion: KNOWLEDGE_CHUNK_PIPELINE_VERSION,
+          sizeBytes: Buffer.byteLength(text, 'utf8'),
+        },
       });
       this.logger.log(
-        `Ingestion complete: documentId=${documentId}, chunks=${chunksWithPos.length}`,
+        `Ingestion complete: documentId=${documentId}, chunks=${chunksWithPos.length} stored=${storedChunks}`,
       );
     } catch (err) {
       await this.prisma.knowledgeDocument.update({
@@ -300,41 +362,6 @@ export class IngestionService {
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
-
-  /** Split text into overlapping chunks */
-  private splitIntoChunks(text: string): string[] {
-    const chunks: string[] = [];
-    let start = 0;
-
-    while (start < text.length) {
-      const end = Math.min(start + CHUNK_SIZE, text.length);
-      chunks.push(text.slice(start, end).trim());
-      if (end >= text.length) break;
-      start += CHUNK_SIZE - CHUNK_OVERLAP;
-    }
-
-    return chunks.filter((c) => c.length > 20); // drop tiny trailing fragments
-  }
-
-  /** Split text into overlapping chunks, preserving start index (for page approximation) */
-  private splitIntoChunksWithPositions(
-    text: string,
-  ): { content: string; start: number }[] {
-    const chunks: { content: string; start: number }[] = [];
-    let start = 0;
-
-    while (start < text.length) {
-      const end = Math.min(start + CHUNK_SIZE, text.length);
-      const slice = text.slice(start, end).trim();
-      if (slice.length > 20) {
-        chunks.push({ content: slice, start });
-      }
-      if (end >= text.length) break;
-      start += CHUNK_SIZE - CHUNK_OVERLAP;
-    }
-
-    return chunks;
-  }
 
   /** Embed a batch of strings using OpenAI */
   private async embedBatch(texts: string[]): Promise<number[][]> {

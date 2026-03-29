@@ -987,10 +987,12 @@ model KnowledgeDocument {
   upstreamVersion  String?
   reviewOn         DateTime?
   reviewDue        DateTime?
-  lastSyncedAt     DateTime?
-  uploadedById     String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  lastSyncedAt         DateTime?
+  /// Increment when chunking or extraction logic changes; Riser sync re-ingests if below KNOWLEDGE_CHUNK_PIPELINE_VERSION.
+  chunkPipelineVersion Int       @default(1)
+  uploadedById         String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   uploadedBy User            @relation(fields: [uploadedById], references: [id])
   chunks     DocumentChunk[]

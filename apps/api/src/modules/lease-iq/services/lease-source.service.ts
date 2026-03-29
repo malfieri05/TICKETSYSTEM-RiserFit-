@@ -23,6 +23,8 @@ export class LeaseSourceService {
       this.s3 = new S3Client({
         region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
         credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
         ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
       });
       this.bucket = this.config.get<string>('S3_BUCKET') ?? null;

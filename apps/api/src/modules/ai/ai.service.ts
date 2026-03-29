@@ -3,10 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { PrismaService } from '../../common/database/prisma.service';
 import { IngestionService } from './ingestion.service';
+import { RiserPolicySyncService } from './riser-policy-sync.service';
 
 // How many chunks to retrieve for context (general + handbook chat; overridden by RAG_TOP_K env)
 const RAG_TOP_K_DEFAULT = 10;
-const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.58;
+/** Cosine distance (<=>): lower = more similar. ~0.78 passes more paraphrases; tighten with RAG_DISTANCE_THRESHOLD env if needed. */
+const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.78;
+/** When strict filter returns nothing, pull this many nearest chunks anyway (model can still say "not in docs"). */
+const RAG_FALLBACK_TOP_K = 8;
 // Model to use for chat completions
 const CHAT_MODEL = 'gpt-4o-mini';
 
@@ -25,7 +29,10 @@ export interface ChatResponse {
     documentId: string;
     title: string;
     excerpt: string;
+    /** First page among cited chunks (backwards compatible) */
     pageNumber?: number | null;
+    /** Sorted unique pages from all retrieved chunks for this document */
+    pagesLabel?: string;
   }>;
   usedContext: boolean;
 }
@@ -39,6 +46,7 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly ingestion: IngestionService,
+    private readonly riserPolicySync: RiserPolicySyncService,
   ) {
     const key = this.config.get<string>('OPENAI_API_KEY');
     if (key) {
@@ -55,33 +63,110 @@ export class AiService {
     return this._openai;
   }
 
+  /** One source row per document; merge page numbers from all chunks used in RAG. */
+  private buildAggregatedSources(chunks: ChunkRow[]): ChatResponse['sources'] {
+    const order: string[] = [];
+    const byDoc = new Map<
+      string,
+      { title: string; excerpt: string; pages: Set<number> }
+    >();
+
+    for (const c of chunks) {
+      if (!byDoc.has(c.document_id)) {
+        order.push(c.document_id);
+        byDoc.set(c.document_id, {
+          title: c.document_title,
+          excerpt:
+            c.content.slice(0, 200) + (c.content.length > 200 ? '…' : ''),
+          pages: new Set(),
+        });
+      }
+      const row = byDoc.get(c.document_id)!;
+      if (c.page_number != null && c.page_number > 0) {
+        row.pages.add(Math.floor(c.page_number));
+      }
+    }
+
+    return order.map((id) => {
+      const r = byDoc.get(id)!;
+      const sorted = [...r.pages].sort((a, b) => a - b);
+      return {
+        documentId: id,
+        title: r.title,
+        excerpt: r.excerpt,
+        ...(sorted.length > 0
+          ? {
+              pageNumber: sorted[0],
+              pagesLabel: `Pages ${sorted.join(', ')}`,
+            }
+          : {}),
+      };
+    });
+  }
+
   // ── Chat (RAG) ─────────────────────────────────────────────────────────────
 
   async chat(userMessage: string): Promise<ChatResponse> {
     // Step 1: Embed the user's question
     const queryEmbedding = await this.ingestion.embedOne(userMessage);
+    const embLiteral = `[${queryEmbedding.join(',')}]`;
+    const threshold = this.getDistanceThreshold();
+    const topK = this.getTopK();
 
-    // Step 2: Similarity search via pgvector cosine distance (<=>)
-    const chunks = await this.prisma.$queryRaw<ChunkRow[]>`
+    // Step 2: Similarity search — include general docs + all handbooks (Riser + manual uploads)
+    let chunks = await this.prisma.$queryRaw<ChunkRow[]>`
       SELECT
         dc.id,
         dc.content,
         dc."documentId"    AS document_id,
         kd.title           AS document_title,
         dc."pageNumber"    AS page_number,
-        dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector AS distance
+        dc.embedding <=> ${embLiteral}::vector AS distance
       FROM "document_chunks" dc
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
       WHERE kd."isActive" = true
         AND (
           kd."documentType" != 'handbook'
-          OR coalesce(kd."upstreamProvider", '') = 'riser'
+          OR kd."upstreamProvider" = 'riser'
+          OR (
+            kd."documentType" = 'handbook'
+            AND (kd."upstreamProvider" IS NULL OR kd."upstreamProvider" = '')
+          )
         )
         AND dc.embedding IS NOT NULL
-        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${this.getDistanceThreshold()}
+        AND dc.embedding <=> ${embLiteral}::vector < ${threshold}
       ORDER BY distance ASC
-      LIMIT ${this.getTopK()}
+      LIMIT ${topK}
     `;
+
+    if (chunks.length === 0) {
+      this.logger.log(
+        'RAG: no chunks under distance threshold; using nearest-neighbor fallback',
+      );
+      chunks = await this.prisma.$queryRaw<ChunkRow[]>`
+        SELECT
+          dc.id,
+          dc.content,
+          dc."documentId"    AS document_id,
+          kd.title           AS document_title,
+          dc."pageNumber"    AS page_number,
+          dc.embedding <=> ${embLiteral}::vector AS distance
+        FROM "document_chunks" dc
+        JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
+        WHERE kd."isActive" = true
+          AND (
+            kd."documentType" != 'handbook'
+            OR kd."upstreamProvider" = 'riser'
+            OR (
+              kd."documentType" = 'handbook'
+              AND (kd."upstreamProvider" IS NULL OR kd."upstreamProvider" = '')
+            )
+          )
+          AND dc.embedding IS NOT NULL
+        ORDER BY distance ASC
+        LIMIT ${RAG_FALLBACK_TOP_K}
+      `;
+    }
 
     this.logger.debug(`RAG retrieved ${chunks.length} chunks for query`);
 
@@ -124,22 +209,7 @@ Keep answers concise and professional. Never suggest submitting a ticket.`;
       completion.choices[0]?.message?.content ??
       'Sorry, I could not generate a response.';
 
-    // Step 5: Deduplicate sources (one entry per unique document)
-    const seen = new Set<string>();
-    const sources = chunks
-      .filter((c) => {
-        if (seen.has(c.document_id)) return false;
-        seen.add(c.document_id);
-        return true;
-      })
-      .map((c) => ({
-        documentId: c.document_id,
-        title: c.document_title,
-        excerpt:
-          c.content.slice(0, 200) +
-          (c.content.length > 200 ? '…' : ''),
-        pageNumber: c.page_number ?? undefined,
-      }));
+    const sources = this.buildAggregatedSources(chunks);
 
     return { answer, sources, usedContext };
   }
@@ -147,27 +217,60 @@ Keep answers concise and professional. Never suggest submitting a ticket.`;
   /** Handbook-only RAG: same as chat() but filters to documentType = 'handbook'. Studio users only. */
   async chatHandbook(userMessage: string): Promise<ChatResponse> {
     const queryEmbedding = await this.ingestion.embedOne(userMessage);
-    const threshold = Math.min(this.getDistanceThreshold(), 0.4);
+    const embLiteral = `[${queryEmbedding.join(',')}]`;
+    const threshold = this.getDistanceThreshold();
     const topK = this.getTopK();
 
-    const chunks = await this.prisma.$queryRaw<ChunkRow[]>`
+    let chunks = await this.prisma.$queryRaw<ChunkRow[]>`
       SELECT
         dc.id,
         dc.content,
         dc."documentId"    AS document_id,
         kd.title           AS document_title,
         dc."pageNumber"    AS page_number,
-        dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector AS distance
+        dc.embedding <=> ${embLiteral}::vector AS distance
       FROM "document_chunks" dc
       JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
       WHERE kd."isActive" = true
         AND kd."documentType" = 'handbook'
-        AND coalesce(kd."upstreamProvider", '') = 'riser'
+        AND (
+          kd."upstreamProvider" = 'riser'
+          OR kd."upstreamProvider" IS NULL
+          OR kd."upstreamProvider" = ''
+        )
         AND dc.embedding IS NOT NULL
-        AND dc.embedding <=> ${`[${queryEmbedding.join(',')}]`}::vector < ${threshold}
+        AND dc.embedding <=> ${embLiteral}::vector < ${threshold}
       ORDER BY distance ASC
       LIMIT ${topK}
     `;
+
+    if (chunks.length === 0) {
+      this.logger.log(
+        'Handbook RAG: no chunks under threshold; using nearest-neighbor fallback',
+      );
+      chunks = await this.prisma.$queryRaw<ChunkRow[]>`
+        SELECT
+          dc.id,
+          dc.content,
+          dc."documentId"    AS document_id,
+          kd.title           AS document_title,
+          dc."pageNumber"    AS page_number,
+          dc.embedding <=> ${embLiteral}::vector AS distance
+        FROM "document_chunks" dc
+        JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
+        WHERE kd."isActive" = true
+          AND kd."documentType" = 'handbook'
+          AND (
+            kd."upstreamProvider" = 'riser'
+            OR kd."upstreamProvider" IS NULL
+            OR kd."upstreamProvider" = ''
+          )
+          AND dc.embedding IS NOT NULL
+        ORDER BY distance ASC
+        LIMIT ${RAG_FALLBACK_TOP_K}
+      `;
+    }
+
     this.logger.debug(`Handbook RAG retrieved ${chunks.length} chunks`);
 
     let systemPrompt: string;
@@ -200,21 +303,7 @@ ${contextBlocks}`;
       completion.choices[0]?.message?.content ??
       'Sorry, I could not generate a response.';
 
-    const seen = new Set<string>();
-    const sources = chunks
-      .filter((c) => {
-        if (seen.has(c.document_id)) return false;
-        seen.add(c.document_id);
-        return true;
-      })
-      .map((c) => ({
-        documentId: c.document_id,
-        title: c.document_title,
-        excerpt:
-          c.content.slice(0, 200) +
-          (c.content.length > 200 ? '…' : ''),
-        pageNumber: c.page_number ?? undefined,
-      }));
+    const sources = this.buildAggregatedSources(chunks);
 
     return { answer, sources, usedContext };
   }
@@ -263,6 +352,10 @@ ${contextBlocks}`;
       where: { id: documentId },
     });
     if (!doc) throw new NotFoundException(`Document ${documentId} not found`);
+    if (doc.upstreamProvider === 'riser' && doc.upstreamId) {
+      await this.riserPolicySync.reindexRiserDocument(documentId);
+      return;
+    }
     if (!doc.s3Key)
       throw new NotFoundException('Document has no stored file to re-index');
     await this.prisma.knowledgeDocument.update({

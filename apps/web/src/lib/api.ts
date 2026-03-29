@@ -16,6 +16,15 @@ api.interceptors.request.use((config) => {
       config.headers.Authorization = `Bearer ${token}`;
     }
   }
+  // Default Content-Type is application/json; FormData must omit it so the runtime sets
+  // multipart/form-data with a proper boundary (manual multipart header breaks multer).
+  if (config.data instanceof FormData) {
+    if (typeof config.headers.delete === 'function') {
+      config.headers.delete('Content-Type');
+    } else {
+      delete (config.headers as Record<string, unknown>)['Content-Type'];
+    }
+  }
   return config;
 });
 
@@ -385,9 +394,7 @@ export const aiApi = {
     const form = new FormData();
     form.append('file', file);
     form.append('title', title);
-    return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/file', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/file', form);
   },
 
   /** Upload a PDF for handbook ingestion (admin). Max 15MB. Stores in S3 and enqueues ingestion. */
@@ -395,9 +402,7 @@ export const aiApi = {
     const form = new FormData();
     form.append('file', file);
     form.append('title', title);
-    return api.post<{ documentId: string; status: string; message: string }>('/ai/ingest/pdf', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post<{ documentId: string; status: string; message: string }>('/ai/ingest/pdf', form);
   },
 
   /** Re-index a knowledge document (admin). Requires document to have stored file (s3Key). */
@@ -438,7 +443,12 @@ export interface AgentResponse {
   content: string;
   actionPlan?: AgentActionPlan;
   toolResults?: Array<{ tool: string; result: unknown }>;
-  sources?: Array<{ title: string; text: string }>;
+  sources?: Array<{
+    documentId: string;
+    title: string;
+    text: string;
+    pagesLabel?: string;
+  }>;
 }
 
 export const agentApi = {
@@ -727,9 +737,7 @@ export const leaseIqApi = {
   uploadSource: (studioId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
-    return api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/upload`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/upload`, form);
   },
   pasteSource: (studioId: string, pastedText: string) =>
     api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/paste`, { pastedText }),

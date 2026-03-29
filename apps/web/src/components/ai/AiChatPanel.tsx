@@ -21,7 +21,12 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   mode?: 'ASK' | 'DO';
-  sources?: Array<{ title: string; text: string }>;
+  sources?: Array<{
+    documentId: string;
+    title: string;
+    text: string;
+    pagesLabel?: string;
+  }>;
   actionPlan?: AgentActionPlan;
   toolResults?: Array<{ tool: string; result: unknown }>;
   isLoading?: boolean;
@@ -285,15 +290,20 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
 
               {msg.sources && msg.sources.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {msg.sources.map((src, i) => (
+                  {msg.sources.map((src) => (
                     <div
-                      key={i}
+                      key={src.documentId}
                       title={src.text}
-                      className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                      className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs max-w-full"
                       style={{ background: 'rgba(52,120,196,0.15)', border: '1px solid rgba(52,120,196,0.3)', color: 'var(--color-text-primary)' }}
                     >
                       <BookOpen className="h-2.5 w-2.5 shrink-0" />
-                      {src.title}
+                      <span className="truncate">
+                        {src.title}
+                        {src.pagesLabel ? (
+                          <span className="opacity-85 font-normal"> · {src.pagesLabel}</span>
+                        ) : null}
+                      </span>
                     </div>
                   ))}
                 </div>

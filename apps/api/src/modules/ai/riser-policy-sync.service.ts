@@ -1,26 +1,23 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/database/prisma.service';
 import { IngestionService } from './ingestion.service';
 import { htmlToText } from 'html-to-text';
+import { KNOWLEDGE_CHUNK_PIPELINE_VERSION } from './knowledge-chunking';
 
 /**
  * RiserU Op Central API — contract confirmed from vendor docs.
  *
  * Docs: https://riseru.opcentral.com.au/#/api-documentation/overview
  *
- * Confirmed:
- * - Auth: Header x-api-key: <RISER_API_KEY> (Op Central requirement).
- * - Base URL: RISER_API_BASE_URL with no trailing slash (we normalize).
- *   Example: https://riseru.api.opcentral.com.au
- * - Endpoint: GET {baseUrl}/v1/opdocs/policy/{policy_id}
- * - Note: Policy IDs are not the same as manual IDs from GET /v1/opdocs/manuals/all. Use policy IDs (e.g. from RiserU dashboard).
- *
- * Policy Details response (vendor-documented):
- * - id (number or string), title, content (HTML) — required.
- * - version (number or string), review_on, review_due (YYYY-MM-DD HH:MM:SS) — optional.
- * - videos, attachments, embedded_pdf — we ignore for sync; we only ingest id, title, content, version, review_*.
- * We defensively accept body as fallback for content.
+ * - GET {baseUrl}/v1/opdocs/policy/{policy_id} with x-api-key
+ * - Response: id, title, content (HTML), optional version, review_*, embedded_pdf, attachments, etc.
+ * - We ingest HTML (and body fallback) plus optional embedded_pdf text extraction.
  */
 
 interface RiserPolicy {
@@ -30,11 +27,11 @@ interface RiserPolicy {
   version?: string;
   review_on?: string | null;
   review_due?: string | null;
+  /** Raw API field for PDF extraction (url string, base64, or object). */
+  embeddedPdf?: unknown;
 }
 
-type FetchPolicyResult =
-  | { policy: RiserPolicy }
-  | { reason: string };
+type FetchPolicyResult = { policy: RiserPolicy } | { reason: string };
 
 @Injectable()
 export class RiserPolicySyncService {
@@ -46,14 +43,6 @@ export class RiserPolicySyncService {
     private readonly ingestion: IngestionService,
   ) {}
 
-  /**
-   * Determine which user should be recorded as the "uploader" for Riser policies.
-   * Priority:
-   * 1) First ADMIN user
-   * 2) The initiating user (current admin triggering the sync)
-   * If neither is available, return null instead of throwing so callers can
-   * treat this as an operational failure rather than a 400.
-   */
   private async getUploaderId(
     initiatorUserId?: string,
   ): Promise<string | null> {
@@ -70,11 +59,6 @@ export class RiserPolicySyncService {
     return null;
   }
 
-  /**
-   * Sync a set of Riser policies into the knowledge base.
-   * Policy IDs are sourced from RISER_POLICY_IDS (comma-separated).
-   * When env is missing, returns configMissing: true so the UI can show a clear message.
-   */
   async syncAllPolicies(initiatorUserId?: string): Promise<{
     synced: number;
     skipped: number;
@@ -117,7 +101,11 @@ export class RiserPolicySyncService {
       };
     }
 
-    const results: { id: string; status: 'synced' | 'skipped' | 'failed'; reason?: string }[] = [];
+    const results: {
+      id: string;
+      status: 'synced' | 'skipped' | 'failed';
+      reason?: string;
+    }[] = [];
     let synced = 0;
     let skipped = 0;
     let failed = 0;
@@ -127,12 +115,18 @@ export class RiserPolicySyncService {
         const fetchResult = await this.fetchPolicy(baseUrl, apiKey, policyId);
         if ('reason' in fetchResult) {
           failed += 1;
-          results.push({ id: policyId, status: 'failed', reason: fetchResult.reason });
+          results.push({
+            id: policyId,
+            status: 'failed',
+            reason: fetchResult.reason,
+          });
           continue;
         }
 
         const changed = await this.upsertPolicyDocument(
           fetchResult.policy,
+          baseUrl,
+          apiKey,
           initiatorUserId,
         );
         if (!changed) {
@@ -155,6 +149,69 @@ export class RiserPolicySyncService {
     }
 
     return { synced, skipped, failed, details: results };
+  }
+
+  /**
+   * Re-fetch a Riser policy by upstream id and re-chunk / re-embed (no S3 file).
+   */
+  async reindexRiserDocument(documentId: string): Promise<void> {
+    const doc = await this.prisma.knowledgeDocument.findUnique({
+      where: { id: documentId },
+    });
+    if (!doc || doc.upstreamProvider !== 'riser' || !doc.upstreamId) {
+      throw new NotFoundException('Riser knowledge document not found');
+    }
+
+    const baseUrl = this.config.get<string>('RISER_API_BASE_URL')?.trim() || '';
+    const apiKey = this.config.get<string>('RISER_API_KEY')?.trim() || '';
+    if (!baseUrl || !apiKey) {
+      throw new BadRequestException(
+        'RISER_API_BASE_URL and RISER_API_KEY must be set to reindex Riser documents',
+      );
+    }
+
+    const fetchResult = await this.fetchPolicy(
+      baseUrl,
+      apiKey,
+      doc.upstreamId,
+    );
+    if ('reason' in fetchResult) {
+      throw new BadRequestException(fetchResult.reason);
+    }
+
+    const policy = fetchResult.policy;
+    const plain = await this.buildIngestPlainText(policy, baseUrl, apiKey);
+    if (!plain) {
+      throw new BadRequestException('No extractable text for this policy');
+    }
+
+    const reviewOn = policy.review_on ? new Date(policy.review_on) : null;
+    const reviewDue = policy.review_due ? new Date(policy.review_due) : null;
+    const now = new Date();
+
+    await this.ingestion.reingestExistingDocumentFromText(
+      doc.id,
+      policy.title,
+      plain,
+      { documentType: 'handbook' },
+    );
+
+    await this.prisma.knowledgeDocument.update({
+      where: { id: doc.id },
+      data: {
+        title: policy.title,
+        upstreamVersion: policy.version ?? null,
+        reviewOn,
+        reviewDue,
+        lastSyncedAt: now,
+        chunkPipelineVersion: KNOWLEDGE_CHUNK_PIPELINE_VERSION,
+        sizeBytes: Buffer.byteLength(plain, 'utf8'),
+      },
+    });
+
+    this.logger.log(
+      `Riser reindex documentId=${documentId} upstreamId=${doc.upstreamId} plainChars=${plain.length}`,
+    );
   }
 
   private async fetchPolicy(
@@ -186,20 +243,25 @@ export class RiserPolicySyncService {
     if (!res.ok) {
       const snippet = bodyText.slice(0, 200).replace(/\s+/g, ' ').trim();
       if (status === 401) {
-        this.logger.warn(`Riser policy fetch ${policyId}: 401 Unauthorized — check RISER_API_KEY. ${snippet ? `Body: ${snippet}` : ''}`);
+        this.logger.warn(
+          `Riser policy fetch ${policyId}: 401 Unauthorized — check RISER_API_KEY. ${snippet ? `Body: ${snippet}` : ''}`,
+        );
         return { reason: 'Unauthorized (check RISER_API_KEY)' };
       }
       if (status === 403) {
-        this.logger.warn(`Riser policy fetch ${policyId}: 403 Forbidden. ${snippet ? `Body: ${snippet}` : ''}`);
+        this.logger.warn(
+          `Riser policy fetch ${policyId}: 403 Forbidden. ${snippet ? `Body: ${snippet}` : ''}`,
+        );
         return { reason: 'Forbidden (API key may lack access)' };
       }
       if (status === 404) {
         this.logger.debug(`Riser policy fetch ${policyId}: 404 Not found.`);
         return { reason: 'Policy not found' };
       }
-      // 400/481 = invalid policy ID. Manual IDs from /manuals/all are NOT valid for /policy/{id}.
       if ((status === 400 || status === 481) && /invalid|policy\s*id/i.test(snippet)) {
-        this.logger.warn(`Riser policy fetch ${policyId}: invalid policy ID (manual IDs from /manuals/all are not policy IDs).`);
+        this.logger.warn(
+          `Riser policy fetch ${policyId}: invalid policy ID (manual IDs from /manuals/all are not policy IDs).`,
+        );
         return {
           reason:
             'Policy ID invalid. Use policy IDs (not manual IDs from /manuals/all). Get policy IDs from the RiserU dashboard or try known IDs (e.g. 100, 200).',
@@ -208,7 +270,9 @@ export class RiserPolicySyncService {
       this.logger.warn(
         `Riser policy fetch ${policyId}: ${status} ${res.statusText}. ${snippet ? `Body: ${snippet}` : ''}`,
       );
-      return { reason: `Upstream error ${status}${snippet ? `: ${snippet}` : ''}` };
+      return {
+        reason: `Upstream error ${status}${snippet ? `: ${snippet}` : ''}`,
+      };
     }
 
     let data: unknown;
@@ -225,13 +289,18 @@ export class RiserPolicySyncService {
     }
 
     const obj = data as Record<string, unknown>;
-    // Vendor docs: id can be number (e.g. 1); version can be number (e.g. 1.2)
     const id = obj.id != null ? String(obj.id) : undefined;
     const title = typeof obj.title === 'string' ? obj.title : undefined;
-    const content = typeof obj.content === 'string' ? obj.content : (typeof obj.body === 'string' ? obj.body : undefined);
+    const content =
+      typeof obj.content === 'string'
+        ? obj.content
+        : typeof obj.body === 'string'
+          ? obj.body
+          : undefined;
     const version = obj.version != null ? String(obj.version) : undefined;
     const reviewOn = obj.review_on != null ? String(obj.review_on) : null;
     const reviewDue = obj.review_due != null ? String(obj.review_due) : null;
+    const embeddedPdf = obj.embedded_pdf ?? obj.embeddedPdf;
 
     if (!id || !title) {
       this.logger.warn(`Riser policy ${policyId}: missing id or title.`);
@@ -250,12 +319,179 @@ export class RiserPolicySyncService {
         version,
         review_on: reviewOn || undefined,
         review_due: reviewDue || undefined,
+        embeddedPdf,
       },
     };
   }
 
+  private stripHtmlScripts(html: string): string {
+    return html
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
+  }
+
+  private htmlToPlain(html: string): string {
+    const cleaned = this.stripHtmlScripts(html);
+    const headingOptions = {
+      uppercase: false,
+      leadingLineBreaks: 1,
+      trailingLineBreaks: 1,
+    };
+    return htmlToText(cleaned, {
+      wordwrap: false,
+      selectors: [
+        { selector: 'a', options: { ignoreHref: true } },
+        { selector: 'img', format: 'skip' },
+        { selector: 'h1', options: { ...headingOptions } },
+        { selector: 'h2', options: { ...headingOptions } },
+        { selector: 'h3', options: { ...headingOptions } },
+        { selector: 'h4', options: { ...headingOptions } },
+        { selector: 'h5', options: { ...headingOptions } },
+        { selector: 'h6', options: { ...headingOptions } },
+        {
+          selector: 'table',
+          options: {
+            uppercaseHeadings: false,
+            rowSpacing: 1,
+          },
+        },
+        { selector: 'ul', options: { itemPrefix: '• ' } },
+        { selector: 'ol', options: { uppercase: false } },
+      ],
+    }).trim();
+  }
+
+  private resolveAssetUrl(baseUrl: string, u: string): string {
+    const t = u.trim();
+    if (/^https?:\/\//i.test(t)) return t;
+    const b = baseUrl.replace(/\/+$/, '');
+    const path = t.startsWith('/') ? t : `/${t}`;
+    return `${b}${path}`;
+  }
+
+  private parseEmbeddedPdfSpec(
+    embedded: unknown,
+  ): { url?: string; base64?: string } | null {
+    if (embedded == null) return null;
+    if (typeof embedded === 'string') {
+      const s = embedded.trim();
+      if (!s) return null;
+      if (/^https?:\/\//i.test(s)) return { url: s };
+      const compact = s.replace(/\s/g, '');
+      if (
+        compact.length > 80 &&
+        /^[A-Za-z0-9+/]+=*$/.test(compact.slice(0, 200))
+      ) {
+        return { base64: compact };
+      }
+      return { url: s };
+    }
+    if (typeof embedded === 'object') {
+      const o = embedded as Record<string, unknown>;
+      for (const key of ['url', 'file_url', 'href', 'src'] as const) {
+        if (typeof o[key] === 'string' && (o[key] as string).trim()) {
+          return { url: (o[key] as string).trim() };
+        }
+      }
+      if (typeof o.data === 'string' && o.data.trim()) {
+        return { base64: o.data.replace(/\s/g, '') };
+      }
+      if (typeof o.base64 === 'string' && o.base64.trim()) {
+        return { base64: o.base64.replace(/\s/g, '') };
+      }
+    }
+    return null;
+  }
+
+  private async fetchPdfBuffer(
+    spec: { url?: string; base64?: string },
+    baseUrl: string,
+    apiKey: string,
+  ): Promise<Buffer | null> {
+    if (spec.base64) {
+      try {
+        return Buffer.from(spec.base64, 'base64');
+      } catch {
+        this.logger.warn('Riser embedded_pdf: invalid base64');
+        return null;
+      }
+    }
+    if (!spec.url) return null;
+    const resolved = this.resolveAssetUrl(baseUrl, spec.url);
+    try {
+      let res = await fetch(resolved, {
+        headers: { 'x-api-key': apiKey },
+      });
+      if (res.status === 401 || res.status === 403) {
+        res = await fetch(resolved);
+      }
+      if (!res.ok) {
+        this.logger.warn(
+          `Riser embedded PDF fetch failed ${res.status} for ${resolved.slice(0, 80)}…`,
+        );
+        return null;
+      }
+      const ab = await res.arrayBuffer();
+      return Buffer.from(ab);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`Riser embedded PDF fetch error: ${msg}`);
+      return null;
+    }
+  }
+
+  private async buildIngestPlainText(
+    policy: RiserPolicy,
+    baseUrl: string,
+    apiKey: string,
+  ): Promise<string> {
+    const htmlLen = policy.content.length;
+    let fromHtml = this.htmlToPlain(policy.content);
+    const parts: string[] = [];
+    if (fromHtml) parts.push(fromHtml);
+
+    const spec = this.parseEmbeddedPdfSpec(policy.embeddedPdf);
+    let pdfChars = 0;
+    if (spec) {
+      const buf = await this.fetchPdfBuffer(spec, baseUrl, apiKey);
+      if (buf && buf.length > 0) {
+        const pdfHeader = buf.subarray(0, 5).toString('ascii');
+        if (pdfHeader.startsWith('%PDF')) {
+          try {
+            const pdfText = await this.ingestion.extractPlainTextFromPdfBuffer(buf);
+            if (pdfText) {
+              pdfChars = pdfText.length;
+              parts.push(
+                '\n\n---\nEmbedded policy PDF (extracted text)\n---\n\n' +
+                  pdfText,
+              );
+            }
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            this.logger.warn(`Riser policy ${policy.id}: PDF parse failed — ${msg}`);
+          }
+        }
+      }
+    }
+
+    const combined = parts.join('\n').trim();
+    const chunkPreview = combined
+      ? // rough chunk count uses same defaults as ingestion (1600 target)
+        Math.max(1, Math.ceil(combined.length / 1400))
+      : 0;
+
+    this.logger.log(
+      `Riser policy ${policy.id} "${policy.title.slice(0, 60)}": htmlChars=${htmlLen} plainHtmlChars=${fromHtml.length} pdfExtractChars=${pdfChars} combinedChars=${combined.length} estChunks≥${chunkPreview}`,
+    );
+
+    return combined;
+  }
+
   private async upsertPolicyDocument(
     policy: RiserPolicy,
+    baseUrl: string,
+    apiKey: string,
     initiatorUserId?: string,
   ): Promise<boolean> {
     const existing = await this.prisma.knowledgeDocument.findFirst({
@@ -269,8 +505,12 @@ export class RiserPolicySyncService {
     const reviewDue = policy.review_due ? new Date(policy.review_due) : null;
     const now = new Date();
 
-    // If nothing changed at metadata level, we can conservatively skip re-indexing.
+    const pipelineOk =
+      existing &&
+      existing.chunkPipelineVersion >= KNOWLEDGE_CHUNK_PIPELINE_VERSION;
+
     if (
+      pipelineOk &&
       existing &&
       existing.upstreamVersion === policy.version &&
       existing.reviewOn?.getTime() === reviewOn?.getTime() &&
@@ -283,27 +523,21 @@ export class RiserPolicySyncService {
       return false;
     }
 
-    // Convert HTML to text for ingestion
-    const text = htmlToText(policy.content, {
-      wordwrap: false,
-      selectors: [{ selector: 'a', options: { ignoreHref: true } }],
-    }).trim();
+    const text = await this.buildIngestPlainText(policy, baseUrl, apiKey);
 
     if (!text) {
-      this.logger.warn(`Riser policy ${policy.id} produced no text after HTML conversion.`);
+      this.logger.warn(`Riser policy ${policy.id} produced no text after conversion.`);
       return false;
     }
 
     if (!existing) {
-      // Create new document + ingest text; treat as handbook
       const uploaderId = await this.getUploaderId(initiatorUserId);
       if (!uploaderId) {
-        // Operational failure: no suitable uploader user. Let caller record as failed.
         throw new Error(
           'No uploader user available to associate with Riser policy document.',
         );
       }
-      const { documentId } = await this.ingestion.ingestText(
+      const { documentId, chunksCreated } = await this.ingestion.ingestText(
         policy.title,
         text,
         uploaderId,
@@ -323,12 +557,21 @@ export class RiserPolicySyncService {
           lastSyncedAt: now,
         },
       });
+      this.logger.log(
+        `Riser policy ${policy.id} indexed: chunksCreated=${chunksCreated} combinedChars=${text.length}`,
+      );
       return true;
     }
 
-    // Re-ingest for existing document: delete chunks, re-embed, update metadata.
-    await this.ingestion.reingestExistingDocumentFromText(existing.id, policy.title, text, {
-      documentType: 'handbook',
+    await this.ingestion.reingestExistingDocumentFromText(
+      existing.id,
+      policy.title,
+      text,
+      { documentType: 'handbook' },
+    );
+
+    const chunksCount = await this.prisma.documentChunk.count({
+      where: { documentId: existing.id },
     });
 
     await this.prisma.knowledgeDocument.update({
@@ -341,7 +584,10 @@ export class RiserPolicySyncService {
       },
     });
 
+    this.logger.log(
+      `Riser policy ${policy.id} re-indexed: chunks=${chunksCount} combinedChars=${text.length}`,
+    );
+
     return true;
   }
 }
-

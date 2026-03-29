@@ -11,8 +11,10 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  BadGatewayException,
   ForbiddenException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -217,13 +219,76 @@ export class AiController {
       },
     );
     const s3Key = `knowledge/${doc.id}.pdf`;
-    await this.attachmentsService.uploadBuffer(
-      s3Key,
-      file.buffer,
-      'application/pdf',
-    );
-    await this.aiService.updateDocumentS3Key(doc.id, s3Key);
-    await this.ingestionService.enqueueIngestionJob(doc.id);
+    let uploadedToS3 = false;
+    try {
+      await this.attachmentsService.uploadBuffer(
+        s3Key,
+        file.buffer,
+        'application/pdf',
+      );
+      uploadedToS3 = true;
+      await this.aiService.updateDocumentS3Key(doc.id, s3Key);
+    } catch (err) {
+      try {
+        if (uploadedToS3) {
+          try {
+            await this.attachmentsService.deleteObjectByKey(s3Key);
+          } catch (delErr) {
+            this.logger.warn(
+              `Failed to delete orphan S3 object ${s3Key} after ingest failure`,
+              delErr,
+            );
+          }
+        }
+        await this.ingestionService.deleteDocument(doc.id);
+      } catch (cleanupErr) {
+        this.logger.error(
+          `Failed to cleanup knowledge doc ${doc.id} after PDF ingest failure`,
+          cleanupErr,
+        );
+      }
+
+      const meta =
+        err && typeof err === 'object' && '$metadata' in err
+          ? (err as { $metadata?: { httpStatusCode?: number } }).$metadata
+          : undefined;
+      const name =
+        err && typeof err === 'object' && 'name' in err
+          ? String((err as { name?: string }).name)
+          : 'Error';
+      const message =
+        err instanceof Error ? err.message : String(err);
+      this.logger.error(
+        `PDF ingest storage step failed for doc ${doc.id}: ${name} — ${message} httpStatus=${meta?.httpStatusCode ?? 'n/a'}`,
+        err instanceof Error ? err.stack : undefined,
+      );
+
+      const clientMsg =
+        'Storage upload failed. Check S3/R2 bucket name, endpoint (S3_ENDPOINT), region (use `auto` for R2), and credentials.';
+      const code = meta?.httpStatusCode;
+      if (code === 503 || code === 429) {
+        throw new ServiceUnavailableException(clientMsg);
+      }
+      throw new BadGatewayException(clientMsg);
+    }
+
+    try {
+      await this.ingestionService.enqueueIngestionJob(doc.id);
+    } catch (queueErr) {
+      const qmsg =
+        queueErr instanceof Error ? queueErr.message : String(queueErr);
+      this.logger.error(
+        `Knowledge ingestion job enqueue failed for ${doc.id}: ${qmsg}`,
+        queueErr instanceof Error ? queueErr.stack : undefined,
+      );
+      return {
+        documentId: doc.id,
+        status: 'uploaded_queue_failed',
+        message:
+          'PDF uploaded to storage but indexing could not be queued. Check Redis, then use Re-index when the queue is healthy.',
+      };
+    }
+
     this.logger.log(
       `Admin ${user.id} uploaded PDF: "${file.originalname}" → documentId=${doc.id}, job enqueued`,
     );
