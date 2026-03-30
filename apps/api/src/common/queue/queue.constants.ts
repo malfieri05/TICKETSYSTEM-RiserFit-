@@ -5,6 +5,7 @@ export const QUEUES = {
   SCHEDULED: 'scheduled-jobs',
   KNOWLEDGE_INGESTION: 'knowledge-ingestion',
   EMAIL_INGEST: 'email-ingest',
+  INVITE_EMAIL: 'invite-email',
 } as const;
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
@@ -37,6 +38,12 @@ export interface KnowledgeIngestionJobData {
   documentId: string;
 }
 
+export interface InviteEmailJobData {
+  to: string;
+  inviteLink: string;
+  seedName: string;
+}
+
 // ─── Queue Options ───────────────────────────────────────────────────────────
 
 export const FANOUT_JOB_OPTIONS = {
@@ -65,4 +72,11 @@ export const EMAIL_INGEST_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 30_000 },
   removeOnComplete: 50,
   removeOnFail: 100,
+};
+
+export const INVITE_EMAIL_JOB_OPTIONS = {
+  attempts: 5,
+  backoff: { type: 'exponential' as const, delay: 5_000 },
+  removeOnComplete: 100,
+  removeOnFail: 200,
 };

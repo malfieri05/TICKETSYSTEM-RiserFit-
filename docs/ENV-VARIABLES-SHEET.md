@@ -47,9 +47,10 @@ S3_ENDPOINT=
 # Optional: link shown in Admin → System Monitoring (paste Cloudflare R2 bucket URL if you want)
 # S3_DASHBOARD_URL=https://dash.cloudflare.com/.../r2/default/buckets/your-bucket
 
-# ─── Optional: Email (Postmark) ────────────────────────────────────────────
-# POSTMARK_API_TOKEN=...
-# POSTMARK_FROM_EMAIL=tickets@yourcompany.com
+# ─── Invite emails (Resend) — full paste template is in this doc under "Invite emails (Resend)"
+# ─── Other transactional email (Postmark) — ticket notifications, still optional
+# POSTMARK_API_TOKEN=
+# POSTMARK_FROM_EMAIL=
 
 # ─── Optional: MS Teams notifications ──────────────────────────────────────
 # TEAMS_WEBHOOK_URL=https://yourcompany.webhook.office.com/...
@@ -63,6 +64,10 @@ S3_ENDPOINT=
 
 # ─── Optional: AI Assistant (OpenAI) ───────────────────────────────────────
 # OPENAI_API_KEY=sk-...
+# Knowledge ingestion: optional tuning (defaults are safe for large PDFs)
+# KNOWLEDGE_CHUNK_TARGET_CHARS=1600
+# KNOWLEDGE_CHUNK_OVERLAP_CHARS=200
+# KNOWLEDGE_EMBEDDING_BATCH_SIZE=10   # embeddings per OpenAI call (1–64; lower if you see API errors on huge docs)
 
 # ─── Optional: RiserU / Op Central policy sync (Knowledge Base) ───────────
 # Base URL from RiserU API docs (no trailing slash):
@@ -86,6 +91,61 @@ S3_ENDPOINT=
 # SENTRY_DASHBOARD_URL=...
 # S3_DASHBOARD_URL=...
 ```
+
+### Invite emails (Resend) — add to `apps/api/.env`
+
+**Invite mail** uses **Resend** when `RESEND_API_KEY` is set. If it is unset, invite sending falls back to **Postmark** (`POSTMARK_API_TOKEN`), then to **console-only dev** logging.
+
+Copy the block below into `apps/api/.env` and replace every `paste-…` / example value.
+
+```env
+# ─── Required for invite delivery (Resend) ─────────────────────────────────
+RESEND_API_KEY=paste-your-resend-api-key-here
+
+# From line must be allowed in Resend (verified domain or Resend test sender).
+# Use quotes if you include a display name.
+RESEND_FROM_EMAIL="Riser Fitness <notifications@quantumindustries.ai>"
+
+# Public URL of the Next.js app (no trailing slash). Invite links are:
+#   {WEB_PUBLIC_URL}/invite/accept?token=...
+# Local: http://localhost:3000  |  Production: https://riser.quantumindustries.ai
+WEB_PUBLIC_URL=http://localhost:3000
+
+# ─── Optional (invites) ────────────────────────────────────────────────────
+# INVITE_FROM_EMAIL=   # If set, overrides RESEND_FROM_EMAIL for invite mail only
+
+# INVITE_TOKEN_TTL_DAYS=7
+# INVITE_MAX_RESENDS_PER_DAY=5
+# INVITE_VALIDATE_MAX_PER_HASH_WINDOW=30
+
+# Send invite email in-process (skip Bull queue). Handy if workers are not running locally.
+# INVITE_EMAIL_SYNC_DEV=true
+
+# Production: 64 hex chars (32 bytes) so resend/regenerate can unwrap the same token.
+# Dev may fall back to JWT_SECRET if unset — set explicitly in prod.
+# INVITE_TOKEN_WRAP_KEY=paste-64-char-hex
+
+# Fallback: use Postmark for invites only if RESEND_API_KEY is unset
+# POSTMARK_API_TOKEN=
+# POSTMARK_FROM_EMAIL=
+```
+
+| Variable | You paste / set… |
+|----------|-------------------|
+| **`RESEND_API_KEY`** | Resend dashboard → **API Keys** → key starting with `re_`. |
+| **`RESEND_FROM_EMAIL`** | Exact **From** Resend accepts (e.g. `Name <you@your-verified-domain.com>`). Must match **Domains** or sender rules in Resend. |
+| **`WEB_PUBLIC_URL`** | Browser origin users open for the app (**not** the API host). Same as your Next.js public URL. |
+| **`INVITE_FROM_EMAIL`** | *(Optional)* Only if invite From should differ from `RESEND_FROM_EMAIL`. |
+| **`INVITE_TOKEN_TTL_DAYS`** | *(Optional)* Days until the link expires (default `7`). |
+| **`INVITE_MAX_RESENDS_PER_DAY`** | *(Optional)* Admin **Resend** cap per invite per rolling 24h (default `5`). |
+| **`INVITE_VALIDATE_MAX_PER_HASH_WINDOW`** | *(Optional)* Max failed validate attempts per token per window (default `30`). |
+| **`INVITE_EMAIL_SYNC_DEV`** | *(Optional)* `true` = send invite mail in the API process (no worker). |
+| **`INVITE_TOKEN_WRAP_KEY`** | *(Optional in dev)* **Required in production** for resend without regenerating: 64 hex characters = 32 bytes. |
+| **`POSTMARK_*`** | Used for **invites** only if `RESEND_API_KEY` is empty; ticket email notifications still use Postmark separately if configured. |
+
+**After saving:** restart the **API** and ensure the **worker** process is running so the `invite-email` queue is processed (unless `INVITE_EMAIL_SYNC_DEV=true`).
+
+---
 
 **Copy-paste for RiserU only (add to `apps/api/.env`):**
 
@@ -159,7 +219,9 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 | `OPENAI_API_KEY` | `apps/api/.env` | No (needed for AI assistant + Riser ingestion) |
 | `RISER_API_BASE_URL`, `RISER_API_KEY`, `RISER_POLICY_IDS` | `apps/api/.env` | No (needed for Riser policy sync) |
 | `TEAMS_WEBHOOK_URL` | `apps/api/.env` | No |
-| `POSTMARK_API_TOKEN`, `POSTMARK_FROM_EMAIL` | `apps/api/.env` | No |
+| `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `WEB_PUBLIC_URL` | `apps/api/.env` | No (needed for **invite** email delivery via Resend) |
+| `INVITE_FROM_EMAIL`, `INVITE_TOKEN_WRAP_KEY`, `INVITE_*` tuning, `INVITE_EMAIL_SYNC_DEV` | `apps/api/.env` | No (invite-specific; see subsection above) |
+| `POSTMARK_API_TOKEN`, `POSTMARK_FROM_EMAIL` | `apps/api/.env` | No (ticket notifications; invite fallback if Resend unset) |
 | `NEXT_PUBLIC_API_URL` | `apps/web/.env.local` | No (defaults to `http://localhost:3001`) |
 
 ---

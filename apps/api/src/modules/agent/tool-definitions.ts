@@ -18,7 +18,7 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'get_current_user_context',
       description:
-        "Get the logged-in user's id, role, team, studio, market, and permissions scope.",
+        "Get the logged-in user's id, role, team, studio, market, and permissions scope. Call before answering role-dependent how-to questions (e.g. admin-only screens vs studio portal) so you do not send users to URLs they cannot access.",
       parameters: { type: 'object', properties: {}, required: [] },
     },
   },
@@ -227,15 +227,49 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'get_ticket_metrics',
       description:
-        'Get ticket counts. Use for "how many X tickets" questions. Group by status, priority, category, or market. Optionally filter by priority (e.g. URGENT) or status first.',
+        'Aggregated ticket counts over all tickets the user is allowed to see (same visibility as ticket list). Use for live counts ("how many open maintenance today?"), historical breakdowns ("which studio has the most maintenance tickets?"), and trends. Combine ticket_class MAINTENANCE + open_only true + date_preset today for live maintenance today. date_preset uses server local time for "today".',
       parameters: {
         type: 'object',
         properties: {
           group_by: {
             type: 'string',
-            enum: ['status', 'priority', 'category', 'market'],
+            enum: [
+              'status',
+              'priority',
+              'category',
+              'market',
+              'studio',
+              'ticket_class',
+            ],
             description:
-              'Dimension to group by. Use priority for "how many urgent/high/low" questions.',
+              'Dimension to group by. Use studio for per-location volume; ticket_class for MAINTENANCE vs SUPPORT split.',
+          },
+          ticket_class: {
+            type: 'string',
+            enum: ['MAINTENANCE', 'SUPPORT', 'ALL'],
+            description:
+              'Filter to maintenance or support tickets (default ALL). Use MAINTENANCE for facilities/maintenance questions.',
+          },
+          open_only: {
+            type: 'boolean',
+            description:
+              'If true, exclude RESOLVED and CLOSED (live / in-flight tickets). Ignored if you pass an explicit status filter.',
+          },
+          date_preset: {
+            type: 'string',
+            enum: ['today', 'last_7_days', 'last_30_days'],
+            description:
+              'Optional time window on createdAt (server local timezone for today). Combine with ticket_class and open_only.',
+          },
+          created_after: {
+            type: 'string',
+            description:
+              'Optional ISO date-time; further narrows createdAt (intersects with date_preset).',
+          },
+          created_before: {
+            type: 'string',
+            description:
+              'Optional ISO date-time; further narrows createdAt (intersects with date_preset).',
           },
           priority: {
             type: 'array',
@@ -250,7 +284,53 @@ export const AGENT_TOOLS: ToolDef[] = [
             type: 'array',
             items: { type: 'string' },
             description:
-              'Optional: filter to specific statuses before grouping',
+              'Optional: filter to specific statuses before grouping (overrides open_only for status)',
+          },
+          limit: {
+            type: 'number',
+            description:
+              'Max number of groups to return after sorting by count (default 25, max 50)',
+          },
+        },
+        required: ['group_by'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'query_user_rollups',
+      description:
+        'Count users grouped by studio, market, or role — for questions like "most new accounts by studio". Uses User.createdAt (account signup time), NOT HR hire date. Scope respects role: studio users only see rollups for their allowed studios (and self).',
+      parameters: {
+        type: 'object',
+        properties: {
+          group_by: {
+            type: 'string',
+            enum: ['studio', 'market', 'role'],
+            description: 'How to bucket users',
+          },
+          date_preset: {
+            type: 'string',
+            enum: ['today', 'last_7_days', 'last_30_days'],
+            description: 'Filter users whose account was created in this window',
+          },
+          created_after: {
+            type: 'string',
+            description: 'Optional ISO date-time for createdAt lower bound',
+          },
+          created_before: {
+            type: 'string',
+            description: 'Optional ISO date-time for createdAt upper bound',
+          },
+          is_active: {
+            type: 'boolean',
+            description: 'If true (default), only active users',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max groups to return (default 25, max 50)',
           },
         },
         required: ['group_by'],
@@ -264,7 +344,7 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'knowledge_search',
       description:
-        'Search the company knowledge base (Riser policies, handbook PDFs, pasted docs). Use for ANY question about company rules, HR, retail/operations tips, audits, leave, scheduling, or procedures — not only formal "policies".',
+        'Search the knowledge base (company policies, handbook PDFs, pasted docs, and the in-app Platform user guide). Use for: (1) company rules, HR, retail/operations, procedures; (2) HOW TO USE THIS APPLICATION — where to click, which URL path to open (/tickets/new, /admin/dispatch, workflow templates, dispatch groups, reporting, inbox, portal vs tickets, Assistant vs Handbook). Prefer this over guessing navigation.',
       parameters: {
         type: 'object',
         properties: {

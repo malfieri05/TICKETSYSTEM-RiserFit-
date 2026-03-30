@@ -16,7 +16,7 @@ export type SubtaskStatus = 'LOCKED' | 'READY' | 'IN_PROGRESS' | 'DONE' | 'SKIPP
 export type UserRole = 'ADMIN' | 'DEPARTMENT_USER' | 'STUDIO_USER';
 
 /** Department enum (backend). Only applies to DEPARTMENT_USER. */
-export type Department = 'HR' | 'OPERATIONS' | 'MARKETING';
+export type Department = 'HR' | 'OPERATIONS' | 'MARKETING' | 'RETAIL';
 
 export type NotificationChannel = 'EMAIL' | 'TEAMS' | 'IN_APP';
 

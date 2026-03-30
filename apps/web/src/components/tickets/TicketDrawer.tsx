@@ -19,11 +19,17 @@ import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachments
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
+import { cn } from '@/lib/utils';
 
 interface Props {
   ticketId: string | null;
   onClose: () => void;
 }
+
+/** Must match drawer slide duration (open + close use the same easing). */
+const DRAWER_SLIDE_MS = 300;
+/** Tailwind `ease-out` equivalent — keep transform + shadow in sync. */
+const DRAWER_EASE = 'cubic-bezier(0, 0, 0.2, 1)';
 
 /** Canonical tab order — determines slide direction when switching. */
 const TAB_ORDER = ['subtasks', 'comments', 'submission', 'history'] as const;
@@ -38,7 +44,30 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
-  const open = !!ticketId;
+  /** Slide position: true while parent still has a selection; false during slide-out. */
+  const panelOpen = !!ticketId;
+  const lastTicketIdRef = useRef<string | null>(null);
+  /** Bumps after slide-out so we re-render once the held id is cleared from the ref. */
+  const [, setPostClosePurge] = useState(0);
+
+  if (ticketId) {
+    lastTicketIdRef.current = ticketId;
+  }
+
+  const displayTicketId = ticketId ?? lastTicketIdRef.current;
+
+  useEffect(() => {
+    if (ticketId) return;
+    const held = lastTicketIdRef.current;
+    if (!held) return;
+    const t = window.setTimeout(() => {
+      lastTicketIdRef.current = null;
+      setPostClosePurge((n) => n + 1);
+    }, DRAWER_SLIDE_MS);
+    return () => window.clearTimeout(t);
+  }, [ticketId]);
+
+  const isClosingVisual = !panelOpen && displayTicketId != null;
 
   const [activeTab, setActiveTab] = useState<TabKey>('subtasks');
   const [newSubtask, setNewSubtask] = useState('');
@@ -56,7 +85,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     setIsEditingTitle(false);
     setIsEditingSubmission(false);
     setSubmissionEditValues({});
-  }, [ticketId]);
+  }, [displayTicketId]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -71,22 +100,22 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   }, []);
 
   const { data: ticketRes, isLoading } = useQuery({
-    queryKey: ['ticket', ticketId],
-    queryFn: () => ticketsApi.get(ticketId!),
-    enabled: !!ticketId,
+    queryKey: ['ticket', displayTicketId],
+    queryFn: () => ticketsApi.get(displayTicketId!),
+    enabled: !!displayTicketId,
   });
   const ticket = ticketRes?.data;
 
   const { data: historyRes } = useQuery({
-    queryKey: ['ticket', ticketId, 'history'],
-    queryFn: () => ticketsApi.history(ticketId!),
-    enabled: !!ticketId && activeTab === 'history',
+    queryKey: ['ticket', displayTicketId, 'history'],
+    queryFn: () => ticketsApi.history(displayTicketId!),
+    enabled: !!displayTicketId && activeTab === 'history',
   });
 
   const subtaskMut = useMutation({
-    mutationFn: () => subtasksApi.create(ticketId!, { title: newSubtask }),
+    mutationFn: () => subtasksApi.create(displayTicketId!, { title: newSubtask }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
       invalidateTicketLists(qc);
       setNewSubtask('');
     },
@@ -94,11 +123,11 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const subtaskStMut = useMutation({
     mutationFn: ({ subtaskId, status }: { subtaskId: string; status: SubtaskStatus }) =>
-      subtasksApi.update(ticketId!, subtaskId, { status }),
+      subtasksApi.update(displayTicketId!, subtaskId, { status }),
     onMutate: async ({ subtaskId, status: newStatus }) => {
-      await qc.cancelQueries({ queryKey: ['ticket', ticketId] });
-      const prev = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', ticketId]);
-      qc.setQueryData(['ticket', ticketId], (old: typeof prev) => {
+      await qc.cancelQueries({ queryKey: ['ticket', displayTicketId] });
+      const prev = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', displayTicketId]);
+      qc.setQueryData(['ticket', displayTicketId], (old: typeof prev) => {
         if (!old?.data?.subtasks) return old;
         return {
           ...old,
@@ -113,11 +142,11 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       return { prev };
     },
     onError: (_err, _v, context) => {
-      if (context?.prev) qc.setQueryData(['ticket', ticketId], context.prev);
+      if (context?.prev) qc.setQueryData(['ticket', displayTicketId], context.prev);
     },
     onSuccess: () => {
       // After optimistic update, check if all subtasks are complete → show toast
-      const cached = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', ticketId]);
+      const cached = qc.getQueryData<{ data: { subtasks: { id: string; status: string }[] } }>(['ticket', displayTicketId]);
       const all = cached?.data?.subtasks;
       if (all && all.length > 0 && all.every((s) => s.status === 'DONE' || s.status === 'SKIPPED')) {
         if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -126,15 +155,15 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       }
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
       invalidateTicketLists(qc);
     },
   });
 
   const titleUpdateMut = useMutation({
-    mutationFn: (title: string) => ticketsApi.update(ticketId!, { title }),
+    mutationFn: (title: string) => ticketsApi.update(displayTicketId!, { title }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
       invalidateTicketLists(qc);
       setIsEditingTitle(false);
     },
@@ -142,18 +171,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const submissionUpdateMut = useMutation({
     mutationFn: (formResponses: Record<string, string>) =>
-      ticketsApi.update(ticketId!, { formResponses }),
+      ticketsApi.update(displayTicketId!, { formResponses }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
       invalidateTicketLists(qc);
       setIsEditingSubmission(false);
     },
   });
 
   const reEvaluateLeaseIqMut = useMutation({
-    mutationFn: () => ticketsApi.reEvaluateLeaseIq(ticketId!),
+    mutationFn: () => ticketsApi.reEvaluateLeaseIq(displayTicketId!),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
     },
   });
 
@@ -197,14 +226,15 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   return (
     <div
-      className="fixed top-0 right-0 z-50 h-full flex flex-col transition-transform duration-300 ease-out"
+      className="fixed top-0 right-0 z-50 h-full flex flex-col"
       style={{
         width: 'min(828px, 68vw)',
         background: 'var(--color-bg-page)',
         borderLeft: `1px solid ${POLISH_THEME.listBorder}`,
         borderTop: `1px solid var(--color-feed-accent-border)`,
-        transform: open ? 'translateX(0)' : 'translateX(100%)',
-        boxShadow: open ? POLISH_THEME.drawerShadow : 'none',
+        transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
+        boxShadow: panelOpen ? POLISH_THEME.drawerShadow : 'none',
+        transition: `transform ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}, box-shadow ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}`,
       }}
     >
       {/* ── Top bar: close — chrome to match title strip (no white band) ───────── */}
@@ -223,15 +253,18 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       </div>
 
       {/* ── Loading skeleton ───────────────────────────────────────────────────── */}
-      {isLoading && (
+      {displayTicketId && isLoading && !ticket && (
         <div className="flex-1 flex items-center justify-center" style={{ background: 'var(--color-bg-drawer-canvas)' }}>
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
       )}
 
-      {/* ── Main content ──────────────────────────────────────────────────────── */}
-      {open && ticket && !isLoading && (
-        <div className="flex-1 overflow-hidden flex flex-col" style={{ background: 'var(--color-bg-drawer-canvas)' }}>
+      {/* ── Main content (stays mounted while slide-out finishes so close matches open) ─ */}
+      {displayTicketId && ticket && !isLoading && (
+        <div
+          className={cn('flex-1 overflow-hidden flex flex-col', isClosingVisual && 'pointer-events-none')}
+          style={{ background: 'var(--color-bg-drawer-canvas)' }}
+        >
 
           {/* ── Header + tab strip: single chrome surface; shadow only under tabs ─ */}
           <div className="shrink-0 rounded-b-2xl z-[11]" style={{ background: 'var(--color-bg-chrome)' }}>
@@ -312,7 +345,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 className="flex items-center gap-1 group"
                 title="Copy ticket ID to clipboard"
                 onClick={() => {
-                  const id = ticket.id ?? ticketId ?? '';
+                  const id = ticket.id ?? displayTicketId ?? '';
                   navigator.clipboard.writeText(id).catch(() => {});
                 }}
               >
@@ -324,7 +357,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                     border: `1px solid rgba(52,120,196,0.2)`,
                   }}
                 >
-                  #{ticket.id?.slice(0, 8) ?? ticketId?.slice(0, 8)}
+                  #{ticket.id?.slice(0, 8) ?? displayTicketId?.slice(0, 8)}
                 </span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -509,12 +542,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 );
               })}
             </nav>
-            {ticketId && (
+            {displayTicketId && (
               <button
                 type="button"
                 onClick={() => {
                   onClose();
-                  router.push(`/tickets/${ticketId}`);
+                  router.push(`/tickets/${displayTicketId}`);
                 }}
                 className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors shrink-0 hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
                 style={{ color: 'var(--color-text-muted)' }}

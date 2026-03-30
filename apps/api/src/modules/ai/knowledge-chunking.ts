@@ -21,6 +21,62 @@ interface TextPiece {
 export const DEFAULT_CHUNK_TARGET_CHARS = 1600;
 export const DEFAULT_CHUNK_OVERLAP_CHARS = 200;
 
+/**
+ * OpenAI embedding models reject inputs over ~8192 tokens. Large PDFs can still
+ * produce a rare oversized segment; hard-cap in characters (~2500–3000 tokens).
+ */
+export const EMBEDDING_SAFE_MAX_CHARS = 10_000;
+
+/** Split any chunk over {@link EMBEDDING_SAFE_MAX_CHARS} into sliding windows before embedding. */
+export function clampChunksForEmbeddingPositions(
+  chunks: { content: string; start: number }[],
+  overlapChars: number,
+): { content: string; start: number }[] {
+  const overlap = Math.min(Math.max(40, overlapChars), 400);
+  const out: { content: string; start: number }[] = [];
+  for (const c of chunks) {
+    if (c.content.length <= EMBEDDING_SAFE_MAX_CHARS) {
+      out.push(c);
+      continue;
+    }
+    const pieces = hardWindowPieces(
+      { text: c.content, absStart: c.start },
+      EMBEDDING_SAFE_MAX_CHARS,
+      overlap,
+    );
+    for (const p of pieces) {
+      if (p.text.length >= MIN_CHUNK_CHARS) {
+        out.push({ content: p.text, start: p.absStart });
+      }
+    }
+  }
+  return out;
+}
+
+/** Same as {@link clampChunksForEmbeddingPositions} for plain string chunks (text ingest). */
+export function clampChunkStringsForEmbedding(
+  chunks: string[],
+  overlapChars: number,
+): string[] {
+  const overlap = Math.min(Math.max(40, overlapChars), 400);
+  const out: string[] = [];
+  for (const content of chunks) {
+    if (content.length <= EMBEDDING_SAFE_MAX_CHARS) {
+      out.push(content);
+      continue;
+    }
+    const pieces = hardWindowPieces(
+      { text: content, absStart: 0 },
+      EMBEDDING_SAFE_MAX_CHARS,
+      overlap,
+    );
+    for (const p of pieces) {
+      if (p.text.length >= MIN_CHUNK_CHARS) out.push(p.text);
+    }
+  }
+  return out;
+}
+
 export function normalizeKnowledgeText(raw: string): string {
   let s = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   s = s.replace(/[ \t]+\n/g, '\n');

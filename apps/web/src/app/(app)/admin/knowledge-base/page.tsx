@@ -221,7 +221,7 @@ export default function KnowledgeBasePage() {
               </div>
             ) : mode === 'pdf' ? (
               <div>
-                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Handbook PDF (max 15 MB)</label>
+                <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Handbook PDF (max 25 MB)</label>
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
                 <div
                   onClick={() => pdfInputRef.current?.click()}
@@ -373,7 +373,7 @@ export default function KnowledgeBasePage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                   {['Title', 'Source', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Policy meta', 'Index status', 'Active', ''].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
                   ))}

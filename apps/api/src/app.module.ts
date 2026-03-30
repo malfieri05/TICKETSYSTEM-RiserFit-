@@ -31,6 +31,7 @@ import { EmailAutomationModule } from './modules/email-automation/email-automati
 import { LeaseIQModule } from './modules/lease-iq/lease-iq.module';
 import { DispatchModule } from './modules/dispatch/dispatch.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { InvitationsModule } from './modules/invitations/invitations.module';
 
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { RolesGuard } from './modules/auth/guards/roles.guard';
@@ -113,6 +114,9 @@ import { RootController } from './root.controller';
 
     // ── Location Profiles ──────────────────────────────────────────────────────
     LocationsModule,
+
+    // ── User invitations (closed provisioning) ────────────────────────────────
+    InvitationsModule,
 
     // ── Background Workers ────────────────────────────────────────────────────
     WorkersModule,

@@ -81,7 +81,9 @@ export default function PortalPage() {
   const { user } = useAuth();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
 
   // Scope summary (dashboard metrics + allowed studios)

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import { UserCacheService } from '../../common/cache/user-cache.service';
-import { Role, Department } from '@prisma/client';
+import { Prisma, Role, Department } from '@prisma/client';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 
 @Injectable()
@@ -308,6 +308,67 @@ export class UsersService {
       studioId: updated.studioId,
       studio: updated.studio,
     };
+  }
+
+  /**
+   * Creates user + junction rows inside an existing transaction (invite acceptance only).
+   * InvitationService owns validation; this method owns persistence shape only.
+   */
+  async provisionUserFromInvite(
+    tx: Prisma.TransactionClient,
+    args: {
+      email: string;
+      name: string;
+      passwordHash: string;
+      role: Role;
+      invitedByUserId: string;
+      departments: Department[];
+      defaultStudioId: string | null;
+      additionalStudioIds: string[];
+    },
+  ) {
+    const user = await tx.user.create({
+      data: {
+        email: args.email,
+        name: args.name,
+        passwordHash: args.passwordHash,
+        role: args.role,
+        studioId: args.role === Role.STUDIO_USER ? args.defaultStudioId : null,
+        marketId: null,
+        teamId: null,
+        isActive: true,
+      },
+    });
+
+    if (args.role === Role.DEPARTMENT_USER) {
+      await tx.userDepartment.createMany({
+        data: args.departments.map((department) => ({
+          userId: user.id,
+          department,
+          assignedBy: args.invitedByUserId,
+        })),
+      });
+    }
+
+    if (args.role === Role.STUDIO_USER && args.additionalStudioIds.length > 0) {
+      const extras = args.additionalStudioIds.filter(
+        (id) => id !== args.defaultStudioId,
+      );
+      if (extras.length > 0) {
+        await tx.userStudioScope.createMany({
+          data: extras.map((studioId) => ({
+            userId: user.id,
+            studioId,
+            grantedBy: args.invitedByUserId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    this.userCache.invalidate(user.id);
+
+    return user;
   }
 
   // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────────

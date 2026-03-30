@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
@@ -12,6 +12,8 @@ type Mode = 'login' | 'register';
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const invitedOk = searchParams.get('invited') === '1';
 
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
@@ -97,6 +99,11 @@ export default function LoginPage() {
 
         {/* Card */}
         <div className="rounded-xl p-8 space-y-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          {invitedOk && (
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', color: '#86efac' }}>
+              Your account is ready. Sign in with the password you set.
+            </div>
+          )}
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
               {mode === 'login' ? 'Sign in to your account' : 'Create an account'}
@@ -213,7 +220,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-[var(--color-text-muted)]">
-          New accounts are created with Requester access. Contact an admin to request Agent or Admin privileges.
+          New accounts are by invitation only. If you need access, ask an administrator.
         </p>
       </div>
     </div>

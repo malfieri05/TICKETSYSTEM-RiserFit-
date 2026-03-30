@@ -157,7 +157,9 @@ export default function LocationProfilePage() {
   const isProfile403 = (profileError as { response?: { status?: number } })?.response?.status === 403;
   const isTickets403 = (ticketsError as { response?: { status?: number } })?.response?.status === 403;
 
-  const handleSelect = useCallback((id: string) => setSelectedTicketId(id), []);
+  const handleSelect = useCallback((id: string) => {
+    setSelectedTicketId((prev) => (prev === id ? null : id));
+  }, []);
   const handleCloseDrawer = useCallback(() => setSelectedTicketId(null), []);
 
   const operational = profile?.profile?.public;

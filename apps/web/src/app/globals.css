@@ -44,9 +44,10 @@
   --sidebar-nav-active-border: var(--color-accent);
   --sidebar-text: #ffffff;
   --sidebar-text-secondary: rgba(255, 255, 255, 0.85);
-  /* Feed table header — same tier as main surface in dark */
-  --color-bg-table-header: #111111;
-  --color-bg-chrome: #0a0a0a;
+  /* Content headers: ticket feed thead, admin table thead, in-page tab tracks, drawer title strip */
+  --color-bg-content-header: #111111;
+  --color-bg-table-header: var(--color-bg-content-header);
+  --color-bg-chrome: var(--color-bg-content-header);
   /* Under rounded drawer chrome: midpoint chrome/page — corner cutouts match scroll body */
   --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 50%, var(--color-bg-page) 50%);
   --color-feed-accent-border: rgba(52, 120, 196, 0.22);
@@ -105,10 +106,10 @@
   --sidebar-nav-active-border: var(--color-accent);
   --sidebar-text: #171717;
   --sidebar-text-secondary: #525252;
-  /* Ticket thead: midpoint between prior #eceff3 and #cfd8e6 — visible edge, not too heavy */
-  --color-bg-table-header: #dee4ec;
-  /* Tab / secondary chrome lane (e.g. Active | Completed on tickets page) */
-  --color-bg-chrome: #e8ebf0;
+  /* Content headers — same band as ticket feed thead */
+  --color-bg-content-header: #dee4ec;
+  --color-bg-table-header: var(--color-bg-content-header);
+  --color-bg-chrome: var(--color-bg-content-header);
   --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 50%, var(--color-bg-page) 50%);
   --color-feed-accent-border: color-mix(in srgb, var(--color-accent) 16%, transparent);
   /* Sticky page header — same family as table header, ~10% lighter (toward white) */

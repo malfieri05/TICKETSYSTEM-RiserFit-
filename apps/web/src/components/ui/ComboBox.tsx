@@ -60,6 +60,9 @@ export function ComboBox({
 
   const listItems = useMemo(() => {
     if (!clearable) return filteredOptions;
+    // Avoid duplicate empty value when options already include "All …" / placeholder row
+    const hasEmpty = filteredOptions.some((o) => o.value === '');
+    if (hasEmpty) return filteredOptions;
     return [{ value: '', label: placeholder }, ...filteredOptions];
   }, [clearable, placeholder, filteredOptions]);
 
@@ -204,7 +207,7 @@ export function ComboBox({
           ) : (
             listItems.map((opt, i) => (
               <li
-                key={opt.value === '' ? '__empty__' : opt.value}
+                key={`${i}-${opt.value === '' ? 'empty' : opt.value}`}
                 data-index={i}
                 role="option"
                 aria-selected={value === opt.value}

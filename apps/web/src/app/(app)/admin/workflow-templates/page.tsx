@@ -57,7 +57,7 @@ export default function AdminWorkflowTemplatesListPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                   <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Context</th>
                   <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Subtasks</th>
                   <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Status</th>

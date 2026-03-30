@@ -30,8 +30,8 @@ import { Role } from '@prisma/client';
 
 // 10MB max for plain-text / markdown document uploads
 const MAX_DOC_SIZE = 10 * 1024 * 1024;
-// 15MB max for PDF handbook uploads
-const MAX_PDF_SIZE = 15 * 1024 * 1024;
+// Match ticket attachment cap so large handbooks can upload (ingestion clamps chunks for OpenAI limits)
+const MAX_PDF_SIZE = 25 * 1024 * 1024;
 
 @Controller('ai')
 export class AiController {

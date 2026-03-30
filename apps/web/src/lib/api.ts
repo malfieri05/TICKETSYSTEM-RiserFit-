@@ -41,6 +41,12 @@ api.interceptors.response.use(
   },
 );
 
+/** Public endpoints (invite validate/accept): no JWT, no 401 → login redirect. */
+export const publicApi = axios.create({
+  baseURL: `${API_URL}/api`,
+  headers: { 'Content-Type': 'application/json' },
+});
+
 // ─── Auth ──────────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -51,6 +57,25 @@ export const authApi = {
   devLogin: (email: string) =>
     api.post<{ access_token: string; user: import('@/types').User }>('/auth/dev-login', { email }),
   me: () => api.get<import('@/types').User>('/auth/me'),
+};
+
+export type ValidateInvitationResponse =
+  | { valid: false }
+  | {
+      valid: true;
+      expiresAt: string;
+      emailMasked: string;
+      roleLabel: string;
+      name: string;
+      scopeSummary: string;
+    };
+
+/** Invite acceptance (no auth; uses publicApi to avoid 401 redirect). */
+export const invitationsPublicApi = {
+  validate: (token: string) =>
+    publicApi.post<ValidateInvitationResponse>('/invitations/validate', { token }),
+  accept: (token: string, password: string) =>
+    publicApi.post<{ success: true }>('/invitations/accept', { token, password }),
 };
 
 // ─── Tickets ───────────────────────────────────────────────────────────────
@@ -397,7 +422,7 @@ export const aiApi = {
     return api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/file', form);
   },
 
-  /** Upload a PDF for handbook ingestion (admin). Max 15MB. Stores in S3 and enqueues ingestion. */
+  /** Upload a PDF for handbook ingestion (admin). Max 25MB. Stores in S3 and enqueues ingestion. */
   ingestPdf: (title: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -593,6 +618,39 @@ export const adminApi = {
   ) => api.patch(`/admin/studios/${id}`, data),
 
   // System monitoring (admin-only)
+  invitations: {
+    list: (params?: { status?: string; skip?: number; take?: number }) =>
+      api.get<{
+        data: Array<{
+          id: string;
+          emailNormalized: string;
+          status: string;
+          assignedRole: string;
+          seedName: string;
+          expiresAt: string;
+          createdAt: string;
+          acceptedAt: string | null;
+          lastSentAt: string | null;
+          sendCount: number;
+          createdUserId: string | null;
+          invitedByUserId: string;
+        }>;
+        total: number;
+      }>('/admin/invitations', { params }),
+    create: (data: {
+      email: string;
+      seedName: string;
+      assignedRole: import('@/types').UserRole;
+      departments?: import('@/types').Department[];
+      defaultStudioId?: string;
+      additionalStudioIds?: string[];
+    }) =>
+      api.post<{ id: string; emailNormalized: string; expiresAt: string }>('/admin/invitations', data),
+    resend: (id: string) => api.post(`/admin/invitations/${id}/resend`),
+    regenerate: (id: string) => api.post(`/admin/invitations/${id}/regenerate`),
+    revoke: (id: string) => api.post(`/admin/invitations/${id}/revoke`),
+  },
+
   getSystemServices: () =>
     api.get<{
       environment: { name: string; region?: string; version?: string | null };

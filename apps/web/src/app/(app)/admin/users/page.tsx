@@ -2,12 +2,15 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, useMemo } from 'react';
-import { Pencil, MapPin, X, Plus } from 'lucide-react';
+import { MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { ComboBox } from '@/components/ui/ComboBox';
+import { MultiComboBox } from '@/components/ui/MultiComboBox';
+import { EditPencilIcon } from '@/components/ui/EditPencilIcon';
 import { usersApi, adminApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import type { UserRole, Department, User } from '@/types';
 
 const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
@@ -17,6 +20,7 @@ const DEPARTMENT_OPTIONS: { value: Department; label: string }[] = [
   { value: 'HR', label: 'HR' },
   { value: 'OPERATIONS', label: 'Operations' },
   { value: 'MARKETING', label: 'Marketing' },
+  { value: 'RETAIL', label: 'Retail' },
 ];
 
 function roleDisplayLabel(role: string, departments: Department[] | null): string {
@@ -86,6 +90,96 @@ export default function AdminUsersPage() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('');
   const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('STUDIO_USER');
+  const [inviteDepartments, setInviteDepartments] = useState<Department[]>([]);
+  const [inviteDefaultStudioId, setInviteDefaultStudioId] = useState('');
+  const [inviteExtraStudioIds, setInviteExtraStudioIds] = useState<string[]>([]);
+  const [inviteSubmitError, setInviteSubmitError] = useState('');
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+
+  const { data: inviteListData, isLoading: invitesLoading } = useQuery({
+    queryKey: ['admin', 'invitations', 'PENDING'],
+    queryFn: () => adminApi.invitations.list({ status: 'PENDING', take: 100 }),
+    enabled: true,
+  });
+  const pendingInvites = inviteListData?.data?.data ?? [];
+
+  const { data: inviteStudiosRes } = useQuery({
+    queryKey: ['admin', 'studios'],
+    queryFn: () => adminApi.listStudios(),
+    enabled: addUserModalOpen,
+  });
+  const inviteStudios: { id: string; name: string }[] = inviteStudiosRes?.data ?? [];
+
+  const openInviteModal = () => {
+    setAddUserModalOpen(true);
+    setInviteEmail('');
+    setInviteName('');
+    setInviteRole('STUDIO_USER');
+    setInviteDepartments([]);
+    setInviteDefaultStudioId('');
+    setInviteExtraStudioIds([]);
+    setInviteSubmitError('');
+  };
+
+  const submitInvite = async () => {
+    setInviteSubmitError('');
+    const email = inviteEmail.trim();
+    const seedName = inviteName.trim();
+    if (!email || !seedName) {
+      setInviteSubmitError('Email and name are required.');
+      return;
+    }
+    if (inviteRole === 'DEPARTMENT_USER' && inviteDepartments.length === 0) {
+      setInviteSubmitError('Select at least one department.');
+      return;
+    }
+    if (inviteRole === 'STUDIO_USER' && !inviteDefaultStudioId) {
+      setInviteSubmitError('Select a default location.');
+      return;
+    }
+    setInviteSubmitting(true);
+    try {
+      const body: Parameters<typeof adminApi.invitations.create>[0] = {
+        email,
+        seedName,
+        assignedRole: inviteRole,
+      };
+      if (inviteRole === 'DEPARTMENT_USER') body.departments = inviteDepartments;
+      if (inviteRole === 'STUDIO_USER') {
+        body.defaultStudioId = inviteDefaultStudioId;
+        const extra = inviteExtraStudioIds.filter((id) => id && id !== inviteDefaultStudioId);
+        if (extra.length) body.additionalStudioIds = extra;
+      }
+      await adminApi.invitations.create(body);
+      setAddUserModalOpen(false);
+      await qc.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+    } catch (err: unknown) {
+      const ax = err as { response?: { status?: number; data?: Record<string, unknown> } };
+      const raw = ax.response?.data;
+      const code = typeof raw?.code === 'string' ? raw.code : undefined;
+      const msg =
+        typeof raw?.message === 'string'
+          ? raw.message
+          : Array.isArray(raw?.message) && typeof raw.message[0] === 'string'
+            ? raw.message[0]
+            : undefined;
+      if (ax.response?.status === 409) {
+        if (code === 'EMAIL_IN_USE') {
+          setInviteSubmitError('That email already has an account.');
+        } else if (code === 'PENDING_INVITE_EXISTS') {
+          setInviteSubmitError('A pending invitation already exists for that email. Resend or revoke it below.');
+        } else {
+          setInviteSubmitError(msg ?? 'This email conflicts with an existing user or invitation.');
+        }
+      } else {
+        setInviteSubmitError(msg ?? 'Could not send invitation. Try again.');
+      }
+    } finally {
+      setInviteSubmitting(false);
+    }
+  };
 
   const filteredUsers = useMemo(() => {
     let list = users;
@@ -150,15 +244,14 @@ export default function AdminUsersPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={isLoading ? 'Users' : `Users (${users.length})`} />
-      {/* Add new user modal (demo only — no backend) */}
       {addUserModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setAddUserModalOpen(false)}
+          onClick={() => !inviteSubmitting && setAddUserModalOpen(false)}
         >
           <div
-            className="rounded-xl shadow-xl max-w-md w-full p-6"
+            className="rounded-xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto"
             style={{
               background: 'var(--color-bg-surface-raised)',
               border: '1px solid var(--color-border-default)',
@@ -167,11 +260,11 @@ export default function AdminUsersPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                Allow new user sign up:
+                Invite user
               </h2>
               <button
                 type="button"
-                onClick={() => setAddUserModalOpen(false)}
+                onClick={() => !inviteSubmitting && setAddUserModalOpen(false)}
                 className="p-1.5 rounded-lg transition-colors hover:bg-[var(--color-bg-surface)]"
                 style={{ color: 'var(--color-text-muted)' }}
                 aria-label="Close"
@@ -179,22 +272,95 @@ export default function AdminUsersPage() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <p className="text-sm mb-2" style={{ color: 'var(--color-text-secondary)' }}>
-              Send secure one-time create account link.
+            <p className="text-sm mb-4" style={{ color: 'var(--color-text-secondary)' }}>
+              We will email a one-time link to finish account setup. Name and role cannot be changed by the invitee.
             </p>
-            <Input
-              type="email"
-              placeholder="New user's email address"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              className="w-full"
-            />
-            <p className="text-xs mt-3" style={{ color: 'var(--color-text-muted)' }}>
-              (Demo only — invite not sent.)
-            </p>
-            <div className="flex justify-end mt-5">
-              <Button size="sm" onClick={() => {}}>
-                Send Invite.
+            <div className="space-y-3">
+              <Input
+                type="email"
+                placeholder="Email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                className="w-full"
+                disabled={inviteSubmitting}
+              />
+              <Input
+                type="text"
+                placeholder="Full name (required)"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                className="w-full"
+                disabled={inviteSubmitting}
+              />
+              <Select
+                value={inviteRole}
+                onChange={(e) => {
+                  const r = e.target.value as UserRole;
+                  setInviteRole(r);
+                  if (r !== 'DEPARTMENT_USER') setInviteDepartments([]);
+                  if (r !== 'STUDIO_USER') {
+                    setInviteDefaultStudioId('');
+                    setInviteExtraStudioIds([]);
+                  }
+                }}
+                className="w-full"
+                disabled={inviteSubmitting}
+              >
+                <option value="STUDIO_USER">Studio User</option>
+                <option value="DEPARTMENT_USER">Department User</option>
+                <option value="ADMIN">Admin</option>
+              </Select>
+              {inviteRole === 'DEPARTMENT_USER' && (
+                <MultiComboBox
+                  id="invite-departments"
+                  options={DEPARTMENT_OPTIONS}
+                  value={inviteDepartments}
+                  onChange={(next) => setInviteDepartments(next as Department[])}
+                  placeholder="Departments…"
+                  disabled={inviteSubmitting}
+                  className="w-full"
+                />
+              )}
+              {inviteRole === 'STUDIO_USER' && (
+                <>
+                  <Select
+                    value={inviteDefaultStudioId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setInviteDefaultStudioId(v);
+                      setInviteExtraStudioIds((prev) => prev.filter((id) => id !== v));
+                    }}
+                    className="w-full"
+                    disabled={inviteSubmitting}
+                  >
+                    <option value="">Default location…</option>
+                    {inviteStudios.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </Select>
+                  <MultiComboBox
+                    id="invite-extra-studios"
+                    options={inviteStudios
+                      .filter((s) => s.id !== inviteDefaultStudioId)
+                      .map((s) => ({ value: s.id, label: s.name }))}
+                    value={inviteExtraStudioIds}
+                    onChange={(next) => setInviteExtraStudioIds(next)}
+                    placeholder="Additional locations (optional)"
+                    disabled={inviteSubmitting}
+                    className="w-full"
+                  />
+                </>
+              )}
+              {inviteSubmitError && (
+                <p className="text-sm text-red-400">{inviteSubmitError}</p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="secondary" size="sm" onClick={() => setAddUserModalOpen(false)} disabled={inviteSubmitting}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void submitInvite()} loading={inviteSubmitting}>
+                Send invitation
               </Button>
             </div>
           </div>
@@ -237,11 +403,93 @@ export default function AdminUsersPage() {
               />
             )}
           </div>
-          <Button size="sm" onClick={() => { setAddUserModalOpen(true); setInviteEmail(''); }}>
+          <Button size="sm" onClick={openInviteModal}>
             <Plus className="h-4 w-4" />
             Add new user
           </Button>
         </div>
+
+        <div className="mb-6 rounded-xl overflow-hidden" style={panel}>
+          <div className="px-4 py-3 text-sm font-semibold" style={{ background: 'var(--color-bg-content-header)', color: 'var(--color-text-primary)' }}>
+            Pending invitations
+          </div>
+          {invitesLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
+            </div>
+          ) : pendingInvites.length === 0 ? (
+            <div className="px-4 py-6 text-sm" style={{ color: 'var(--color-text-muted)' }}>No pending invitations.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)' }}>
+                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Email</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Name</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Role</th>
+                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Expires</th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingInvites.map((inv, i) => (
+                  <tr key={inv.id} style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}>
+                    <td className="px-4 py-2" style={{ color: 'var(--color-text-primary)' }}>{inv.emailNormalized}</td>
+                    <td className="px-4 py-2" style={{ color: 'var(--color-text-muted)' }}>{inv.seedName}</td>
+                    <td className="px-4 py-2" style={{ color: 'var(--color-text-muted)' }}>{inv.assignedRole}</td>
+                    <td className="px-4 py-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                      {new Date(inv.expiresAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2 text-right space-x-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            await adminApi.invitations.resend(inv.id);
+                            await qc.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+                          } catch (e: unknown) {
+                            const ax = e as { response?: { status?: number; data?: { message?: string } } };
+                            if (ax.response?.status === 429) {
+                              alert(ax.response?.data?.message ?? 'Resend limit reached.');
+                            } else {
+                              alert(ax.response?.data?.message ?? 'Resend failed.');
+                            }
+                          }
+                        }}
+                      >
+                        Resend
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          if (!confirm('Regenerate link? The previous link will stop working.')) return;
+                          await adminApi.invitations.regenerate(inv.id);
+                          await qc.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+                        }}
+                      >
+                        New link
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        style={{ color: '#dc2626' } as React.CSSProperties}
+                        onClick={async () => {
+                          if (!confirm('Revoke this invitation?')) return;
+                          await adminApi.invitations.revoke(inv.id);
+                          await qc.invalidateQueries({ queryKey: ['admin', 'invitations'] });
+                        }}
+                      >
+                        Revoke
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
         <div className="rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex justify-center py-12">
@@ -254,7 +502,7 @@ export default function AdminUsersPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface)' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Name</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Email</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Role</th>
@@ -285,6 +533,48 @@ export default function AdminUsersPage() {
                           {roleDisplayLabel(draftRole, draftDepartments.length ? draftDepartments : null)}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            className={cn(
+                              'relative h-9 w-9 shrink-0 rounded-full border-2 border-blue-600',
+                              'flex items-center justify-center bg-[var(--color-bg-surface)]',
+                              'hover:bg-blue-50/90 dark:hover:bg-blue-950/40 transition-colors duration-200',
+                              'disabled:opacity-50 disabled:pointer-events-none',
+                            )}
+                            title={isEditable ? 'cancel edit' : 'edit'}
+                            aria-label={isEditable ? 'Cancel edit' : 'Edit'}
+                            disabled={isSaving}
+                            onClick={() => {
+                              if (isEditable) {
+                                setRoleDrafts((prev) => ({ ...prev, [u.id]: u.role }));
+                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: u.departments ?? [] }));
+                                setEditableRows((prev) => ({ ...prev, [u.id]: false }));
+                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                              } else {
+                                setEditableRows((prev) => ({ ...prev, [u.id]: true }));
+                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                              }
+                            }}
+                          >
+                            <span
+                              className={cn(
+                                'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
+                                isEditable ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100',
+                              )}
+                              aria-hidden={isEditable}
+                            >
+                              <EditPencilIcon className="text-blue-600" />
+                            </span>
+                            <span
+                              className={cn(
+                                'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
+                                isEditable ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none',
+                              )}
+                              aria-hidden={!isEditable}
+                            >
+                              <X className="h-4 w-4 text-blue-600" strokeWidth={2.5} />
+                            </span>
+                          </button>
                           <Select
                             value={draftRole}
                             onChange={(e) => {
@@ -305,42 +595,19 @@ export default function AdminUsersPage() {
                             <option value="ADMIN">Admin</option>
                           </Select>
                           {deptUserNeedsDepartment && (
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1" title="Check all that apply">
-                              {DEPARTMENT_OPTIONS.map((d) => {
-                                const checked = draftDepartments.includes(d.value);
-                                return (
-                                  <label key={d.value} className="inline-flex items-center gap-1.5 cursor-pointer text-sm" style={{ color: 'var(--color-text-primary)' }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() => {
-                                        const next = checked
-                                          ? draftDepartments.filter((x) => x !== d.value)
-                                          : [...draftDepartments, d.value];
-                                        setDepartmentDrafts((prev) => ({ ...prev, [u.id]: next }));
-                                        setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
-                                      }}
-                                      disabled={!isEditable || isSaving}
-                                      className="rounded border-gray-300"
-                                    />
-                                    {d.label}
-                                  </label>
-                                );
-                              })}
-                            </div>
+                            <MultiComboBox
+                              id={`user-${u.id}-departments`}
+                              options={DEPARTMENT_OPTIONS}
+                              value={draftDepartments}
+                              onChange={(next) => {
+                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: next as Department[] }));
+                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                              }}
+                              placeholder="Select departments…"
+                              disabled={!isEditable || isSaving}
+                              className="w-36 min-w-0 shrink-0"
+                            />
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setEditableRows((prev) => ({ ...prev, [u.id]: true }));
-                              setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
-                            }}
-                            disabled={isEditable || isSaving}
-                            title="Edit role/department"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
                           <Button
                             variant="secondary"
                             size="sm"

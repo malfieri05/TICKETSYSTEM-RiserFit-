@@ -33,7 +33,9 @@ export default function PortalTicketsPage() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
 
   useEffect(() => {

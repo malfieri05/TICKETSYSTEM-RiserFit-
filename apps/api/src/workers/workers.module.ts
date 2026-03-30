@@ -12,6 +12,8 @@ import { QUEUES } from '../common/queue/queue.constants';
 import { KnowledgeIngestionProcessor } from './processors/knowledge-ingestion.processor';
 import { EmailAutomationModule } from '../modules/email-automation/email-automation.module';
 import { EmailIngestProcessor } from './processors/email-ingest.processor';
+import { InviteEmailProcessor } from './processors/invite-email.processor';
+import { InvitationsModule } from '../modules/invitations/invitations.module';
 
 @Module({
   imports: [
@@ -21,12 +23,14 @@ import { EmailIngestProcessor } from './processors/email-ingest.processor';
       { name: QUEUES.SCHEDULED },
       { name: QUEUES.KNOWLEDGE_INGESTION },
       { name: QUEUES.EMAIL_INGEST },
+      { name: QUEUES.INVITE_EMAIL },
     ),
     NotificationsModule,
     SlaModule,
     AiModule,
     PermissionsModule,
     EmailAutomationModule,
+    InvitationsModule,
   ],
   providers: [
     NotificationFanoutProcessor,
@@ -34,6 +38,7 @@ import { EmailIngestProcessor } from './processors/email-ingest.processor';
     StaleTicketProcessor,
     KnowledgeIngestionProcessor,
     EmailIngestProcessor,
+    InviteEmailProcessor,
     SchedulerService,
   ],
 })

@@ -9,6 +9,8 @@ import { QUEUES, KNOWLEDGE_INGESTION_JOB_OPTIONS } from '../../common/queue/queu
 import {
   chunkKnowledgeText,
   chunkKnowledgeTextWithPositions,
+  clampChunkStringsForEmbedding,
+  clampChunksForEmbeddingPositions,
   DEFAULT_CHUNK_OVERLAP_CHARS,
   DEFAULT_CHUNK_TARGET_CHARS,
   KNOWLEDGE_CHUNK_PIPELINE_VERSION,
@@ -67,6 +69,16 @@ export class IngestionService {
     return { targetChars, overlapChars };
   }
 
+  /** Smaller batches = smaller HTTP bodies and easier debugging when OpenAI rejects a batch. */
+  private getEmbeddingBatchSize(): number {
+    const raw = parseInt(
+      this.config.get<string>('KNOWLEDGE_EMBEDDING_BATCH_SIZE') ?? '',
+      10,
+    );
+    if (Number.isFinite(raw) && raw >= 1 && raw <= 64) return raw;
+    return 10;
+  }
+
   /** Extract plain text from a PDF buffer (shared by S3 ingestion and Riser embedded PDF). */
   async extractPlainTextFromPdfBuffer(buffer: Buffer): Promise<string> {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -106,11 +118,11 @@ export class IngestionService {
     });
 
     const chunkOpts = this.getChunkOptions();
-    const chunks = chunkKnowledgeText(content, chunkOpts);
+    let chunks = chunkKnowledgeText(content, chunkOpts);
+    chunks = clampChunkStringsForEmbedding(chunks, chunkOpts.overlapChars);
     this.logger.log(`Ingesting "${title}" → ${chunks.length} chunks`);
 
-    // Embed in batches of 20 (stay well within OpenAI rate limits)
-    const BATCH = 20;
+    const BATCH = this.getEmbeddingBatchSize();
     let chunkIndex = 0;
     for (let i = 0; i < chunks.length; i += BATCH) {
       const batch = chunks.slice(i, i + BATCH);
@@ -166,14 +178,15 @@ export class IngestionService {
     }
 
     const chunkOpts = this.getChunkOptions();
-    const chunks = chunkKnowledgeText(content, chunkOpts);
+    let chunks = chunkKnowledgeText(content, chunkOpts);
+    chunks = clampChunkStringsForEmbedding(chunks, chunkOpts.overlapChars);
     this.logger.log(
       `Re-ingesting existing document ${documentId} ("${title}") → ${chunks.length} chunks`,
     );
 
     await this.prisma.documentChunk.deleteMany({ where: { documentId } });
 
-    const BATCH = 20;
+    const BATCH = this.getEmbeddingBatchSize();
     let chunkIndex = 0;
     for (let i = 0; i < chunks.length; i += BATCH) {
       const batch = chunks.slice(i, i + BATCH);
@@ -257,7 +270,11 @@ export class IngestionService {
       await this.prisma.documentChunk.deleteMany({ where: { documentId } });
 
       const chunkOpts = this.getChunkOptions();
-      const chunksWithPos = chunkKnowledgeTextWithPositions(text, chunkOpts);
+      let chunksWithPos = chunkKnowledgeTextWithPositions(text, chunkOpts);
+      chunksWithPos = clampChunksForEmbeddingPositions(
+        chunksWithPos,
+        chunkOpts.overlapChars,
+      );
       this.logger.log(
         `Ingesting document ${documentId} → ${chunksWithPos.length} chunks`,
       );
@@ -271,7 +288,7 @@ export class IngestionService {
         );
       }
 
-      const BATCH = 20;
+      const BATCH = this.getEmbeddingBatchSize();
       const numPages: number =
         typeof data?.numpages === 'number' && data.numpages > 0
           ? data.numpages
@@ -365,11 +382,22 @@ export class IngestionService {
 
   /** Embed a batch of strings using OpenAI */
   private async embedBatch(texts: string[]): Promise<number[][]> {
-    const response = await this.openai.embeddings.create({
-      model: EMBEDDING_MODEL,
-      input: texts,
-    });
-    return response.data.map((item) => item.embedding);
+    try {
+      const response = await this.openai.embeddings.create({
+        model: EMBEDDING_MODEL,
+        input: texts,
+      });
+      return response.data.map((item) => item.embedding);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const maxLen = texts.reduce((m, t) => Math.max(m, t.length), 0);
+      if (/maximum|8192|token|too long|length/i.test(msg)) {
+        this.logger.error(
+          `OpenAI embeddings.create failed (batch=${texts.length}, longestInputChars=${maxLen}): ${msg}`,
+        );
+      }
+      throw e;
+    }
   }
 
   /** Embed a single string */

@@ -32,8 +32,9 @@ export const POLISH_THEME = {
   listBg: 'var(--color-bg-surface-raised)',
   listBorder: 'var(--color-border-default)',
   listBgHeader: 'var(--color-bg-surface)',
-  /** Feed `<thead>` band — distinct from row surface in light mode */
-  tableHeaderBg: 'var(--color-bg-table-header)',
+  /** Table thead, card section headers, in-content toolbars (`--color-bg-content-header` in globals.css) */
+  contentHeaderBg: 'var(--color-bg-content-header)',
+  tableHeaderBg: 'var(--color-bg-content-header)',
   innerBorder: 'var(--color-border-subtle)',
   rowBorder: 'var(--color-border-default)',
   rowHover: 'var(--color-bg-surface)',

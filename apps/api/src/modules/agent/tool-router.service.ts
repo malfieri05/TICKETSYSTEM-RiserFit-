@@ -3,6 +3,8 @@ import { PrismaService } from '../../common/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { IngestionService } from '../ai/ingestion.service';
 import { TicketsService } from '../tickets/tickets.service';
+import { ReportingService } from '../reporting/reporting.service';
+import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import {
   Role,
@@ -11,6 +13,7 @@ import {
   SubtaskStatus,
   Prisma,
 } from '@prisma/client';
+import { buildTicketCreatedAtFilter } from './ticket-metrics-where';
 
 /** Match AiService RAG — agent was using 0.4 and dropped almost all handbook hits. */
 const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.78;
@@ -31,6 +34,8 @@ export class ToolRouterService {
     private readonly config: ConfigService,
     private readonly ingestion: IngestionService,
     private readonly ticketsService: TicketsService,
+    private readonly reportingService: ReportingService,
+    private readonly ticketVisibility: TicketVisibilityService,
   ) {}
 
   async execute(
@@ -76,6 +81,8 @@ export class ToolRouterService {
         return this.updateSubtaskStatus(args, actor);
       case 'get_ticket_metrics':
         return this.getMetrics(args, actor);
+      case 'query_user_rollups':
+        return this.queryUserRollups(args, actor);
       case 'knowledge_search':
         return this.knowledgeSearch(args);
       case 'list_categories':
@@ -445,36 +452,88 @@ export class ToolRouterService {
     return { subtask_id: updated.id, status: updated.status };
   }
 
-  // ── get_ticket_metrics ──────────────────────────────────────────────────────
+  // ── get_ticket_metrics (scoped + analytics filters) ─────────────────────────
 
-  private async getMetrics(args: Record<string, unknown>, _actor: RequestUser) {
+  private buildTicketAnalyticsWhere(
+    args: Record<string, unknown>,
+    actor: RequestUser,
+  ): Prisma.TicketWhereInput {
+    const scopeWhere = this.ticketVisibility.buildWhereClause(actor);
+    const extra: Prisma.TicketWhereInput[] = [];
+
+    const created = buildTicketCreatedAtFilter(args);
+    if (created) extra.push(created);
+
+    const tc = String(args.ticket_class ?? 'ALL').toUpperCase();
+    const openOnly = args.open_only === true || args.open_only === 'true';
+    const statusFilter = Array.isArray(args?.status)
+      ? (args.status as TicketStatus[]).filter(Boolean)
+      : undefined;
+
+    const useDispatchMaintenanceOpen =
+      tc === 'MAINTENANCE' && openOnly && !statusFilter?.length;
+
+    if (useDispatchMaintenanceOpen) {
+      extra.push(this.reportingService.buildOpenMaintenanceWhere({}));
+    } else {
+      if (tc === 'MAINTENANCE') {
+        extra.push({ ticketClass: { code: 'MAINTENANCE' } });
+      } else if (tc === 'SUPPORT') {
+        extra.push({ ticketClass: { code: 'SUPPORT' } });
+      }
+      if (openOnly && !statusFilter?.length) {
+        extra.push({
+          status: { notIn: ['RESOLVED', 'CLOSED'] as TicketStatus[] },
+        });
+      }
+    }
+
+    if (statusFilter?.length) {
+      extra.push({ status: { in: statusFilter } });
+    }
+    const priorityFilter = Array.isArray(args?.priority)
+      ? (args.priority as Priority[]).filter(Boolean)
+      : undefined;
+    if (priorityFilter?.length) {
+      extra.push({ priority: { in: priorityFilter } });
+    }
+
+    const parts = [scopeWhere, ...extra].filter(
+      (p) => p && Object.keys(p as object).length > 0,
+    );
+    if (parts.length === 0) return {};
+    if (parts.length === 1) return parts[0];
+    return { AND: parts };
+  }
+
+  private async getMetrics(args: Record<string, unknown>, actor: RequestUser) {
     try {
       const groupBy = String(args?.group_by ?? 'status')
         .toLowerCase()
         .trim();
-      const statusFilter = Array.isArray(args?.status)
-        ? (args.status as TicketStatus[]).filter(Boolean)
-        : undefined;
-      const priorityFilter = Array.isArray(args?.priority)
-        ? (args.priority as Priority[]).filter(Boolean)
-        : undefined;
+      const where = this.buildTicketAnalyticsWhere(args, actor);
+      const limit = Math.min(Math.max(Number(args.limit) || 25, 1), 50);
 
-      const where: Prisma.TicketWhereInput = {};
-      if (statusFilter?.length) where.status = { in: statusFilter };
-      if (priorityFilter?.length) where.priority = { in: priorityFilter };
-
-      const groupField:
+      type MetricsGroupField =
         | 'status'
         | 'priority'
         | 'maintenanceCategoryId'
-        | 'marketId' =
+        | 'marketId'
+        | 'studioId'
+        | 'ticketClassId';
+
+      let groupField: MetricsGroupField =
         groupBy === 'priority'
           ? 'priority'
           : groupBy === 'category'
             ? 'maintenanceCategoryId'
             : groupBy === 'market'
               ? 'marketId'
-              : 'status';
+              : groupBy === 'studio'
+                ? 'studioId'
+                : groupBy === 'ticket_class'
+                  ? 'ticketClassId'
+                  : 'status';
 
       const groups = await this.prisma.ticket.groupBy({
         by: [groupField],
@@ -483,8 +542,10 @@ export class ToolRouterService {
         orderBy: { _count: { id: 'desc' } },
       });
 
+      const top = groups.slice(0, limit);
+
       if (groupBy === 'category') {
-        const catIds = groups
+        const catIds = top
           .map(
             (g) =>
               (g as { maintenanceCategoryId?: string | null })
@@ -499,7 +560,7 @@ export class ToolRouterService {
           : [];
         const catMap = Object.fromEntries(cats.map((c) => [c.id, c.name]));
         return {
-          counts: groups.map((g) => {
+          counts: top.map((g) => {
             const id = (g as { maintenanceCategoryId?: string | null })
               .maintenanceCategoryId;
             return {
@@ -510,8 +571,8 @@ export class ToolRouterService {
         };
       }
       if (groupBy === 'market') {
-        const mktIds = groups
-          .map((g) => (g as { marketId?: string }).marketId)
+        const mktIds = top
+          .map((g) => (g as { marketId?: string | null }).marketId)
           .filter((id): id is string => Boolean(id));
         const mkts = mktIds.length
           ? await this.prisma.market.findMany({
@@ -521,16 +582,82 @@ export class ToolRouterService {
           : [];
         const mktMap = Object.fromEntries(mkts.map((m) => [m.id, m.name]));
         return {
-          counts: groups.map((g) => ({
+          counts: top.map((g) => ({
             group:
-              mktMap[(g as { marketId?: string }).marketId ?? ''] ?? 'Unknown',
+              mktMap[(g as { marketId?: string | null }).marketId ?? ''] ??
+              'Unknown',
             count: g._count.id,
           })),
         };
       }
+      if (groupBy === 'studio') {
+        const studioIds = top
+          .map((g) => (g as { studioId?: string | null }).studioId)
+          .filter((id): id is string => Boolean(id));
+        const studios = studioIds.length
+          ? await this.prisma.studio.findMany({
+              where: { id: { in: studioIds } },
+              select: { id: true, name: true, marketId: true },
+            })
+          : [];
+        const marketIds = studios
+          .map((s) => s.marketId)
+          .filter((id): id is string => Boolean(id));
+        const markets = marketIds.length
+          ? await this.prisma.market.findMany({
+              where: { id: { in: marketIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+        const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
+        const studioMap = Object.fromEntries(
+          studios.map((s) => [
+            s.id,
+            {
+              name: s.name,
+              marketName: marketMap[s.marketId ?? ''] ?? '',
+            },
+          ]),
+        );
+        return {
+          counts: top.map((g) => {
+            const sid = (g as { studioId?: string | null }).studioId;
+            const meta = sid ? studioMap[sid] : undefined;
+            const label = sid
+              ? meta
+                ? `${meta.name}${meta.marketName ? ` (${meta.marketName})` : ''}`
+                : 'Unknown'
+              : 'No studio';
+            return { group: label, count: g._count.id };
+          }),
+        };
+      }
+      if (groupBy === 'ticket_class') {
+        const classIds = top
+          .map((g) => (g as { ticketClassId?: string | null }).ticketClassId)
+          .filter((id): id is string => Boolean(id));
+        const classes = classIds.length
+          ? await this.prisma.ticketClass.findMany({
+              where: { id: { in: classIds } },
+              select: { id: true, code: true, name: true },
+            })
+          : [];
+        const classMap = Object.fromEntries(
+          classes.map((c) => [c.id, `${c.code}: ${c.name}`]),
+        );
+        return {
+          counts: top.map((g) => {
+            const id = (g as { ticketClassId?: string | null }).ticketClassId;
+            return {
+              group: id ? (classMap[id] ?? 'Unknown') : 'Unclassified',
+              count: g._count.id,
+            };
+          }),
+        };
+      }
 
       return {
-        counts: groups.map((g) => ({
+        counts: top.map((g) => ({
           group: String((g as Record<string, unknown>)[groupField] ?? ''),
           count: g._count.id,
         })),
@@ -539,6 +666,149 @@ export class ToolRouterService {
       const msg = err instanceof Error ? err.message : 'Metrics query failed';
       this.logger.warn(`get_ticket_metrics failed: ${msg}`);
       return { counts: [], error: msg };
+    }
+  }
+
+  // ── query_user_rollups (account creation dates — not HR hire date) ─────────
+
+  private buildUserRollupWhere(actor: RequestUser): Prisma.UserWhereInput {
+    if (actor.role === Role.ADMIN || actor.role === Role.DEPARTMENT_USER) {
+      return {};
+    }
+    const studioIds = [actor.studioId, ...actor.scopeStudioIds].filter(
+      (id): id is string => Boolean(id),
+    );
+    const or: Prisma.UserWhereInput[] = [{ id: actor.id }];
+    if (studioIds.length > 0) {
+      or.push({ studioId: { in: studioIds } });
+    }
+    return { OR: or };
+  }
+
+  private buildUserCreatedAtFilter(
+    args: Record<string, unknown>,
+  ): Prisma.DateTimeFilter | null {
+    const w = buildTicketCreatedAtFilter(args);
+    if (!w || !w.createdAt || typeof w.createdAt !== 'object') return null;
+    return w.createdAt as Prisma.DateTimeFilter;
+  }
+
+  private async queryUserRollups(
+    args: Record<string, unknown>,
+    actor: RequestUser,
+  ) {
+    try {
+      const groupBy = String(args.group_by ?? 'studio').toLowerCase().trim();
+      const isActive =
+        args.is_active !== false && args.is_active !== 'false';
+      const limit = Math.min(Math.max(Number(args.limit) || 25, 1), 50);
+
+      const whereUser: Prisma.UserWhereInput = this.buildUserRollupWhere(actor);
+      if (isActive) whereUser.isActive = true;
+
+      const created = this.buildUserCreatedAtFilter(args);
+      if (created) whereUser.createdAt = created;
+
+      const disclaimer =
+        'Counts reflect user accounts (User.createdAt / signup), not HR hire dates.';
+
+      if (groupBy === 'role') {
+        const rows = await this.prisma.user.groupBy({
+          by: ['role'],
+          where: whereUser,
+          _count: { id: true },
+          orderBy: { _count: { id: 'desc' } },
+        });
+        return {
+          counts: rows.slice(0, limit).map((r) => ({
+            group: r.role,
+            count: r._count.id,
+          })),
+          disclaimer,
+        };
+      }
+
+      if (groupBy === 'market') {
+        const rows = await this.prisma.user.groupBy({
+          by: ['marketId'],
+          where: whereUser,
+          _count: { id: true },
+          orderBy: { _count: { marketId: 'desc' } },
+        });
+        const top = rows.slice(0, limit);
+        const mktIds = top
+          .map((r) => r.marketId)
+          .filter((id): id is string => Boolean(id));
+        const mkts = mktIds.length
+          ? await this.prisma.market.findMany({
+              where: { id: { in: mktIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+        const mktMap = Object.fromEntries(mkts.map((m) => [m.id, m.name]));
+        return {
+          counts: top.map((r) => ({
+            group: r.marketId
+              ? (mktMap[r.marketId] ?? 'Unknown')
+              : 'No market',
+            count: r._count.id,
+          })),
+          disclaimer,
+        };
+      }
+
+      const rows = await this.prisma.user.groupBy({
+        by: ['studioId'],
+        where: whereUser,
+        _count: { id: true },
+        orderBy: { _count: { studioId: 'desc' } },
+      });
+      const top = rows.slice(0, limit);
+      const studioIds = top
+        .map((r) => r.studioId)
+        .filter((id): id is string => Boolean(id));
+      const studios = studioIds.length
+        ? await this.prisma.studio.findMany({
+            where: { id: { in: studioIds } },
+            select: { id: true, name: true, marketId: true },
+          })
+        : [];
+      const marketIds = studios
+        .map((s) => s.marketId)
+        .filter((id): id is string => Boolean(id));
+      const markets = marketIds.length
+        ? await this.prisma.market.findMany({
+            where: { id: { in: marketIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+      const marketMap = Object.fromEntries(markets.map((m) => [m.id, m.name]));
+      const studioMap = Object.fromEntries(
+        studios.map((s) => [
+          s.id,
+          {
+            name: s.name,
+            marketName: marketMap[s.marketId ?? ''] ?? '',
+          },
+        ]),
+      );
+      return {
+        counts: top.map((r) => {
+          const sid = r.studioId;
+          const meta = sid ? studioMap[sid] : undefined;
+          const label = sid
+            ? meta
+              ? `${meta.name}${meta.marketName ? ` (${meta.marketName})` : ''}`
+              : 'Unknown'
+            : 'No studio';
+          return { group: label, count: r._count.id };
+        }),
+        disclaimer,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'User rollup failed';
+      this.logger.warn(`query_user_rollups failed: ${msg}`);
+      return { counts: [], error: msg, disclaimer: '' };
     }
   }
 

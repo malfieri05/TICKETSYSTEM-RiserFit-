@@ -111,6 +111,7 @@ describe('TicketsService', () => {
     policy = {
       evaluate: jest.fn().mockReturnValue({ allowed: true }),
     };
+    const leaseEvaluation = { evaluateForTicket: jest.fn() };
     const subtaskWorkflow = {
       instantiateForTicket: jest.fn().mockResolvedValue(undefined),
     };
@@ -125,6 +126,7 @@ describe('TicketsService', () => {
       ticketForms as never,
       subtaskWorkflow as never,
       policy as never,
+      leaseEvaluation as never,
     );
   });
 

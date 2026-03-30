@@ -79,7 +79,7 @@ export default function AdminWorkflowAnalyticsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Template</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Total</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Active</th>
@@ -125,7 +125,7 @@ export default function AdminWorkflowAnalyticsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-surface-raised)' }}>
+                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                     <th className="text-left py-3 px-4 font-semibold text-[var(--color-text-primary)]">Department</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Tickets created</th>
                     <th className="text-right py-3 px-4 font-semibold text-[var(--color-text-primary)]">Workflows started</th>

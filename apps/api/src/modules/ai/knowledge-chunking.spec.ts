@@ -1,6 +1,8 @@
 import {
   chunkKnowledgeText,
   chunkKnowledgeTextWithPositions,
+  clampChunksForEmbeddingPositions,
+  EMBEDDING_SAFE_MAX_CHARS,
   normalizeKnowledgeText,
 } from './knowledge-chunking';
 
@@ -51,6 +53,15 @@ describe('knowledge-chunking', () => {
     expect(withPos.length).toBeGreaterThan(1);
     for (let i = 1; i < withPos.length; i++) {
       expect(withPos[i].start).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('clampChunksForEmbeddingPositions splits segments over OpenAI-safe char limit', () => {
+    const huge = 'z'.repeat(EMBEDDING_SAFE_MAX_CHARS + 5000);
+    const clamped = clampChunksForEmbeddingPositions([{ content: huge, start: 0 }], 100);
+    expect(clamped.length).toBeGreaterThan(1);
+    for (const c of clamped) {
+      expect(c.content.length).toBeLessThanOrEqual(EMBEDDING_SAFE_MAX_CHARS);
     }
   });
 

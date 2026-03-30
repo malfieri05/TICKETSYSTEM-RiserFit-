@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, FormEvent } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useEffect, useMemo, FormEvent } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle, Globe } from 'lucide-react';
-import { agentApi, type AgentActionPlan } from '@/lib/api';
+import { agentApi, adminApi, type AgentActionPlan } from '@/lib/api';
+import { AssistantLinkedText, flattenStudiosFromMarkets } from '@/components/ai/assistant-linked-text';
 import { cn } from '@/lib/utils';
 
 function stripConfirmCancelPhrase(text: string): string {
@@ -14,6 +15,16 @@ function stripConfirmCancelPhrase(text: string): string {
     .replace(/\n*Click Confirm to proceed or Cancel to stop\.?/gi, '')
     .replace(/\n*Confirm to proceed or Cancel to stop\.?/gi, '')
     .trimEnd();
+}
+
+/** Chat renders plain text; strip markdown the model may still emit so ** does not show literally. */
+function stripAssistantMarkdown(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+  let s = text;
+  s = s.replace(/\*\*([^*]+)\*\*/g, '$1');
+  s = s.replace(/^#{1,6}\s+/gm, '');
+  s = s.replace(/`([^`]+)`/g, '$1');
+  return s;
 }
 
 interface Message {
@@ -51,6 +62,13 @@ export interface AiChatPanelProps {
 
 export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps) {
   const qc = useQueryClient();
+  const { data: marketsData } = useQuery({
+    queryKey: ['markets', 'assistant-chat'],
+    queryFn: async () => (await adminApi.listMarkets()).data,
+    staleTime: 5 * 60 * 1000,
+  });
+  const studioLinkTargets = useMemo(() => flattenStudiosFromMarkets(marketsData), [marketsData]);
+
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -254,7 +272,17 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
                     {msg.content}
                   </div>
                 ) : (
-                  <div className="whitespace-pre-wrap">{stripConfirmCancelPhrase(msg.content)}</div>
+                  <div className="whitespace-pre-wrap">
+                    {msg.role === 'assistant' ? (
+                      <AssistantLinkedText
+                        text={stripAssistantMarkdown(stripConfirmCancelPhrase(msg.content))}
+                        studios={studioLinkTargets}
+                        toolResults={msg.toolResults}
+                      />
+                    ) : (
+                      stripAssistantMarkdown(stripConfirmCancelPhrase(msg.content))
+                    )}
+                  </div>
                 )}
               </div>
 

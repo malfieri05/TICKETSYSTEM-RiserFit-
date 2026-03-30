@@ -8,6 +8,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "npm run start:dev",
+    "ingest:platform-guide": "ts-node --transpile-only -r dotenv/config scripts/ingest-platform-user-guide.ts",
     "seed:locations": "ts-node prisma/seed-locations.ts",
     "import:studio-profiles": "ts-node --transpile-only prisma/import-studio-profiles.ts",
     "cleanup:studios": "ts-node prisma/cleanup-legacy-studios.ts",
@@ -53,6 +54,7 @@
     "postmark": "^4.0.7",
     "prisma": "^7.4.2",
     "reflect-metadata": "^0.2.2",
+    "resend": "^4.8.0",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

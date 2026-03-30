@@ -38,7 +38,9 @@ export default function InboxPage() {
     });
   };
 
-  const handleSelect = useCallback((id: string) => setSelectedId(id), []);
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId((prev) => (prev === id ? null : id));
+  }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
 
   const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';

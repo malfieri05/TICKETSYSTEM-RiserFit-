@@ -95,6 +95,14 @@ enum AuditAction {
   SUBTASK_COMPLETED
 }
 
+/// Admin invite-only provisioning lifecycle
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
 // Email-triggered assembly automation (Stage 1+)
 enum VendorOrderState {
   ORDER_CONFIRMED
@@ -347,11 +355,51 @@ model User {
   studioScopes         UserStudioScope[]
   dispatchGroupsCreated     DispatchGroup[]
   dispatchGroupTemplatesCreated DispatchGroupTemplate[]
+  invitationsCreated   UserInvitation[] @relation("UserInvitationInviter")
+  invitationRedeemed   UserInvitation?  @relation("UserInvitationRedeemed")
 
   @@index([email])
   @@index([role])
   @@index([teamId])
   @@map("users")
+}
+
+// ============================================================
+// USER INVITATIONS (closed-system provisioning)
+// ============================================================
+
+model UserInvitation {
+  id                   String           @id @default(cuid())
+  emailNormalized      String           @map("email_normalized")
+  invitedByUserId      String           @map("invited_by_user_id")
+  tokenHash            String           @map("token_hash")
+  /// AES-256-GCM wrap of raw 32-byte token (base64) so Resend can rebuild the same link without storing plaintext.
+  tokenWrap            String           @map("token_wrap")
+  tokenVersion         Int              @default(1) @map("token_version")
+  status               InvitationStatus @default(PENDING)
+  expiresAt            DateTime         @map("expires_at")
+  acceptedAt           DateTime?        @map("accepted_at")
+  revokedAt            DateTime?        @map("revoked_at")
+  lastSentAt           DateTime?        @map("last_sent_at")
+  sendCount            Int              @default(0) @map("send_count")
+  resendWindowStartAt  DateTime?        @map("resend_window_start_at")
+  resendsInWindow      Int              @default(0) @map("resends_in_window")
+  assignedRole         Role             @map("assigned_role")
+  seedName             String           @map("seed_name")
+  departmentsJson      Json?            @map("departments_json")
+  defaultStudioId      String?          @map("default_studio_id")
+  additionalStudioIds  Json?            @map("additional_studio_ids")
+  createdUserId        String?          @unique @map("created_user_id")
+  createdAt            DateTime         @default(now()) @map("created_at")
+  updatedAt            DateTime         @updatedAt @map("updated_at")
+
+  invitedBy   User  @relation("UserInvitationInviter", fields: [invitedByUserId], references: [id])
+  createdUser User? @relation("UserInvitationRedeemed", fields: [createdUserId], references: [id])
+
+  @@index([tokenHash])
+  @@index([emailNormalized])
+  @@index([status])
+  @@map("user_invitations")
 }
 
 // ============================================================

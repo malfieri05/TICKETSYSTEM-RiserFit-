@@ -452,7 +452,10 @@ export default function ReportingPage() {
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide">
+                  <tr
+                    className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide"
+                    style={{ background: 'var(--color-bg-content-header)' }}
+                  >
                     <th className="text-left py-2 pr-4">Owner</th>
                     <th className="text-right py-2 pr-4">Avg Completion</th>
                     <th className="text-right py-2 pr-2">Closed Tickets</th>
@@ -508,7 +511,10 @@ export default function ReportingPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide">
+                      <tr
+                        className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide"
+                        style={{ background: 'var(--color-bg-content-header)' }}
+                      >
                         <th className="text-left py-2 pr-4">Step</th>
                         <th className="text-right py-2 pr-4">Avg Completion</th>
                         <th className="text-right py-2 pr-2">Avg Active Work</th>

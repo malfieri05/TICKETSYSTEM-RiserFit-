@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -20,19 +21,33 @@ export class AuthService {
 
   // ── Password auth ────────────────────────────────────────────────────────
 
+  assertPasswordPolicy(password: string): void {
+    if (password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters.');
+    }
+  }
+
+  async hashPassword(plain: string): Promise<string> {
+    this.assertPasswordPolicy(plain);
+    return bcrypt.hash(plain, BCRYPT_ROUNDS);
+  }
+
   async register(
     email: string,
     name: string,
     password: string,
   ): Promise<{ access_token: string; user: RequestUser }> {
+    if (process.env.ALLOW_PUBLIC_REGISTER !== 'true') {
+      throw new ForbiddenException(
+        'Account creation is by invitation only. Contact your administrator.',
+      );
+    }
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists.');
     }
 
-    if (password.length < 8) {
-      throw new BadRequestException('Password must be at least 8 characters.');
-    }
+    this.assertPasswordPolicy(password);
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
