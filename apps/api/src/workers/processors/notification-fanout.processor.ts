@@ -29,6 +29,7 @@ const FANOUT_RULES: Record<string, string[]> = {
   TICKET_RESOLVED: ['requester', 'watchers'],
   TICKET_CLOSED: ['requester', 'watchers'],
   COMMENT_ADDED: ['requester', 'owner', 'watchers'],
+  TICKET_TAG_ADDED: ['requester', 'owner', 'watchers'],
   MENTION_IN_COMMENT: ['mentioned'],
   SUBTASK_ASSIGNED: ['subtaskOwner'],
   SUBTASK_COMPLETED: ['owner'],
@@ -83,6 +84,11 @@ function buildNotificationContent(
       return {
         title: `${actorName} commented`,
         body: `On "${ticketTitle}": ${String(payload.bodyPreview ?? '').substring(0, 100)}`,
+      };
+    case 'TICKET_TAG_ADDED':
+      return {
+        title: 'Tag added',
+        body: `${actorName} added tag "${String(payload.tagLabel ?? '')}" to "${ticketTitle}".`,
       };
     case 'MENTION_IN_COMMENT':
       return {
@@ -216,6 +222,17 @@ export class NotificationFanoutProcessor extends WorkerHost {
       }
     }
 
+    // TICKET_TAG_ADDED — same recipient pool as comments; drop users who cannot view the ticket
+    if (eventType === 'TICKET_TAG_ADDED' && ticket) {
+      const candidateIds = Array.from(recipientIds);
+      for (const userId of candidateIds) {
+        const canView = await this.canUserViewTicket(ticket, userId);
+        if (!canView) {
+          recipientIds.delete(userId);
+        }
+      }
+    }
+
     // Don't notify the actor who triggered the event
     recipientIds.delete(actorId);
 
@@ -281,7 +298,11 @@ export class NotificationFanoutProcessor extends WorkerHost {
       // Create email delivery record and enqueue dispatch job
       if (wantsEmail) {
         const subtaskIdPart = (payload.subtaskId as string) ?? '';
-        const idempotencyKey = `${eventType}_${ticketId}_${subtaskIdPart}_${user.id}_EMAIL_${job.data.occurredAt}`;
+        const tagIdPart =
+          eventType === 'TICKET_TAG_ADDED'
+            ? ((payload.tagId as string) ?? '')
+            : '';
+        const idempotencyKey = `${eventType}_${ticketId}_${subtaskIdPart || tagIdPart}_${user.id}_EMAIL_${job.data.occurredAt}`;
 
         // Check idempotency — don't create duplicate delivery record
         const existing = await this.prisma.notificationDelivery.findUnique({

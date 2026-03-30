@@ -134,6 +134,12 @@ export const ticketsApi = {
     api.get<import('@/types').LeaseIqResult | null>(`/tickets/${id}/lease-iq-result`),
   reEvaluateLeaseIq: (id: string) =>
     api.post<import('@/types').LeaseIqResult>(`/tickets/${id}/lease-iq/evaluate`),
+  addTag: (id: string, data: { label: string }) =>
+    api.post<{
+      tag: { id: string; name: string };
+      createdAt: string;
+      createdBy: { id: string; name: string };
+    }>(`/tickets/${id}/tags`, data),
 };
 
 // Shared helper: invalidate all major ticket list surfaces after mutations

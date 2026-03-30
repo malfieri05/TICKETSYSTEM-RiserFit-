@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Inbox as InboxIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
-import { ticketsApi } from '@/lib/api';
+import { ticketsApi, invalidateTicketLists } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import type { TicketFilters } from '@/types';
@@ -20,6 +20,7 @@ const PAGE_SIZE = 20;
 
 export default function InboxPage() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   const [page, setPage] = useState(1);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -42,6 +43,22 @@ export default function InboxPage() {
     setSelectedId((prev) => (prev === id ? null : id));
   }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
+
+  const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
+  const addTagMut = useMutation({
+    mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
+      ticketsApi.addTag(ticketId, { label }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleAddTag = useCallback(
+    async (ticketId: string, label: string) => {
+      await addTagMut.mutateAsync({ ticketId, label });
+    },
+    [addTagMut],
+  );
 
   const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';
   const { data: foldersData } = useQuery({
@@ -131,8 +148,14 @@ export default function InboxPage() {
               id={ticket.id}
               title={ticket.title}
               status={ticket.status}
-              priority={ticket.priority}
+              dueDate={ticket.dueDate}
               createdAt={ticket.createdAt}
+              tags={ticket.tags ?? []}
+              canAddTag={canAddTag}
+              onAddTag={canAddTag ? handleAddTag : undefined}
+              isAddingTag={
+                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+              }
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}

@@ -12,6 +12,7 @@ import {
   TICKET_LIST_INBOX,
   TICKET_TRANSITION_STATUS,
   TICKET_UPDATE_CORE_FIELDS,
+  TICKET_ADD_TAG,
   TICKET_VIEW,
 } from './capability-keys';
 
@@ -22,6 +23,7 @@ export const TicketCapabilities = [
   TICKET_TRANSITION_STATUS,
   TICKET_ASSIGN_OWNER,
   TICKET_UPDATE_CORE_FIELDS,
+  TICKET_ADD_TAG,
 ] as const;
 
 export const SubtaskCapabilities = [

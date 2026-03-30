@@ -26,6 +26,7 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { TransitionStatusDto } from './dto/transition-status.dto';
+import { AddTicketTagDto } from './dto/add-ticket-tag.dto';
 
 @Controller('tickets')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -109,6 +110,17 @@ export class TicketsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.commentsService.getMentionableUsers(ticketId, user, search);
+  }
+
+  // POST /api/tickets/:id/tags
+  @Post(':id/tags')
+  @HttpCode(HttpStatus.CREATED)
+  addTicketTag(
+    @Param('id') id: string,
+    @Body() dto: AddTicketTagDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.ticketsService.addTag(id, dto, user);
   }
 
   // GET /api/tickets/:id

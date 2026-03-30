@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
@@ -16,13 +17,20 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketFiltersDto } from './dto/ticket-filters.dto';
 import { assertValidTransition } from './ticket-state-machine';
 import { generateTicketTitle } from './title-generator';
-import { Role, TicketStatus, Prisma, EvaluationTrigger } from '@prisma/client';
+import {
+  Role,
+  TicketStatus,
+  Prisma,
+  EvaluationTrigger,
+  AuditAction,
+} from '@prisma/client';
 import { SlaService } from '../sla/sla.service';
 import { TicketFormsService } from '../ticket-forms/ticket-forms.service';
 import { SubtaskWorkflowService } from '../subtask-workflow/subtask-workflow.service';
 import { PolicyService } from '../../policy/policy.service';
 import { LeaseEvaluationService } from '../lease-iq/services/lease-evaluation.service';
 import {
+  TICKET_ADD_TAG,
   TICKET_ASSIGN_OWNER,
   TICKET_CREATE,
   TICKET_LIST_INBOX,
@@ -31,6 +39,19 @@ import {
   TICKET_VIEW,
 } from '../../policy/capabilities/capability-keys';
 import { mapCommentToResponse } from '../../common/serializers/comment-response';
+import { AddTicketTagDto } from './dto/add-ticket-tag.dto';
+import {
+  normalizeTicketTagLabel,
+  TICKET_TAG_LABEL_MAX_LEN,
+  TICKET_MAX_TAGS_PER_TICKET,
+} from './ticket-tag.utils';
+
+/** New tickets: due 7 calendar days from this instant (matches migration backfill). */
+function defaultTicketDueDate(from: Date = new Date()): Date {
+  const d = new Date(from.getTime());
+  d.setDate(d.getDate() + 7);
+  return d;
+}
 
 // ─── Prisma select shapes (prevents N+1 and controls response size) ──────────
 
@@ -40,6 +61,39 @@ const TAXONOMY_SELECT = {
   supportTopic: { select: { id: true, name: true } },
   maintenanceCategory: { select: { id: true, name: true, color: true } },
 };
+
+type TicketTagRow = {
+  createdAt: Date;
+  tag: { id: string; name: string };
+  createdBy: { id: string; name: string };
+};
+
+function mapTicketTagsToResponse(
+  rows: TicketTagRow[] | undefined,
+): {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy: { id: string; name: string };
+}[] {
+  if (!rows?.length) return [];
+  return rows.map((r) => ({
+    id: r.tag.id,
+    name: r.tag.name,
+    createdAt: r.createdAt.toISOString(),
+    createdBy: { id: r.createdBy.id, name: r.createdBy.name },
+  }));
+}
+
+const TICKET_TAGS_LIST_SELECT = {
+  orderBy: { createdAt: 'asc' as const },
+  take: TICKET_MAX_TAGS_PER_TICKET,
+  select: {
+    createdAt: true,
+    createdBy: { select: { id: true, name: true } },
+    tag: { select: { id: true, name: true } },
+  },
+} as const;
 
 const TICKET_LIST_SELECT = {
   id: true,
@@ -55,6 +109,7 @@ const TICKET_LIST_SELECT = {
   updatedAt: true,
   resolvedAt: true,
   closedAt: true,
+  dueDate: true,
   ...TAXONOMY_SELECT,
   studio: { select: { id: true, name: true } },
   market: { select: { id: true, name: true } },
@@ -68,6 +123,7 @@ const TICKET_LIST_SELECT = {
       teamId: true,
     },
   },
+  tags: TICKET_TAGS_LIST_SELECT,
   _count: {
     select: {
       comments: true,
@@ -92,6 +148,7 @@ const TICKET_LIST_SELECT_LIGHT = {
   updatedAt: true,
   resolvedAt: true,
   closedAt: true,
+  dueDate: true,
   ...TAXONOMY_SELECT,
   studio: { select: { id: true, name: true } },
   market: { select: { id: true, name: true } },
@@ -105,6 +162,7 @@ const TICKET_LIST_SELECT_LIGHT = {
       teamId: true,
     },
   },
+  tags: TICKET_TAGS_LIST_SELECT,
 } satisfies Prisma.TicketSelect;
 
 const TICKET_DETAIL_SELECT = {
@@ -149,9 +207,7 @@ const TICKET_DETAIL_SELECT = {
       user: { select: { id: true, name: true, email: true, avatarUrl: true } },
     },
   },
-  tags: {
-    include: { tag: { select: { id: true, name: true, color: true } } },
-  },
+  tags: TICKET_TAGS_LIST_SELECT,
   formResponses: {
     select: { fieldKey: true, value: true },
     orderBy: { fieldKey: 'asc' as const },
@@ -402,6 +458,7 @@ export class TicketsService {
     }
 
     const ticket = await this.prisma.$transaction(async (tx) => {
+      const createAt = new Date();
       const created = await tx.ticket.create({
         data: {
           title: titleToStore,
@@ -416,6 +473,7 @@ export class TicketsService {
           priority: dto.priority ?? 'MEDIUM',
           requesterId: actor.id,
           status: 'NEW',
+          dueDate: defaultTicketDueDate(createAt),
         } satisfies Prisma.TicketUncheckedCreateInput,
         select: TICKET_LIST_SELECT,
       });
@@ -530,7 +588,10 @@ export class TicketsService {
       // Do not fail ticket create if evaluation errors
     }
 
-    return ticket;
+    return {
+      ...ticket,
+      tags: mapTicketTagsToResponse(ticket.tags as TicketTagRow[] | undefined),
+    };
   }
 
   // ─── LIST ───────────────────────────────────────────────────────────────────
@@ -759,8 +820,13 @@ export class TicketsService {
       }));
     }
 
+    const withTags = annotated.map((t) => ({
+      ...t,
+      tags: mapTicketTagsToResponse(t.tags as TicketTagRow[] | undefined),
+    }));
+
     return {
-      data: annotated,
+      data: withTags,
       total,
       page,
       limit: limitClamped,
@@ -816,6 +882,7 @@ export class TicketsService {
 
     return {
       ...ticket,
+      tags: mapTicketTagsToResponse(ticket.tags as TicketTagRow[] | undefined),
       comments: threadedComments,
       sla: this.sla.compute(ticket),
       completedSubtasks,
@@ -952,7 +1019,10 @@ export class TicketsService {
       newValues: dto as Record<string, unknown>,
     });
 
-    return updated;
+    return {
+      ...updated,
+      tags: mapTicketTagsToResponse(updated.tags as TicketTagRow[] | undefined),
+    };
   }
 
   // ─── ASSIGN ──────────────────────────────────────────────────────────────────
@@ -1018,7 +1088,10 @@ export class TicketsService {
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      tags: mapTicketTagsToResponse(updated.tags as TicketTagRow[] | undefined),
+    };
   }
 
   // ─── TRANSITION STATUS ───────────────────────────────────────────────────────
@@ -1107,7 +1180,10 @@ export class TicketsService {
       },
     });
 
-    return updated;
+    return {
+      ...updated,
+      tags: mapTicketTagsToResponse(updated.tags as TicketTagRow[] | undefined),
+    };
   }
 
   // ─── WATCHERS ────────────────────────────────────────────────────────────────
@@ -1268,6 +1344,7 @@ export class TicketsService {
           title: true,
           status: true,
           priority: true,
+          dueDate: true,
           updatedAt: true,
           createdAt: true,
           resolvedAt: true,
@@ -1384,6 +1461,7 @@ export class TicketsService {
           title: true,
           status: true,
           priority: true,
+          dueDate: true,
           updatedAt: true,
           studio: { select: { id: true, name: true } },
           requester: { select: { id: true, name: true } },
@@ -1512,5 +1590,172 @@ export class TicketsService {
     ];
 
     return { folders };
+  }
+
+  async addTag(ticketId: string, dto: AddTicketTagDto, actor: RequestUser) {
+    const raw = dto.label;
+    if (raw.length > TICKET_TAG_LABEL_MAX_LEN) {
+      throw new BadRequestException({
+        code: 'INVALID_TAG_INPUT',
+        message: 'Tag label is too long',
+      });
+    }
+    const trimmed = raw.trim();
+    if (trimmed.length === 0) {
+      throw new BadRequestException({
+        code: 'INVALID_TAG_INPUT',
+        message: 'Tag label cannot be empty',
+      });
+    }
+    const labelNormalized = normalizeTicketTagLabel(raw);
+    if (labelNormalized.length === 0 || labelNormalized.length > TICKET_TAG_LABEL_MAX_LEN) {
+      throw new BadRequestException({
+        code: 'INVALID_TAG_INPUT',
+        message: 'Tag label is invalid after normalization',
+      });
+    }
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        title: true,
+        requesterId: true,
+        ownerId: true,
+        studioId: true,
+        department: { select: { code: true } },
+        owner: { select: { teamId: true, team: { select: { name: true } } } },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found',
+      });
+    }
+
+    const viewDecision = this.policy.evaluate(TICKET_VIEW, actor, ticket);
+    if (!viewDecision.allowed) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found',
+      });
+    }
+
+    const tagDecision = this.policy.evaluate(TICKET_ADD_TAG, actor, ticket);
+    if (!tagDecision.allowed) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN_TAG_CREATION',
+        message: 'You do not have permission to add tags to this ticket',
+      });
+    }
+
+    const actorUser = await this.prisma.user.findUnique({
+      where: { id: actor.id },
+      select: { name: true },
+    });
+    const authorName = actorUser?.name ?? 'Someone';
+
+    const run = await this.prisma.$transaction(async (tx) => {
+      const existingCount = await tx.ticketTag.count({
+        where: { ticketId },
+      });
+      if (existingCount >= TICKET_MAX_TAGS_PER_TICKET) {
+        throw new BadRequestException({
+          code: 'TAG_LIMIT_REACHED',
+          message: `A ticket may have at most ${TICKET_MAX_TAGS_PER_TICKET} tags`,
+        });
+      }
+
+      let tagRow = await tx.tag.findUnique({
+        where: { name: labelNormalized },
+      });
+      if (!tagRow) {
+        try {
+          tagRow = await tx.tag.create({
+            data: { name: labelNormalized },
+          });
+        } catch (e) {
+          if (
+            e instanceof Prisma.PrismaClientKnownRequestError &&
+            e.code === 'P2002'
+          ) {
+            tagRow = await tx.tag.findUniqueOrThrow({
+              where: { name: labelNormalized },
+            });
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      let junction: { createdAt: Date };
+      try {
+        junction = await tx.ticketTag.create({
+          data: {
+            ticketId,
+            tagId: tagRow.id,
+            createdByUserId: actor.id,
+          },
+          select: { createdAt: true },
+        });
+      } catch (e) {
+        if (
+          e instanceof Prisma.PrismaClientKnownRequestError &&
+          e.code === 'P2002'
+        ) {
+          throw new ConflictException({
+            code: 'TAG_ALREADY_EXISTS_ON_TICKET',
+            message: 'This tag is already on the ticket',
+          });
+        }
+        throw e;
+      }
+
+      await tx.ticket.update({
+        where: { id: ticketId },
+        data: { updatedAt: new Date() },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: AuditAction.TICKET_TAG_ADDED,
+          entityType: 'ticket_tag',
+          entityId: `${ticketId}:${tagRow.id}`,
+          ticketId,
+          newValues: { tagId: tagRow.id, tagName: labelNormalized },
+        },
+      });
+
+      return { tagId: tagRow.id, createdAt: junction.createdAt };
+    });
+
+    const createdTagId = run.tagId;
+    const createdAt = run.createdAt;
+
+    await this.domainEvents.emit({
+      type: 'TICKET_TAG_ADDED',
+      ticketId,
+      actorId: actor.id,
+      occurredAt: new Date(),
+      payload: {
+        tagId: createdTagId,
+        tagLabel: labelNormalized,
+        authorName,
+        requesterId: ticket.requesterId,
+        ownerId: ticket.ownerId ?? undefined,
+        title: ticket.title,
+      },
+    });
+
+    this.logger.log(`Tag added: ticket=${ticketId} tag=${createdTagId}`);
+
+    return {
+      tag: { id: createdTagId, name: labelNormalized },
+      createdAt: createdAt.toISOString(),
+      createdBy: { id: actor.id, name: authorName },
+    };
   }
 }

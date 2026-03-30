@@ -3,9 +3,15 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ticket, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
-import { ticketsApi, dashboardApi, adminApi, type StudioDashboardSummaryResponse } from '@/lib/api';
+import {
+  ticketsApi,
+  dashboardApi,
+  adminApi,
+  invalidateTicketLists,
+  type StudioDashboardSummaryResponse,
+} from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
@@ -79,12 +85,29 @@ function BreakdownBar({ label, count, max, color }: { label: string; count: numb
 export default function PortalPage() {
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const qc = useQueryClient();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const handleSelect = useCallback((id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
   }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
+
+  const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
+  const addTagMut = useMutation({
+    mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
+      ticketsApi.addTag(ticketId, { label }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleAddTag = useCallback(
+    async (ticketId: string, label: string) => {
+      await addTagMut.mutateAsync({ ticketId, label });
+    },
+    [addTagMut],
+  );
 
   // Scope summary (dashboard metrics + allowed studios)
   const { data: scopeData, isLoading: scopeLoading } = useQuery({
@@ -321,8 +344,14 @@ export default function PortalPage() {
               title={ticket.title}
               subLabel={subLabel}
               status={ticket.status}
-              priority={ticket.priority}
+              dueDate={ticket.dueDate}
               createdAt={ticket.createdAt}
+              tags={ticket.tags ?? []}
+              canAddTag={canAddTag}
+              onAddTag={canAddTag ? handleAddTag : undefined}
+              isAddingTag={
+                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+              }
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}
@@ -487,8 +516,14 @@ export default function PortalPage() {
               title={ticket.title}
               subLabel={subLabel}
               status={ticket.status}
-              priority={ticket.priority}
+              dueDate={ticket.dueDate}
               createdAt={ticket.createdAt}
+              tags={ticket.tags ?? []}
+              canAddTag={canAddTag}
+              onAddTag={canAddTag ? handleAddTag : undefined}
+              isAddingTag={
+                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+              }
               commentCount={ticket._count?.comments ?? 0}
               completedSubtasks={completedSubtasks}
               totalSubtasks={totalSubtasks}

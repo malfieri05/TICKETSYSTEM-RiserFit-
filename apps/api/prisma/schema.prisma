@@ -66,6 +66,7 @@ enum NotificationEventType {
   SUBTASK_BECAME_READY
   ATTACHMENT_ADDED
   TICKET_SLA_BREACHED
+  TICKET_TAG_ADDED
 }
 
 enum DeliveryChannel {
@@ -93,6 +94,7 @@ enum AuditAction {
   SUBTASK_CREATED
   SUBTASK_UPDATED
   SUBTASK_COMPLETED
+  TICKET_TAG_ADDED
 }
 
 /// Admin invite-only provisioning lifecycle
@@ -357,6 +359,7 @@ model User {
   dispatchGroupTemplatesCreated DispatchGroupTemplate[]
   invitationsCreated   UserInvitation[] @relation("UserInvitationInviter")
   invitationRedeemed   UserInvitation?  @relation("UserInvitationRedeemed")
+  ticketTagsCreated    TicketTag[]      @relation("TicketTagCreatedBy")
 
   @@index([email])
   @@index([role])
@@ -618,6 +621,8 @@ model Ticket {
   dispatchReadiness    DispatchReadiness?
   resolvedAt           DateTime?
   closedAt             DateTime?
+  /// Default at create: createdAt + 7 calendar days (set in application layer).
+  dueDate              DateTime
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
@@ -651,6 +656,7 @@ model Ticket {
   @@index([supportTopicId])
   @@index([maintenanceCategoryId])
   @@index([priority])
+  @@index([dueDate])
   @@index([createdAt])
   @@index([status, ownerId])
   @@index([requesterId, status])
@@ -919,14 +925,18 @@ model Tag {
 }
 
 model TicketTag {
-  ticketId  String
-  tagId     String
-  createdAt DateTime @default(now())
+  ticketId          String
+  tagId             String
+  createdByUserId   String   @map("created_by_user_id")
+  createdAt         DateTime @default(now())
 
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag       Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("TicketTagCreatedBy", fields: [createdByUserId], references: [id])
 
   @@id([ticketId, tagId])
+  @@index([ticketId])
+  @@index([createdByUserId])
   @@map("ticket_tags")
 }
 

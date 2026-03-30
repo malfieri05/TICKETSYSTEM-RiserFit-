@@ -19,7 +19,17 @@ export type DomainEventPayload =
   | SubtaskAssignedPayload
   | SubtaskCompletedPayload
   | SubtaskBlockedPayload
-  | SubtaskBecameReadyPayload;
+  | SubtaskBecameReadyPayload
+  | TicketTagAddedPayload;
+
+export interface TicketTagAddedPayload {
+  tagId: string;
+  tagLabel: string;
+  authorName: string;
+  requesterId: string;
+  ownerId?: string;
+  title: string;
+}
 
 export interface TicketCreatedPayload {
   requesterId: string;

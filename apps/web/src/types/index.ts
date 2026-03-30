@@ -79,11 +79,21 @@ export interface SlaStatus {
 
 // ─── Tickets ───────────────────────────────────────────────────────────────
 
+/** Operational tag on a ticket (v1): `id` is the global Tag id. */
+export interface TicketTagItem {
+  id: string;
+  name: string;
+  createdAt: string;
+  createdBy: { id: string; name: string };
+}
+
 export interface TicketListItem {
   id: string;
   title: string;
   status: TicketStatus;
   priority: TicketPriority;
+  /** ISO; default at create = createdAt + 7 calendar days */
+  dueDate: string;
   createdAt: string;
   updatedAt: string;
   requester: { id: string; displayName: string; email: string };
@@ -101,6 +111,7 @@ export interface TicketListItem {
   completedSubtasks?: number;
   totalSubtasks?: number;
   progressPercent?: number;
+  tags?: TicketTagItem[];
 }
 
 /** Studio Portal scope-summary: counts + recent tickets (minimal fields). */
@@ -109,6 +120,7 @@ export interface ScopeSummaryRecentTicket {
   title: string;
   status: TicketStatus;
   priority: TicketPriority;
+  dueDate: string;
   updatedAt: string;
   studio?: { id: string; name: string } | null;
   requester: { id: string; name: string };
@@ -147,7 +159,7 @@ export interface TicketDetail extends TicketListItem {
   comments: Comment[];
   subtasks: Subtask[];
   watchers: { userId: string; user: { displayName: string; email: string } }[];
-  tags: { tag: { id: string; name: string } }[];
+  tags: TicketTagItem[];
   formResponses?: TicketFormResponseItem[];
   leaseIqResult?: LeaseIqResult | null;
 }

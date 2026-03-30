@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
   Plus, User, CheckCircle2, RefreshCw, Scale,
@@ -253,9 +253,9 @@ export default function TicketDetailPage() {
               <StatusBadge status={ticket.status} />
             </div>
 
-            {/* Tertiary: created, requester, location */}
+            {/* Tertiary: created (with year), due date (with year), requester, location */}
             <p className="text-xs mt-2 flex items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+              <span>Created: {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
               <span>· Requested by {ticket.requester.displayName}</span>
               {(ticket as { studio?: { id: string; name: string } }).studio?.id && (
                 <>
@@ -267,6 +267,18 @@ export default function TicketDetailPage() {
                   />
                 </>
               )}
+            </p>
+            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
+              <span>
+                Due Date:{' '}
+                {(() => {
+                  const raw = ticket.dueDate;
+                  if (!raw?.trim()) return '—';
+                  const d = parseISO(raw);
+                  if (Number.isNaN(d.getTime())) return '—';
+                  return format(d, 'MMM d, yyyy');
+                })()}
+              </span>
             </p>
 
             {/* Progress inline bar */}

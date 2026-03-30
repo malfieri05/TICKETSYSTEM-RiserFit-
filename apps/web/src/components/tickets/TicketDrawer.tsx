@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare,
   Clock, Plus, User, CheckCircle2, Maximize2, Pencil, Scale, RefreshCw,
@@ -16,6 +16,10 @@ import { Select, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
+import {
+  TicketTagCapsule,
+  TICKET_TAG_TOOLTIP_FONT_PX,
+} from '@/components/tickets/TicketTagCapsule';
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
@@ -38,6 +42,41 @@ type TabKey = (typeof TAB_ORDER)[number];
 /** Submission field key → display label: underscores to spaces, capitalize words. */
 function formatFieldLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Panel tag hover: bold+underline labels; blue date/time, black interpunct; extra line gap (~+10%). */
+function PanelTagHoverTooltipContent({
+  createdAt,
+  createdByDisplayName,
+}: {
+  createdAt: string;
+  createdByDisplayName: string;
+}) {
+  const d = new Date(createdAt);
+  const whenDate = `${format(d, 'EEE')} ${format(d, 'M/d/yy')}`;
+  const whenTime = format(d, 'h:mm a');
+  const by = createdByDisplayName.trim() || 'Unknown';
+  const lineGapPx = TICKET_TAG_TOOLTIP_FONT_PX * 0.1;
+  return (
+    <div
+      className="flex flex-col items-center text-center"
+      style={{ rowGap: `calc(0.25em + ${lineGapPx}px)` }}
+    >
+      <span>
+        <span className="font-bold underline">Added</span>
+        <span className="font-bold">:</span>
+        {` `}
+        <span style={{ color: '#3b82f6' }}>{whenDate}</span>
+        <span style={{ color: 'var(--color-text-primary)' }}>{' · '}</span>
+        <span style={{ color: '#3b82f6' }}>{whenTime}</span>
+      </span>
+      <span>
+        <span className="font-bold underline">By</span>
+        <span className="font-bold">:</span>
+        {` ${by}`}
+      </span>
+    </div>
+  );
 }
 
 export function TicketDrawer({ ticketId, onClose }: Props) {
@@ -373,9 +412,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               <StatusBadge status={ticket.status} />
             </div>
 
-            {/* Tertiary: created, requester, location */}
+            {/* Tertiary: created (with year), due date (with year), requester, location */}
             <p className="text-xs mt-2 flex items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>Created {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+              <span>Created: {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
               {ticket.requester?.displayName && <span>· {ticket.requester.displayName}</span>}
               {ticket.studio?.id && ticket.studio?.name && (
                 <>
@@ -391,6 +430,43 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 <span>· {ticket.market.name}</span>
               )}
             </p>
+            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
+              <span>
+                Due Date:{' '}
+                {(() => {
+                  const raw = ticket.dueDate;
+                  if (!raw?.trim()) return '—';
+                  const d = parseISO(raw);
+                  if (Number.isNaN(d.getTime())) return '—';
+                  return format(d, 'MMM d, yyyy');
+                })()}
+              </span>
+            </p>
+
+            {/* Tags (v1: read-only in drawer) */}
+            {ticket.tags && ticket.tags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 mt-2 max-w-full">
+                  <span
+                    className="text-[10px] font-semibold uppercase tracking-wide shrink-0"
+                    style={{ color: POLISH_THEME.metaSecondary }}
+                  >
+                    Tags:
+                  </span>
+                  {ticket.tags.map((t) => (
+                    <span key={t.id} className="max-w-[min(200px,100%)] min-w-0">
+                      <TicketTagCapsule
+                        name={t.name}
+                        hoverText={
+                          <PanelTagHoverTooltipContent
+                            createdAt={t.createdAt}
+                            createdByDisplayName={t.createdBy?.name ?? ''}
+                          />
+                        }
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
 
             {/* Quaternary: inline progress */}
             {(() => {

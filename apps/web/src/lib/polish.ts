@@ -55,6 +55,15 @@ export const POLISH_THEME = {
   drawerShadow: 'var(--shadow-drawer)',
   /** Drawer Subtasks/Comments tab row — raised over scroll body */
   drawerTabBarShadow: 'var(--shadow-drawer-tabbar)',
+  /**
+   * Operational ticket tags (feed, drawer) — orange capsule; same hue family as status/waiting-on-vendor.
+   * `boxShadow` matches StatusBadge / PriorityBadge inset ring pattern.
+   */
+  ticketTagCapsule: {
+    background: 'rgba(249,115,22,0.15)',
+    color: '#ea580c',
+    boxShadow: 'inset 0 0 0 1px rgba(249,115,22,0.3)',
+  },
 } as const;
 
 /** Tailwind-compatible class names for consistent layout */
@@ -63,7 +72,7 @@ export const POLISH_CLASS = {
   cellPadding: 'px-4 py-3.5',
   /** Table header text style */
   tableHeader: 'text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
-  /** Centered table header — used for Progress, Requester, Comments columns */
+  /** Centered table header — Created, Tags, Status, Due date, Progress, Requester */
   tableHeaderCenter: 'text-center px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
   /** Section vertical gap (e.g. between title and filters) */
   sectionGap: 'space-y-5',

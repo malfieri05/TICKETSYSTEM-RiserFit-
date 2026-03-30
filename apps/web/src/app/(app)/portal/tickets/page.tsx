@@ -4,12 +4,13 @@ import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { MessageCircle, Search } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
-import { StatusBadge, PriorityBadge } from '@/components/ui/Badge';
+import { StatusBadge } from '@/components/ui/Badge';
+import { FeedCreatedAtCell, FeedDueDateCell } from '@/components/tickets/TicketRow';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
@@ -200,7 +201,7 @@ export default function PortalTicketsPage() {
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Title</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Location</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Priority</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Due date</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Updated</th>
                   </tr>
                 </thead>
@@ -220,8 +221,8 @@ export default function PortalTicketsPage() {
                         style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
                       >
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{topicLabel}</td>
-                        <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-secondary)' }}>
-                          {format(new Date(ticket.createdAt), 'MMM d, yyyy')}
+                        <td className="px-4 py-3 text-xs whitespace-nowrap text-center" style={{ color: 'var(--color-text-secondary)' }}>
+                          <FeedCreatedAtCell createdAtIso={ticket.createdAt} />
                         </td>
                         <td className="px-4 py-3">
                           <span className="font-medium text-[var(--color-text-primary)] line-clamp-1">{ticket.title}</span>
@@ -242,10 +243,7 @@ export default function PortalTicketsPage() {
                         </td>
                         <td className="px-4 py-3"><StatusBadge status={ticket.status} /></td>
                         <td className="px-4 py-3">
-                          <PriorityBadge
-                            priority={ticket.priority}
-                            muted={['RESOLVED', 'CLOSED'].includes(ticket.status)}
-                          />
+                          <FeedDueDateCell dueDateIso={ticket.dueDate} />
                         </td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: 'var(--color-text-muted)' }}>
                           {formatDistanceToNow(new Date(ticket.updatedAt), { addSuffix: true })}

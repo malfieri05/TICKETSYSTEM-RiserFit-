@@ -23,7 +23,7 @@ export function TableSkeletonRows({ count = 5 }: { count?: number }) {
       <tbody>
         {Array.from({ length: count }).map((_, i) => (
           <tr key={i} style={{ borderBottom: `1px solid ${POLISH_THEME.rowBorder}` }}>
-            <td className={POLISH_CLASS.cellPadding} colSpan={7}>
+            <td className={POLISH_CLASS.cellPadding} colSpan={8}>
               <div
                 className="h-4 rounded w-full max-w-md"
                 style={skeletonRow}
@@ -36,7 +36,7 @@ export function TableSkeletonRows({ count = 5 }: { count?: number }) {
   );
 }
 
-/** Portal table (7 columns): multiple placeholder bars per row for realistic load. */
+/** Portal-style table: multiple placeholder bars per row for realistic load. */
 export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
   return (
     <>
@@ -45,25 +45,34 @@ export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
         {Array.from({ length: count }).map((_, i) => (
           <tr key={i} style={{ borderBottom: `1px solid ${POLISH_THEME.rowBorder}` }}>
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-20" style={skeletonRow} />
-            </td>
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-24" style={skeletonRow} />
+              <div className="h-3 rounded w-16" style={skeletonRow} />
             </td>
             <td className={POLISH_CLASS.cellPadding}>
               <div className="h-4 rounded w-3/4 max-w-xs" style={skeletonRow} />
             </td>
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-16" style={skeletonRow} />
+              <div className="h-3 rounded w-24" style={skeletonRow} />
             </td>
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-5 rounded w-14" style={skeletonRow} />
+              <div className="h-4 rounded w-20" style={skeletonRow} />
             </td>
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-5 rounded w-14" style={skeletonRow} />
+              <div className="h-5 rounded w-20" style={skeletonRow} />
             </td>
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-20" style={skeletonRow} />
+              <div className="h-5 rounded w-16" style={skeletonRow} />
+            </td>
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="h-3 rounded w-12" style={skeletonRow} />
+                <div className="h-1.5 rounded w-16" style={skeletonRow} />
+              </div>
+            </td>
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="h-3 rounded w-24" style={skeletonRow} />
+            </td>
+            <td className={POLISH_CLASS.cellPadding}>
+              <div className="h-3 rounded w-8" style={skeletonRow} />
             </td>
           </tr>
         ))}
@@ -74,7 +83,7 @@ export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
 
 /**
  * Skeleton rows for the canonical 8-column feed table
- * (ID | Title | Created | Status | Priority | Progress | Requester | Comments).
+ * (ID | Title | Created | Tags | Status | Due date | Progress | Requester).
  * Column count matches CANONICAL_FEED_HEADERS so there is no horizontal shift
  * when the real data replaces the skeleton.
  */
@@ -89,21 +98,31 @@ export function TicketsTableSkeletonRows({ count = 5 }: { count?: number }) {
             <td className={POLISH_CLASS.cellPadding}>
               <div className="h-3 rounded w-16" style={skeletonRow} />
             </td>
-            {/* Title */}
+            {/* Title (wider — comments inline in real rows) */}
             <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-4 rounded w-3/4 max-w-xs" style={skeletonRow} />
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-4 flex-1 rounded max-w-xs" style={skeletonRow} />
+                <div className="h-3 w-10 shrink-0 rounded" style={skeletonRow} />
+              </div>
             </td>
             {/* Created */}
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-24" style={skeletonRow} />
+            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+              <div className="h-3 rounded w-24 mx-auto" style={skeletonRow} />
+            </td>
+            {/* Tags — match TicketRow fixed rail (max-w 280), bar after imaginary + slot */}
+            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+              <div className="mx-auto flex w-full max-w-[280px] items-center gap-1.5">
+                <div className="h-7 w-7 shrink-0 rounded-full" style={{ visibility: 'hidden' }} aria-hidden />
+                <div className="h-4 min-w-0 flex-1 rounded w-20" style={skeletonRow} />
+              </div>
             </td>
             {/* Status */}
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-5 rounded w-20" style={skeletonRow} />
+            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+              <div className="h-5 rounded w-20 mx-auto" style={skeletonRow} />
             </td>
-            {/* Priority */}
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-5 rounded w-16" style={skeletonRow} />
+            {/* Due date */}
+            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+              <div className="h-4 rounded w-14 mx-auto" style={skeletonRow} />
             </td>
             {/* Progress */}
             <td className={POLISH_CLASS.cellPadding}>
@@ -115,10 +134,6 @@ export function TicketsTableSkeletonRows({ count = 5 }: { count?: number }) {
             {/* Requester */}
             <td className={POLISH_CLASS.cellPadding}>
               <div className="h-3 rounded w-24" style={skeletonRow} />
-            </td>
-            {/* Comments */}
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-8" style={skeletonRow} />
             </td>
           </tr>
         ))}

@@ -241,6 +241,30 @@ body {
   box-shadow: 0 0 0 3px var(--color-focus-ring);
 }
 
+/*
+ * Tags column: content box = 28px (same as + control) so pills center with +;
+ * padding-bottom is outside that box (content-box) so the horizontal scrollbar paints in the strip below, not over capsules.
+ */
+.ticket-tags-lateral-scroll {
+  box-sizing: content-box;
+  height: 1.75rem; /* 28px — matches h-7 + button */
+  display: flex;
+  align-items: center;
+  padding-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-default) transparent;
+}
+.ticket-tags-lateral-scroll::-webkit-scrollbar {
+  height: 5px;
+}
+.ticket-tags-lateral-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--color-border-default);
+}
+.ticket-tags-lateral-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 /* Ticket feed body scroller: smooth, contained, never drags page chrome. */
 .ticket-feed-body-scroll {
   scroll-behavior: smooth;

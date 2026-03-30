@@ -37,12 +37,16 @@ export class DomainEventsService {
       };
 
       // Idempotency: anchor to persisted entity where available (e.g. one comment → one fan-out job)
-      const payload = event.payload as { commentId?: string } | undefined;
+      const payload = event.payload as
+        | { commentId?: string; tagId?: string }
+        | undefined;
       const jobId =
-        (event.type === 'COMMENT_ADDED' || event.type === 'MENTION_IN_COMMENT') &&
-        payload?.commentId
-          ? `${event.type}_${event.ticketId}_${payload.commentId}`
-          : `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`;
+        event.type === 'TICKET_TAG_ADDED' && payload?.tagId
+          ? `${event.type}_${event.ticketId}_${payload.tagId}`
+          : (event.type === 'COMMENT_ADDED' || event.type === 'MENTION_IN_COMMENT') &&
+              payload?.commentId
+            ? `${event.type}_${event.ticketId}_${payload.commentId}`
+            : `${event.type}_${event.ticketId}_${event.occurredAt.getTime()}`;
 
       await this.fanoutQueue.add(event.type, jobData, {
         ...FANOUT_JOB_OPTIONS,

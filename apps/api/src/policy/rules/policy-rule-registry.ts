@@ -14,6 +14,7 @@ import {
   ticketUpdateCoreFieldsRule,
   ticketViewRule,
 } from './ticket.policy-rules';
+import { ticketAddTagRule } from './ticket-tag.policy-rules';
 import {
   subtaskCreateRule,
   subtaskTransitionStatusRule,
@@ -48,6 +49,7 @@ const buildRegistry = (
   'ticket.transition_status': ticketTransitionStatusRule,
   'ticket.assign_owner': ticketAssignOwnerRule,
   'ticket.update_core_fields': ticketUpdateCoreFieldsRule,
+  'ticket.add_tag': ticketAddTagRule,
 
   // Subtasks
   'subtask.view': subtaskViewRule,

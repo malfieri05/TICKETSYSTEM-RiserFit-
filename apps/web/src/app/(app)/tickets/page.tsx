@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
-import { adminApi } from '@/lib/api';
+import { adminApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,7 @@ import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const PAGE_SIZE = 20;
@@ -27,9 +28,11 @@ const FILTER_KEYS: (keyof TicketFilters)[] = [
   'createdAfter', 'createdBefore',
 ];
 
-const FEED_COLGROUP_WIDTHS = ['10%', '38%', '13%', '12%', '11%', '10%', '8%', '8%'] as const;
+const FEED_COLGROUP_WIDTHS = ['9%', '35%', '10%', '11%', '10%', '9%', '9%', '7%'] as const;
 
 export default function TicketsPage() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -192,6 +195,24 @@ export default function TicketsPage() {
     setSelectedId((prev) => (prev === id ? null : id));
   }, []);
   const handleClose = useCallback(() => setSelectedId(null), []);
+
+  const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
+
+  const addTagMut = useMutation({
+    mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
+      ticketsApi.addTag(ticketId, { label }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+
+  const handleAddTag = useCallback(
+    async (ticketId: string, label: string) => {
+      await addTagMut.mutateAsync({ ticketId, label });
+    },
+    [addTagMut],
+  );
 
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
 
@@ -398,8 +419,14 @@ export default function TicketsPage() {
                           id={ticket.id}
                           title={ticket.title}
                           status={ticket.status}
-                          priority={ticket.priority}
+                          dueDate={ticket.dueDate}
                           createdAt={ticket.createdAt}
+                          tags={ticket.tags ?? []}
+                          canAddTag={canAddTag}
+                          onAddTag={canAddTag ? handleAddTag : undefined}
+                          isAddingTag={
+                            addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+                          }
                           commentCount={ticket._count?.comments ?? 0}
                           completedSubtasks={completedSubtasks}
                           totalSubtasks={totalSubtasks}

@@ -6,6 +6,7 @@ export const TICKET_LIST_INBOX = 'ticket.list_inbox';
 export const TICKET_TRANSITION_STATUS = 'ticket.transition_status';
 export const TICKET_ASSIGN_OWNER = 'ticket.assign_owner';
 export const TICKET_UPDATE_CORE_FIELDS = 'ticket.update_core_fields';
+export const TICKET_ADD_TAG = 'ticket.add_tag';
 
 export const SUBTASK_VIEW = 'subtask.view';
 export const SUBTASK_CREATE = 'subtask.create';
@@ -26,6 +27,7 @@ export type CapabilityKey =
   | typeof TICKET_TRANSITION_STATUS
   | typeof TICKET_ASSIGN_OWNER
   | typeof TICKET_UPDATE_CORE_FIELDS
+  | typeof TICKET_ADD_TAG
   | typeof SUBTASK_VIEW
   | typeof SUBTASK_CREATE
   | typeof SUBTASK_UPDATE

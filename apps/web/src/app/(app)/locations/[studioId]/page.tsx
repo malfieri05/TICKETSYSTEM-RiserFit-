@@ -2,12 +2,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Building2, Users, Phone,
   FileText, Tag, AlertTriangle, ChevronDown,
 } from 'lucide-react';
-import { locationsApi, ticketsApi } from '@/lib/api';
+import { locationsApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { useAuth } from '@/hooks/useAuth';
 
 type ViewTab = 'active' | 'completed';
 const PAGE_SIZE = 20;
@@ -116,6 +117,8 @@ function formatDateOnly(dateStr: string | null | undefined): string | null {
 export default function LocationProfilePage() {
   const { studioId } = useParams<{ studioId: string }>();
   const router = useRouter();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [page, setPage] = useState(1);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -161,6 +164,23 @@ export default function LocationProfilePage() {
     setSelectedTicketId((prev) => (prev === id ? null : id));
   }, []);
   const handleCloseDrawer = useCallback(() => setSelectedTicketId(null), []);
+
+  const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
+  const addTagMut = useMutation({
+    mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
+      ticketsApi.addTag(ticketId, { label }),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['location-tickets', studioId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleAddTag = useCallback(
+    async (ticketId: string, label: string) => {
+      await addTagMut.mutateAsync({ ticketId, label });
+    },
+    [addTagMut],
+  );
 
   const operational = profile?.profile?.public;
   const hasOperational = operational && Object.values(operational).some((v) => v != null);
@@ -423,8 +443,14 @@ export default function LocationProfilePage() {
                               id={ticket.id}
                               title={ticket.title}
                               status={ticket.status}
-                              priority={ticket.priority}
+                              dueDate={ticket.dueDate}
                               createdAt={ticket.createdAt}
+                              tags={ticket.tags ?? []}
+                              canAddTag={canAddTag}
+                              onAddTag={canAddTag ? handleAddTag : undefined}
+                              isAddingTag={
+                                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+                              }
                               commentCount={ticket._count?.comments ?? 0}
                               completedSubtasks={completedSubtasks}
                               totalSubtasks={totalSubtasks}
