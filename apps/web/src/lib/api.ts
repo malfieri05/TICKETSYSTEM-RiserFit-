@@ -282,8 +282,13 @@ export interface DashboardSummaryResponse {
   newTickets: number;
   inProgressTickets: number;
   resolvedTickets: number;
+  closedTickets: number;
   avgCompletionHours: number | null;
+  avgFirstResponseHours: number | null;
+  kpiRange?: { from: string; to: string };
+  supportByDepartment: { deptId: string; deptName: string; count: number }[];
   supportByType: { typeId: string; typeName: string; count: number }[];
+  maintenanceByCategory: { categoryId: string; categoryName: string; count: number }[];
   maintenanceByLocation: { locationId: string; locationName: string; count: number }[];
 }
 
@@ -291,14 +296,25 @@ export interface StudioDashboardSummaryResponse {
   openTickets: number;
   completedTickets: number;
   avgCompletionHours: number | null;
+  avgFirstResponseHours: number | null;
   byLocation: { locationId: string; locationName: string; count: number }[];
 }
 
 export const dashboardApi = {
-  summary: (studioId?: string) =>
+  summary: (
+    studioId?: string,
+    kpiRange?: { from: string; to: string },
+  ) =>
     api.get<DashboardSummaryResponse | StudioDashboardSummaryResponse>(
       '/dashboard/summary',
-      { params: studioId ? { studioId } : undefined },
+      {
+        params: {
+          ...(studioId ? { studioId } : {}),
+          ...(kpiRange?.from && kpiRange?.to
+            ? { from: kpiRange.from, to: kpiRange.to }
+            : {}),
+        },
+      },
     ),
 };
 
@@ -325,10 +341,12 @@ export const reportingApi = {
       open: number;
       resolved: number;
       avgResolutionHours: number | null;
+      avgFirstResponseHours: number | null;
     }>('/reporting/summary'),
 
+  /** Pass days=0 to request all-time data (no date filter). */
   volumeByDay: (days = 30) =>
-    api.get<{ date: string; count: number }[]>(`/reporting/volume?days=${days}`),
+    api.get<{ date: string; count: number; closed: number }[]>(`/reporting/volume?days=${days}`),
 
   byStatus: () =>
     api.get<{ status: string; count: number }[]>('/reporting/by-status'),
@@ -807,6 +825,10 @@ export const leaseIqApi = {
     api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/paste`, { pastedText }),
   parse: (studioId: string) =>
     api.post<{ rulesetId: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/parse`),
+  studiosWithRulesets: () =>
+    api.get<{ studioIds: string[]; publishedStudioIds: string[] }>(
+      `${LEASE_IQ_PREFIX}/studios-with-rulesets`,
+    ),
   listRulesets: (studioId: string) =>
     api.get<{ id: string; status: string; createdAt: string; _count: { rules: number } }[]>(
       `${LEASE_IQ_PREFIX}/studios/${studioId}/rulesets`,

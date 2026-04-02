@@ -1,4 +1,9 @@
-import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { IngestionService } from '../ai/ingestion.service';
@@ -14,6 +19,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { buildTicketCreatedAtFilter } from './ticket-metrics-where';
+import { FirstResponseService } from '../../common/first-response/first-response.service';
 
 /** Match AiService RAG — agent was using 0.4 and dropped almost all handbook hits. */
 const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.78;
@@ -36,6 +42,7 @@ export class ToolRouterService {
     private readonly ticketsService: TicketsService,
     private readonly reportingService: ReportingService,
     private readonly ticketVisibility: TicketVisibilityService,
+    private readonly firstResponse: FirstResponseService,
   ) {}
 
   async execute(
@@ -355,6 +362,13 @@ export class ToolRouterService {
 
   private async addComment(args: Record<string, unknown>, actor: RequestUser) {
     const ticketId = String(args.ticket_id);
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { requesterId: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException(`Ticket ${ticketId} not found`);
+    }
     // Internal notes feature removed; all comments are public.
     const comment = await this.prisma.ticketComment.create({
       data: {
@@ -365,6 +379,14 @@ export class ToolRouterService {
       },
       select: { id: true, body: true, createdAt: true },
     });
+
+    await this.firstResponse.recordNonRequesterComment(
+      this.prisma,
+      ticketId,
+      ticket.requesterId,
+      actor.id,
+      comment.createdAt,
+    );
 
     await this.writeAuditLog(
       actor.id,
@@ -433,6 +455,15 @@ export class ToolRouterService {
     const subtaskId = String(args.subtask_id);
     const status = String(args.status) as SubtaskStatus;
 
+    const prior = await this.prisma.subtask.findUnique({
+      where: { id: subtaskId },
+      select: { status: true, ticketId: true },
+    });
+    if (!prior) {
+      throw new NotFoundException(`Subtask ${subtaskId} not found`);
+    }
+
+    const now = new Date();
     const updated = await this.prisma.subtask.update({
       where: { id: subtaskId },
       data: {
@@ -441,6 +472,15 @@ export class ToolRouterService {
       },
       select: { id: true, title: true, status: true, ticketId: true },
     });
+
+    await this.firstResponse.recordFirstSubtaskStatusChange(
+      this.prisma,
+      prior.ticketId,
+      subtaskId,
+      prior.status,
+      status,
+      now,
+    );
 
     await this.writeAuditLog(
       actor.id,

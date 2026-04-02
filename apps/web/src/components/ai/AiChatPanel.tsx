@@ -47,20 +47,24 @@ interface Message {
   confirmed?: boolean;
 }
 
-const WELCOME: Message = {
+const ROVI_WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    "Hi! I have access to all tickets, knowledge base, and reporting. Ask me anything or ask me to do something — like create a ticket, update status, or assign work.",
+    "Hi! I'm Rovi. I have access to all tickets, knowledge base, and reporting. Ask me anything or ask me to do something — like create a ticket, update status, or assign work.",
 };
 
 export interface AiChatPanelProps {
   onClose?: () => void;
   fullScreen?: boolean;
   className?: string;
+  /** Called with the first user message text when the chat first starts */
+  onFirstMessage?: (text: string) => void;
+  /** Pre-fill the input and auto-send on mount (used by welcome capsules) */
+  initialMessage?: string;
 }
 
-export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps) {
+export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, initialMessage }: AiChatPanelProps) {
   const qc = useQueryClient();
   const { data: marketsData } = useQuery({
     queryKey: ['markets', 'assistant-chat'],
@@ -69,7 +73,7 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
   });
   const studioLinkTargets = useMemo(() => flattenStudiosFromMarkets(marketsData), [marketsData]);
 
-  const [messages, setMessages] = useState<Message[]>([WELCOME]);
+  const [messages, setMessages] = useState<Message[]>([ROVI_WELCOME]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -81,10 +85,23 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (initialMessage) {
+      setInput(initialMessage);
+    }
+  }, [initialMessage]);
+
+  const hasSentRef = useRef(false);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const message = input.trim();
     if (!message || isLoading) return;
+
+    if (!hasSentRef.current) {
+      hasSentRef.current = true;
+      onFirstMessage?.(message);
+    }
 
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: message };
     const loadingMsg: Message = { id: `l-${Date.now()}`, role: 'assistant', content: '', isLoading: true };
@@ -190,7 +207,7 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
 
   const startNewConversation = () => {
     setConversationId(null);
-    setMessages([WELCOME]);
+    setMessages([ROVI_WELCOME]);
   };
 
   return (
@@ -209,7 +226,7 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
             <Bot className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Assistant</p>
+            <p className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Rovi</p>
             <p className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>Chat · has access to your system</p>
           </div>
         </div>
@@ -383,7 +400,7 @@ export function AiChatPanel({ onClose, fullScreen, className }: AiChatPanelProps
             value={input}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything or request an action…"
+            placeholder="Ask Rovi anything…"
             rows={1}
             className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] overflow-hidden placeholder-[var(--color-text-muted)]"
             style={{ minHeight: '42px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}

@@ -74,26 +74,47 @@ TicketingSystem-CLAUDE/
 apps/api/src/
 ├── main.ts
 ├── app.module.ts
+├── health/            # readiness + queue visibility (admin system monitoring)
+├── policy/            # Riser policy sync hooks (AI / compliance)
+├── common/
+│   ├── database/      # Prisma
+│   ├── cache/         # my-summary cache, user cache
+│   ├── audit-log/
+│   ├── permissions/   # ticket-visibility.service (role + studio scope)
+│   ├── redis/         # SSE pub/sub for multi-instance
+│   └── storage/       # shared S3 client from env (R2/AWS)
 └── modules/
-    ├── auth/          # SSO (OIDC/SAML) + JWT + RBAC guards + decorators
+    ├── auth/          # JWT + RBAC guards + decorators (SSO path as configured)
     ├── users/
-    ├── tickets/       # includes ticket-state-machine.ts — ONLY place for status transitions
-    ├── subtasks/      # includes resolution gate check
-    ├── comments/      # includes mention-parser.service.ts
+    ├── invitations/   # closed provisioning: invite, accept, resend, revoke
+    ├── tickets/       # ticket-state-machine.ts — ONLY place for status transitions
+    ├── subtasks/      # resolution gate check
+    ├── comments/      # mention-parser.service.ts
     ├── attachments/   # S3 presigned URLs, 25MB enforcement
-    ├── notifications/ # SSE endpoint + fan-out logic + channel adapters
-    │   └── channels/  # email.channel.ts, teams.channel.ts, sse.channel.ts
-    ├── workers/       # BullMQ processors (separate process)
-    │   └── processors/
-    │       ├── notification-fanout.processor.ts
-    │       ├── notification-dispatch.processor.ts
-    │       └── cleanup.processor.ts
-    ├── events/        # domain-events.service.ts — event → queue bridge
-    ├── reporting/
-    ├── admin/         # categories, users, teams, markets, studios
-    ├── subtask-workflow/  # workflow templates, subtask templates, dependencies (Stage 4 + 6.5 admin UI)
-    ├── ticket-forms/  # schema-driven create-ticket form schema (Stage 2/3)
-    └── search/        # Postgres filtered search + pagination
+    ├── notifications/ # SSE + fan-out + channel adapters
+    │   └── channels/  # email, teams, sse
+    ├── events/        # domain-events → queue bridge
+    ├── reporting/     # aggregates, CSV-oriented admin reporting, dispatch slices
+    ├── dashboard/     # GET /dashboard/summary — role-scoped KPIs + breakdowns
+    ├── admin/
+    ├── ticket-forms/  # schema-driven create
+    ├── subtask-workflow/
+    ├── workflow-analytics/
+    ├── search/
+    ├── ai/            # RAG, knowledge ingest
+    ├── agent/         # tool-calling assistant + audit
+    ├── email-automation/  # Gmail ingest, assembly/delivery pipeline, review queue (see README in module)
+    ├── lease-iq/      # per-studio lease PDF/rules, ticket evaluation
+    ├── dispatch/      # dispatch groups, recommendations, maintenance-focused reporting hooks
+    └── locations/     # public location profile API for studio pages
+└── workers/
+    └── processors/
+        ├── notification-fanout.processor.ts
+        ├── notification-dispatch.processor.ts
+        ├── stale-ticket.processor.ts
+        ├── email-ingest.processor.ts
+        ├── invite-email.processor.ts
+        └── knowledge-ingestion.processor.ts
 ```
 
 ---
@@ -115,6 +136,12 @@ All tables are live. Prisma schema is at `apps/api/prisma/schema.prisma`.
 - `tags`
 - `audit_logs`
 - `knowledge_documents`, `document_chunks` (Phase 4 AI)
+- `user_invitations`, `user_departments`, `user_studio_scopes` (invites + department users + multi-studio visibility)
+- `studio_profiles` (location profile pages)
+- `dispatch_groups`, `dispatch_group_items`, `dispatch_group_templates` (dispatch intelligence)
+- `inbound_emails`, `vendor_order_records`, `order_line_items`, `delivery_events`, `studio_address_normalized`, `assembly_trigger_items`, `email_automation_*` tables (vendor email automation pipeline — distinct from Postmark **notification** email)
+- `lease_sources`, `lease_rule_sets`, `lease_rules`, `lease_rule_terms`, `ticket_lease_iq_results` (Lease IQ)
+- `agent_conversations`, `agent_messages`, `agent_action_logs` (AI agent tool-calling audit trail)
 
 **Key indexes (already in schema):**
 - tickets: status, owner_id, requester_id, studio_id, market_id, category_id, priority, created_at
@@ -177,6 +204,11 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 | **Phase 4** | AI Assistant: RAG chatbot ingesting RiserU docs + pgvector | ✅ COMPLETE |
 | **Stage 6** | Inbox/notification center (actionable queue), schema-driven create-ticket UI | ✅ COMPLETE |
 | **Stage 6.5** | Admin Workflow Template Manager: list/create/edit/delete templates, subtask templates, dependencies, workflow preview | ✅ COMPLETE |
+| **Stage 5+** | Role-scoped dashboard summary API + UI; admin reporting extensions (workflow timing, dispatch-by-studio, etc.) | ✅ COMPLETE |
+| **Email automation** | Gmail ingest + vendor order/assembly ticket path + admin review queue (module `email-automation`) | ✅ COMPLETE |
+| **Lease IQ** | Lease PDF/source per studio, rule sets, ticket evaluation + admin UI | ✅ COMPLETE |
+| **Dispatch** | Groups, templates, recommendations API + UI hooks | ✅ COMPLETE (V1) |
+| **Invitations** | Admin invite flow, accept via token, Resend (or configured mailer) | ✅ COMPLETE |
 
 ---
 
@@ -192,12 +224,16 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 
 **Phase 2 (Frontend) ✅**
 - Full Next.js UI at `apps/web/src/`
-- Routes: `/login`, `/tickets`, `/tickets/new` (schema-driven), `/tickets/[id]`, `/notifications`, `/inbox` (actionable queue), `/admin/categories`, `/admin/markets`, `/admin/users`, `/admin/reporting`, `/admin/workflow-templates` (list/new/[id]), `/admin/knowledge-base`, `/assistant`, `/handbook`, `/dashboard`
+- Core routes: `/login`, `/tickets`, `/tickets/new` (schema-driven), `/tickets/[id]`, `/notifications`, `/inbox` (actionable queue), `/dashboard`, `/assistant`, `/handbook`
+- Portal (studio users): `/portal` (tabs: my tickets, by studio, dashboard summary), `/portal/tickets` (legacy list; primary flow is `/portal`)
+- Locations: `/locations/[studioId]` (studio profile)
+- Admin: `/admin/categories`, `/admin/markets` (locations), `/admin/users` (invites, roles, studio scopes), `/admin/reporting`, `/admin/workflow-templates` (list/new/[id]), `/admin/knowledge-base`, `/admin/email-automation`, `/admin/lease-iq`, `/admin/system-monitoring` (health/queues)
 - Auth: JWT in localStorage → injected on every axios request → 401 auto-redirects
 - SSE: `useNotificationStream()` auto-connects, invalidates cache on events
 - Attachments: drag-drop upload → presigned S3 PutObject → confirm-upload; GetObject presigned download
-- Reporting: KPI cards, 30-day volume chart (CSS bars), by-status/priority/category/market breakdowns, avg resolution table, CSV export
+- Reporting (admin): KPI cards, 30-day volume chart (CSS bars), by-status/priority/category/market breakdowns, avg resolution, completion-by-owner, workflow timing, dispatch-focused slices, CSV export where implemented
 - Teams channel: Adaptive Card v1.2 via incoming webhook, dev-mode fallback
+- **Theme / polish:** `apps/web/src/app/globals.css` — `data-theme` light/dark CSS variables (`--color-*`, `--radius-sm/md/lg`, `--shadow-*`). Shared TS helpers: `apps/web/src/lib/polish.ts` (`POLISH_THEME`, `POLISH_CLASS`, `FEED_COL_WIDTHS` for aligned ticket feed columns). **UI/UX polish spec:** `docs/ui-ux-polish-system-v1.md` (token usage, table standardization, workflow protection). **Brand:** `BrandMark` rounded-square tile (`apps/web/src/components/layout/BrandMark.tsx`) in sidebar + login. **Header:** fixed bar height via `Header` (`h-14`). **MultiComboBox:** portaled dropdown to avoid modal clipping (e.g. invite user departments).
 
 **Stage 6 / 6.5 ✅**
 - Inbox: actionable notification queue with READY subtask context; relative timestamps; optimistic read
@@ -216,13 +252,15 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 
 **To run locally:**
 ```bash
-# Terminal 1 — API
-cd apps/api && npx ts-node --transpile-only src/main.ts
+# Recommended — monorepo (API + web via Turborepo)
+npm run dev
+# API: http://localhost:3001/api  ·  Web: http://localhost:3000
 
-# Terminal 2 — Frontend
-cd apps/web && npx next dev
+# Alternative — separate terminals
+cd apps/api && npm run start:dev    # Nest watch (port from env, often 3001)
+cd apps/web && npx next dev         # port 3000
 ```
-Then open http://localhost:3000
+If ports 3000/3001 are stuck, free them before restarting (e.g. `lsof -ti:3001 | xargs kill`).
 
 **Required env vars (apps/api/.env):**
 ```
@@ -263,7 +301,7 @@ OPENAI_API_KEY=sk-...
 
 **Frontend:**
 - `/assistant` — full chat UI: message thread, avatar bubbles, source citation pills, auto-scroll, Shift+Enter multiline, AI disclaimer
-- `/admin/knowledge-base` — paste-text and file-upload ingest modes, document table (chunks count, toggle active/inactive, delete)
+- `/admin/knowledge-base` — ingest modes: **Handbook PDF**, paste text, upload file; document table (chunks count, toggle active/inactive, delete); info modal explains purpose for admins
 - Sidebar: "AI Assistant" in main nav (all users), "Knowledge Base" in Admin section
 
 **Required env var (add to apps/api/.env):**
@@ -287,6 +325,10 @@ OPENAI_API_KEY=sk-...
 - My-summary and ticket list endpoints have been optimized (caching, pooled DB connections, optional lightweight list mode) to keep real-world response times snappy for ~50 concurrent human users.
 - AI Agent sidebar (tool-calling assistant) is fully wired into tickets/subtasks/users/reporting with confirmation flow and audit logs; it is an optional UX helper, not required for core workflows.
 - **Stage 23 (User Visibility & Inbox):** Admin can set a studio user’s default location and add/remove additional locations (Admin → Users → Locations). Studio users see a location filter on the portal when they have multiple allowed studios; GET /tickets returns 403 if a STUDIO_USER filters by a studio outside their allowed set. Department users see inbox topic folders (All + support topics) with active counts (grouped count by supportTopicId). Studio users cannot create/update subtasks or transition ticket status; they can view progress, comment (non-internal), and receive notifications. Actionable nav remains visible for DEPARTMENT_USER and ADMIN.
+- **Dashboard (`GET /dashboard/summary`):** `DashboardService` applies `TicketVisibilityService` filters. **ADMIN / DEPARTMENT_USER:** counts for NEW / IN_PROGRESS / RESOLVED+CLOSED, avg completion hours (last 30d), `supportByType` (support topic breakdown), `maintenanceByLocation` (maintenance tickets by studio). **STUDIO_USER:** open vs completed, same avg window, `byLocation` (optional `?studioId` when within allowed scope). UI: `/dashboard` and portal **Dashboard** tab reuse `dashboardApi.summary`.
+- **Email automation vs notifications:** Postmark (or log-only) powers **ticket notification** emails. **Email automation** is a separate pipeline: Gmail ingest (BullMQ `email-ingest` job), persistence of inbound vendor mail, assembly/delivery matching, optional ticket creation — see `apps/api/src/modules/email-automation/README.md`.
+- **Lease IQ:** Admin configures lease sources and rule sets per studio; tickets can be evaluated against published rules; admin UI at `/admin/lease-iq`.
+- **Invitations:** Closed provisioning — `InvitationsModule` + `invite-email.processor`; production mailer may be Resend (see `InviteMailService` logs) or as configured in env.
 
 ---
 
@@ -331,7 +373,7 @@ OPENAI_API_KEY=sk-...
 - SLA requirements (response time / resolution time targets)?
 - Required reporting dashboards (specific metrics)?
 - External vendor access or strictly internal-only?
-- Email-to-ticket ingestion needed? (Assumed Phase 2/3)
+- General **support** email-to-ticket (shared mailbox → tickets): not the same as **vendor email automation** (implemented for assembly/delivery path); confirm if a separate inbound support address is required
 - Mobile support required?
 - Attachment retention policy?
 
@@ -345,4 +387,4 @@ OPENAI_API_KEY=sk-...
 - Build must comfortably handle 400–500 daily active users with zero unplanned downtime
 
 ---
-*Last updated: Phases 0–4, Stage 6/6.5, and Stage 23 (user visibility, studio locations, department inbox folders) complete. Full system built and ready for deployment.*
+*Last updated: April 2026 — Phases 0–4, Stages 5–6.5, Stage 23, dashboard summary API, portal + locations, email automation (vendor/Gmail path), Lease IQ, dispatch V1, invitations, admin system monitoring, theme/polish tokens (`globals.css`, `lib/polish.ts`), and `docs/ui-ux-polish-system-v1.md`.*

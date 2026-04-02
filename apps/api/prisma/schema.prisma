@@ -621,6 +621,8 @@ model Ticket {
   dispatchReadiness    DispatchReadiness?
   resolvedAt           DateTime?
   closedAt             DateTime?
+  /// Earliest of: first public comment by someone other than the requester, or first status change on the first-ordered subtask (template sortOrder, then createdAt).
+  firstResponseAt      DateTime?
   /// Default at create: createdAt + 7 calendar days (set in application layer).
   dueDate              DateTime
   createdAt            DateTime     @default(now())
@@ -662,6 +664,7 @@ model Ticket {
   @@index([requesterId, status])
   @@index([updatedAt])
   @@index([resolvedAt])
+  @@index([firstResponseAt])
   @@index([studioId, dispatchTradeType, dispatchReadiness, status])
   @@map("tickets")
 }

@@ -32,22 +32,30 @@ export class ReportingService {
 
   // ── Overall summary stats ─────────────────────────────────────────────────
   async getSummary() {
-    const [total, byStatus, avgResolutionMs] = await Promise.all([
-      this.prisma.ticket.count(),
+    const [total, byStatus, avgResolutionMs, avgFirstResponseMs] =
+      await Promise.all([
+        this.prisma.ticket.count(),
 
-      this.prisma.ticket.groupBy({
-        by: ['status'],
-        _count: { _all: true },
-      }),
+        this.prisma.ticket.groupBy({
+          by: ['status'],
+          _count: { _all: true },
+        }),
 
-      // Average resolution time in hours for RESOLVED/CLOSED tickets
-      this.prisma.$queryRaw<[{ avg_hours: number | null }]>`
+        // Average resolution time in hours for RESOLVED/CLOSED tickets
+        this.prisma.$queryRaw<[{ avg_hours: number | null }]>`
         SELECT AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 3600) AS avg_hours
         FROM tickets
         WHERE resolved_at IS NOT NULL
           AND status IN ('RESOLVED', 'CLOSED')
       `,
-    ]);
+
+        // First response: created → first non-requester comment or first-ordered subtask status change
+        this.prisma.$queryRaw<[{ avg_hours: number | null }]>`
+        SELECT AVG(EXTRACT(EPOCH FROM ("firstResponseAt" - "createdAt")) / 3600) AS avg_hours
+        FROM tickets
+        WHERE "firstResponseAt" IS NOT NULL
+      `,
+      ]);
 
     const statusMap = Object.fromEntries(
       byStatus.map((row) => [row.status, row._count._all]),
@@ -69,26 +77,67 @@ export class ReportingService {
       avgResolutionHours: avgResolutionMs[0]?.avg_hours
         ? parseFloat(Number(avgResolutionMs[0].avg_hours).toFixed(1))
         : null,
+      avgFirstResponseHours: avgFirstResponseMs[0]?.avg_hours
+        ? parseFloat(Number(avgFirstResponseMs[0].avg_hours).toFixed(1))
+        : null,
     };
   }
 
-  // ── Ticket volume over last N days ────────────────────────────────────────
+  // ── Ticket volume over last N days (days=0 → all time) ───────────────────
   async getVolumeByDay(days = 30) {
-    const since = new Date();
-    since.setDate(since.getDate() - days);
+    const since =
+      days > 0 ? new Date(Date.now() - days * 86_400_000) : null;
 
-    const rows = await this.prisma.$queryRaw<{ day: Date; count: bigint }[]>`
-      SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
-      FROM tickets
-      WHERE "createdAt" >= ${since}
-      GROUP BY day
-      ORDER BY day
-    `;
+    // Created per day
+    const createdRows: { day: Date; count: bigint }[] = since
+      ? await this.prisma.$queryRaw`
+          SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+          FROM tickets
+          WHERE "createdAt" >= ${since}
+          GROUP BY day ORDER BY day`
+      : await this.prisma.$queryRaw`
+          SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+          FROM tickets
+          GROUP BY day ORDER BY day`;
 
-    return rows.map((r) => ({
-      date: r.day.toISOString().slice(0, 10),
-      count: Number(r.count),
-    }));
+    // Closed/resolved per day (use resolvedAt when set, else closedAt)
+    const closedRows: { day: Date; count: bigint }[] = since
+      ? await this.prisma.$queryRaw`
+          SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+                 COUNT(*) AS count
+          FROM tickets
+          WHERE status IN ('RESOLVED', 'CLOSED')
+            AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+            AND COALESCE("resolvedAt", "closedAt") >= ${since}
+          GROUP BY day ORDER BY day`
+      : await this.prisma.$queryRaw`
+          SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+                 COUNT(*) AS count
+          FROM tickets
+          WHERE status IN ('RESOLVED', 'CLOSED')
+            AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+          GROUP BY day ORDER BY day`;
+
+    // Merge into a single date-keyed map
+    const map = new Map<string, { count: number; closed: number }>();
+
+    for (const r of createdRows) {
+      const key = r.day.toISOString().slice(0, 10);
+      const entry = map.get(key) ?? { count: 0, closed: 0 };
+      entry.count = Number(r.count);
+      map.set(key, entry);
+    }
+
+    for (const r of closedRows) {
+      const key = r.day.toISOString().slice(0, 10);
+      const entry = map.get(key) ?? { count: 0, closed: 0 };
+      entry.closed = Number(r.count);
+      map.set(key, entry);
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { count, closed }]) => ({ date, count, closed }));
   }
 
   // ── Breakdown by status ───────────────────────────────────────────────────

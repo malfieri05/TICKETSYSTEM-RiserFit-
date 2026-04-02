@@ -143,7 +143,7 @@ export function TicketAttachmentsSection({
             style={{
               background: 'rgba(239,68,68,0.12)',
               border: '1px solid rgba(239,68,68,0.3)',
-              color: '#dc2626',
+              color: 'var(--color-danger-hover)',
             }}
           >
             {uploadError}

@@ -21,10 +21,12 @@ import {
   ChevronRight,
   Mail,
   Bot,
+  Truck,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
 import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
+import { BrandMark } from '@/components/layout/BrandMark';
 import type { Department } from '@/types';
 
 type PortalTab = 'my' | 'studio' | 'dashboard';
@@ -77,15 +79,9 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
     ],
   },
   {
-    label: 'Reporting & Dispatch',
-    items: [
-      { href: '/admin/reporting', label: 'Reporting', icon: BarChart2 },
-      { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: BarChart2 },
-    ],
-  },
-  {
     label: 'Content / Tools',
     items: [
+      { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: Truck },
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
       { href: '/admin/email-automation', label: 'Email Automation', icon: Mail },
       { href: '/admin/lease-iq', label: 'Lease IQ', icon: BookMarked },
@@ -162,14 +158,7 @@ export function Sidebar() {
         className="flex h-14 items-center gap-2.5 px-5"
         style={{ borderBottom: '1px solid var(--color-border-default)' }}
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg overflow-hidden bg-transparent">
-          <img
-            src="/Logo.png"
-            alt="Riser Fitness"
-            className="h-full w-full object-contain"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
-        </div>
+        <BrandMark size="sm" />
         <span className="font-bold tracking-tight" style={{ color: 'var(--sidebar-text)' }}>Riser Fitness</span>
       </div>
 

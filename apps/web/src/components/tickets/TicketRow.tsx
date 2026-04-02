@@ -77,21 +77,21 @@ export function FeedDueDateCell({ dueDateIso }: { dueDateIso: string }) {
   const todayStart = startOfDay(new Date());
   if (isBefore(dueDay, todayStart)) {
     return (
-      <span className="text-xs font-medium whitespace-nowrap" style={{ color: '#dc2626' }}>
+      <span className="text-xs font-medium whitespace-nowrap" style={{ color: POLISH_THEME.dueDateOverdue }}>
         {format(d, 'MMM d')}
       </span>
     );
   }
   if (isToday(d)) {
     return (
-      <span className="text-xs font-medium" style={{ color: '#ea580c' }}>
+      <span className="text-xs font-medium" style={{ color: POLISH_THEME.dueDateToday }}>
         Today
       </span>
     );
   }
   if (isTomorrow(d)) {
     return (
-      <span className="text-xs font-medium" style={{ color: '#ca8a04' }}>
+      <span className="text-xs font-medium" style={{ color: POLISH_THEME.dueDateSoon }}>
         Tomorrow
       </span>
     );

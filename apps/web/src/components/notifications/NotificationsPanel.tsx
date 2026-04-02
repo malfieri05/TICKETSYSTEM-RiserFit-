@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { Bell, CheckCheck, X, ExternalLink } from 'lucide-react';
+import { Bell, CheckCheck, X } from 'lucide-react';
 import { notificationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -124,16 +124,6 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
               Mark all read
             </Button>
           )}
-          <button
-            type="button"
-            onClick={() => { onClose(); router.push('/notifications'); }}
-            className="p-2 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
-            style={{ color: 'var(--color-text-muted)' }}
-            title="Open full page"
-            aria-label="Open full page"
-          >
-            <ExternalLink className="h-4 w-4" />
-          </button>
           <button
             type="button"
             onClick={onClose}

@@ -6,6 +6,7 @@ import { authApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { BrandMark } from '@/components/layout/BrandMark';
 
 type Mode = 'login' | 'register';
 
@@ -83,14 +84,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden">
-            <img
-              src="/Logo.png"
-              alt="Riser Fitness"
-              className="h-full w-full object-contain"
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          </div>
+          <BrandMark size="md" />
           <div>
             <h1 className="text-2xl font-bold" style={{ color: 'var(--color-text-primary)' }}>Riser Fitness</h1>
             <p className="text-sm text-[var(--color-text-muted)] mt-1">Internal support ticketing system</p>
@@ -100,7 +94,7 @@ export default function LoginPage() {
         {/* Card */}
         <div className="rounded-xl p-8 space-y-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           {invitedOk && (
-            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', color: '#86efac' }}>
+            <div className="rounded-lg px-3 py-2 text-sm" style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', color: 'var(--color-success)' }}>
               Your account is ready. Sign in with the password you set.
             </div>
           )}

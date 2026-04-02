@@ -11,7 +11,6 @@ export const APP_HELP_STATIC_PATHS: readonly string[] = [
   '/admin/lease-iq',
   '/admin/workflow-templates',
   '/admin/dispatch',
-  '/admin/reporting',
   '/admin/users',
   '/admin/markets',
   '/portal/tickets',

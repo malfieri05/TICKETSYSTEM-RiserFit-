@@ -16,7 +16,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { useAuth } from '@/hooks/useAuth';
-import { POLISH_THEME } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const PAGE_SIZE = 20;
 
@@ -195,14 +195,14 @@ export default function PortalTicketsPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: POLISH_THEME.tableHeaderBg }}>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Topic / Category</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Created</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Title</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Location</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Due date</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Updated</th>
+                  <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Topic / Category</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Created</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Title</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Location</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Status</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Due date</th>
+                    <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Updated</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -217,7 +217,7 @@ export default function PortalTicketsPage() {
                       <tr
                         key={ticket.id}
                         onClick={() => router.push(`/tickets/${ticket.id}`)}
-                        className="ticket-feed-table-row cursor-pointer transition-colors"
+                        className={`ticket-feed-table-row cursor-pointer ${POLISH_CLASS.rowTransition}`}
                         style={{ borderBottom: '1px solid var(--color-border-subtle)' }}
                       >
                         <td className="px-4 py-3 text-sm" style={{ color: 'var(--color-text-secondary)' }}>{topicLabel}</td>

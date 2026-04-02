@@ -64,7 +64,33 @@ export const POLISH_THEME = {
     color: '#ea580c',
     boxShadow: 'inset 0 0 0 1px rgba(249,115,22,0.3)',
   },
+  /** Success green — "Saved", active status indicators */
+  success: 'var(--color-success)',
+  /** Due date: overdue — past due, needs attention */
+  dueDateOverdue: 'var(--color-danger-hover)',
+  /** Due date: today — urgent but not past due */
+  dueDateToday: '#ea580c',
+  /** Due date: tomorrow — approaching */
+  dueDateSoon: '#ca8a04',
+  /** Info blue — date highlights, linked text */
+  info: '#3b82f6',
 } as const;
+
+/**
+ * Canonical feed column widths — shared by tickets page, inbox, portal.
+ * Values correspond to CANONICAL_FEED_HEADERS column order:
+ * ID | Title | Created | Tags | Status | Due date | Progress | Requester
+ */
+export const FEED_COL_WIDTHS = [
+  '9%',   // ID
+  '35%',  // Title
+  '10%',  // Created
+  '11%',  // Tags
+  '10%',  // Status
+  '9%',   // Due date
+  '9%',   // Progress
+  '7%',   // Requester
+] as const;
 
 /** Tailwind-compatible class names for consistent layout */
 export const POLISH_CLASS = {
@@ -84,4 +110,12 @@ export const POLISH_CLASS = {
   emptyStateIcon: 'h-10 w-10',
   /** Row hover transition */
   rowTransition: 'transition-colors duration-150 ease-out',
+  /** Admin data table row — hover, transition, non-clickable. Apply alongside admin-table-row CSS class. */
+  adminRow: 'admin-table-row transition-colors duration-150 ease-out',
+  /** Admin table header: left-aligned, matches tableHeader spec (11px uppercase). */
+  adminTableHeader: 'text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
+  /** Admin table header: right-aligned variant. */
+  adminTableHeaderRight: 'text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em]',
+  /** Admin cell padding — consistent with feed rows. */
+  adminCellPadding: 'px-4 py-3.5',
 } as const;

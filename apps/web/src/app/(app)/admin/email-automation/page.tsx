@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
-  Mail,
   Settings,
   List,
   MapPin,
@@ -22,6 +21,7 @@ import {
   FlaskConical,
   Link2,
   Unlink,
+  type LucideIcon,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +40,34 @@ const TABS: { id: TabId; label: string; icon: typeof Settings }[] = [
   { id: 'events', label: 'Event log', icon: Clock },
   { id: 'playground', label: 'Email Pattern Playground', icon: FlaskConical },
 ];
+
+function TabEmptyState({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center max-w-md mx-auto"
+      style={{
+        borderColor: 'var(--color-border-default)',
+        background: 'var(--color-bg-surface)',
+      }}
+    >
+      <Icon className="h-9 w-9 shrink-0 opacity-35" style={{ color: 'var(--color-text-muted)' }} aria-hidden />
+      <p className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+        {title}
+      </p>
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-muted)' }}>
+        {description}
+      </p>
+    </div>
+  );
+}
 
 export default function EmailAutomationPage() {
   const qc = useQueryClient();
@@ -292,6 +320,7 @@ function AssemblyTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     );
   }
 
+  const list = items ?? [];
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -313,31 +342,39 @@ function AssemblyTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
           <Plus className="h-4 w-4" /> Add
         </Button>
       </div>
-      <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
-        {(items ?? []).map((item) => (
-          <li key={item.id} className="flex items-center justify-between py-2">
-            <span style={{ color: 'var(--color-text-primary)' }}>
-              {item.keywordOrPhrase}
-              {item.displayName && (
-                <span className="text-sm ml-2" style={{ color: 'var(--color-text-muted)' }}>
-                  ({item.displayName})
+      {list.length === 0 ? (
+        <TabEmptyState
+          icon={List}
+          title="No assembly triggers yet"
+          description="Add keywords or phrases that appear in delivery emails when assembly is required. The automation uses this list to decide when to open assembly tickets."
+        />
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
+          {list.map((item) => (
+            <li key={item.id} className="flex items-center justify-between py-2">
+              <span style={{ color: 'var(--color-text-primary)' }}>
+                {item.keywordOrPhrase}
+                {item.displayName && (
+                  <span className="text-sm ml-2" style={{ color: 'var(--color-text-muted)' }}>
+                    ({item.displayName})
+                  </span>
+                )}
+                <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
+                  {item.matchMode} · {item.isActive ? 'Active' : 'Inactive'}
                 </span>
-              )}
-              <span className="text-xs ml-2" style={{ color: 'var(--color-text-muted)' }}>
-                {item.matchMode} · {item.isActive ? 'Active' : 'Inactive'}
               </span>
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => deleteMut.mutate(item.id)}
-              disabled={deleteMut.isPending}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </li>
-        ))}
-      </ul>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => deleteMut.mutate(item.id)}
+                disabled={deleteMut.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -361,6 +398,7 @@ function AddressesTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     );
   }
 
+  const addrList = addresses ?? [];
   return (
     <div className="space-y-4">
       <Button
@@ -371,16 +409,24 @@ function AddressesTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
         Refresh from studios
       </Button>
       <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-        {addresses?.length ?? 0} normalized address(es). Refresh builds from Studio formatted addresses.
+        {addrList.length} normalized address{addrList.length !== 1 ? 'es' : ''}. Refresh builds from Studio formatted addresses.
       </p>
-      <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
-        {(addresses ?? []).map((a) => (
-          <li key={a.id} className="py-2">
-            <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{a.studio?.name ?? a.studioId}</span>
-            <p className="text-sm truncate" style={{ color: 'var(--color-text-muted)' }}>{a.normalizedAddress}</p>
-          </li>
-        ))}
-      </ul>
+      {addrList.length === 0 ? (
+        <TabEmptyState
+          icon={MapPin}
+          title="No normalized addresses"
+          description="Run Refresh from studios to build address rows from each studio’s formatted address. Delivery emails are matched against these to pick a location."
+        />
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
+          {addrList.map((a) => (
+            <li key={a.id} className="py-2">
+              <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{a.studio?.name ?? a.studioId}</span>
+              <p className="text-sm truncate" style={{ color: 'var(--color-text-muted)' }}>{a.normalizedAddress}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -408,40 +454,49 @@ function ReviewTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     );
   }
 
+  const reviewList = items ?? [];
   return (
     <div className="space-y-4">
-      <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
-        {(items ?? []).map((item: { id: string; reason: string; status: string; email?: { id: string; subject: string | null }; createdAt: string }) => (
-          <li key={item.id} className="py-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{item.reason}</span>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{item.status}</span>
-            </div>
-            {item.email && (
-              <Link
-                href={`/admin/email-automation/emails/${item.email.id}`}
-                className="text-sm underline"
-                style={{ color: 'var(--color-accent)' }}
-              >
-                {item.email.subject ?? item.email.id}
-              </Link>
-            )}
-            <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
-              {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
-            </p>
-            {item.status === 'PENDING' && (
-              <div className="flex gap-2 mt-2">
-                <Button size="sm" onClick={() => resolveMut.mutate(item.id)} disabled={resolveMut.isPending}>
-                  <Check className="h-4 w-4" /> Resolve
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => dismissMut.mutate(item.id)} disabled={dismissMut.isPending}>
-                  <X className="h-4 w-4" /> Dismiss
-                </Button>
+      {reviewList.length === 0 ? (
+        <TabEmptyState
+          icon={AlertCircle}
+          title="Review queue is clear"
+          description="When the automation needs a human decision—low confidence, missing order match, ambiguous address, and similar—it will list those cases here."
+        />
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
+          {reviewList.map((item: { id: string; reason: string; status: string; email?: { id: string; subject: string | null }; createdAt: string }) => (
+            <li key={item.id} className="py-3">
+              <div className="flex items-center justify-between">
+                <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{item.reason}</span>
+                <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{item.status}</span>
               </div>
-            )}
-          </li>
-        ))}
-      </ul>
+              {item.email && (
+                <Link
+                  href={`/admin/email-automation/emails/${item.email.id}`}
+                  className="text-sm underline"
+                  style={{ color: 'var(--color-accent)' }}
+                >
+                  {item.email.subject ?? item.email.id}
+                </Link>
+              )}
+              <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>
+                {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true })}
+              </p>
+              {item.status === 'PENDING' && (
+                <div className="flex gap-2 mt-2">
+                  <Button size="sm" onClick={() => resolveMut.mutate(item.id)} disabled={resolveMut.isPending}>
+                    <Check className="h-4 w-4" /> Resolve
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => dismissMut.mutate(item.id)} disabled={dismissMut.isPending}>
+                    <X className="h-4 w-4" /> Dismiss
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -463,29 +518,50 @@ function EmailsTab({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     );
   }
 
+  const emailList = emails ?? [];
+  const hasEmails = emailList.length > 0;
   return (
     <div className="space-y-4">
-      <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
-        {(emails ?? []).map((email: { id: string; subject: string | null; fromAddress: string | null; receivedAt: string; classification: string | null; processedAt: string | null }) => (
-          <li key={email.id} className="py-2">
-            <Link
-              href={`/admin/email-automation/emails/${email.id}`}
-              className="block hover:underline"
-              style={{ color: 'var(--color-text-primary)' }}
-            >
-              {email.subject ?? '(no subject)'}
-            </Link>
-            <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              {email.fromAddress} · {email.classification ?? '—'} · {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: true })}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {!hasEmails && page === 1 ? (
+        <TabEmptyState
+          icon={Inbox}
+          title="No inbound emails yet"
+          description="After Gmail is connected and ingest runs, messages from your poll window appear here. Use Config → Run ingest now or wait for the scheduled job."
+        />
+      ) : !hasEmails && page > 1 ? (
+        <TabEmptyState
+          icon={Inbox}
+          title="No emails on this page"
+          description="You’ve reached an empty page. Go back to see earlier messages."
+        />
+      ) : (
+        <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
+          {emailList.map((email: { id: string; subject: string | null; fromAddress: string | null; receivedAt: string; classification: string | null; processedAt: string | null }) => (
+            <li key={email.id} className="py-2">
+              <Link
+                href={`/admin/email-automation/emails/${email.id}`}
+                className="block hover:underline"
+                style={{ color: 'var(--color-text-primary)' }}
+              >
+                {email.subject ?? '(no subject)'}
+              </Link>
+              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                {email.fromAddress} · {email.classification ?? '—'} · {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: true })}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="flex gap-2">
         <Button variant="secondary" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
           Previous
         </Button>
-        <Button variant="secondary" size="sm" onClick={() => setPage((p) => p + 1)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setPage((p) => p + 1)}
+          disabled={!hasEmails || emailList.length < 20}
+        >
           Next
         </Button>
       </div>
@@ -508,9 +584,19 @@ function EventsTab() {
     );
   }
 
+  const eventList = events ?? [];
+  if (eventList.length === 0) {
+    return (
+      <TabEmptyState
+        icon={Clock}
+        title="No events recorded yet"
+        description="Processing steps—classification, order creation, delivery handling, tickets—are logged here once the pipeline runs on ingested mail."
+      />
+    );
+  }
   return (
     <ul className="divide-y" style={{ borderColor: 'var(--color-border-default)' }}>
-      {(events ?? []).map((ev: { id: string; eventType: string; emailId: string; createdAt: string }) => (
+      {eventList.map((ev: { id: string; eventType: string; emailId: string; createdAt: string }) => (
         <li key={ev.id} className="py-2 text-sm">
           <span className="font-medium" style={{ color: 'var(--color-text-primary)' }}>{ev.eventType}</span>
           <span className="ml-2" style={{ color: 'var(--color-text-muted)' }}>email {ev.emailId.slice(0, 8)}…</span>
@@ -553,6 +639,12 @@ function PlaygroundTab() {
         {mutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}
         Run preview
       </Button>
+      {mutation.isPending && (
+        <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Running preview…
+        </div>
+      )}
       {result && (
         <div className="p-4 rounded-lg text-sm space-y-3" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <p><strong>Classification:</strong> {result.classification.type} (confidence: {result.classification.confidence})</p>
@@ -569,6 +661,18 @@ function PlaygroundTab() {
             <p><strong>Studio match:</strong> {result.studioMatch.kind === 'single' ? `Studio ${result.studioMatch.studioId}` : result.studioMatch.kind === 'ambiguous' ? `Ambiguous (${result.studioMatch.studioIds.length} studios)` : 'None'}</p>
           )}
         </div>
+      )}
+      {mutation.isError && (
+        <p className="text-sm" style={{ color: 'var(--color-danger)' }}>
+          Preview failed. Check the email text and try again, or verify the API is running.
+        </p>
+      )}
+      {!result && !mutation.isPending && !mutation.isError && (
+        <TabEmptyState
+          icon={FlaskConical}
+          title="Preview results"
+          description="Paste a sample email above and click Run preview to see classification, extracted fields, assembly match, and studio match—nothing is saved."
+        />
       )}
     </div>
   );

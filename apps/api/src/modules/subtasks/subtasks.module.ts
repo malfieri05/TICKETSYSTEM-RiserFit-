@@ -6,6 +6,7 @@ import { EventsModule } from '../events/events.module';
 import { SubtaskWorkflowModule } from '../subtask-workflow/subtask-workflow.module';
 import { PermissionsModule } from '../../common/permissions/permissions.module';
 import { PolicyModule } from '../../policy/policy.module';
+import { FirstResponseModule } from '../../common/first-response/first-response.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PolicyModule } from '../../policy/policy.module';
     SubtaskWorkflowModule,
     PermissionsModule,
     PolicyModule,
+    FirstResponseModule,
   ],
   controllers: [SubtasksController],
   providers: [SubtasksService],

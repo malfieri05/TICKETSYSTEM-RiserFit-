@@ -3,12 +3,19 @@ import { AiModule } from '../ai/ai.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { ReportingModule } from '../reporting/reporting.module';
 import { PermissionsModule } from '../../common/permissions/permissions.module';
+import { FirstResponseModule } from '../../common/first-response/first-response.module';
 import { AgentController } from './agent.controller';
 import { AgentService } from './agent.service';
 import { ToolRouterService } from './tool-router.service';
 
 @Module({
-  imports: [AiModule, TicketsModule, ReportingModule, PermissionsModule],
+  imports: [
+    AiModule,
+    TicketsModule,
+    ReportingModule,
+    PermissionsModule,
+    FirstResponseModule,
+  ],
   controllers: [AgentController],
   providers: [AgentService, ToolRouterService],
   exports: [AgentService],

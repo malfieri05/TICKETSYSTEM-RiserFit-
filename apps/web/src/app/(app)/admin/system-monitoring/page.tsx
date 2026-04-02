@@ -328,8 +328,8 @@ export default function SystemMonitoringPage() {
                     )}
                     {svc.lastError && (
                       <div className="flex items-start gap-1.5">
-                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" style={{ color: '#dc2626' }} />
-                        <span className="text-[11px]" style={{ color: '#dc2626' }}>
+                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" style={{ color: 'var(--color-danger)' }} />
+                        <span className="text-[11px]" style={{ color: 'var(--color-danger)' }}>
                           {svc.lastError}
                         </span>
                       </div>

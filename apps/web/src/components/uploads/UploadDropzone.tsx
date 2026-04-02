@@ -4,23 +4,46 @@ import React, { useCallback, useState } from 'react';
 import { Upload } from 'lucide-react';
 
 interface UploadDropzoneProps {
+  /** Omit or pass empty string to hide the label row (e.g. when the parent already has a heading). */
   label?: string;
   description?: string;
   maxSizeBytes?: number;
   multiple?: boolean;
+  /** e.g. ".pdf,application/pdf" — enforced for both picker and drag-and-drop */
+  accept?: string;
+  /** Main line inside the dashed box (e.g. "Click to select a PDF file") */
+  selectPrompt?: string;
+  /** Subline under the main prompt */
+  secondaryPrompt?: string;
   onFilesSelected: (files: File[]) => void;
 }
 
 const DEFAULT_MAX_SIZE_BYTES = 25 * 1024 * 1024;
 
+function fileMatchesAccept(file: File, accept: string | undefined): boolean {
+  if (!accept?.trim()) return true;
+  const tokens = accept.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean);
+  for (const t of tokens) {
+    if (t === 'application/pdf' && file.type === 'application/pdf') return true;
+    if (t.startsWith('.') && file.name.toLowerCase().endsWith(t)) return true;
+    if (t.includes('/') && file.type.toLowerCase() === t) return true;
+  }
+  return false;
+}
+
 export function UploadDropzone({
-  label = 'Click or drag to upload',
+  label,
   description,
   maxSizeBytes = DEFAULT_MAX_SIZE_BYTES,
   multiple = false,
+  accept,
+  selectPrompt,
+  secondaryPrompt,
   onFilesSelected,
 }: UploadDropzoneProps) {
   const [error, setError] = useState<string | null>(null);
+  const maxMb = Math.max(1, Math.round(maxSizeBytes / (1024 * 1024)));
+  const resolvedLabel = label === undefined ? 'Click or drag to upload' : label;
 
   const handleFiles = useCallback(
     (files: FileList | File[]) => {
@@ -28,7 +51,11 @@ export function UploadDropzone({
       const accepted: File[] = [];
       for (const file of asArray) {
         if (file.size > maxSizeBytes) {
-          setError('File must be smaller than 25MB.');
+          setError(`File must be smaller than ${maxMb} MB.`);
+          continue;
+        }
+        if (!fileMatchesAccept(file, accept)) {
+          setError('This file type is not allowed.');
           continue;
         }
         accepted.push(file);
@@ -38,7 +65,7 @@ export function UploadDropzone({
         onFilesSelected(accepted);
       }
     },
-    [maxSizeBytes, onFilesSelected],
+    [accept, maxMb, maxSizeBytes, onFilesSelected],
   );
 
   const onDrop: React.DragEventHandler<HTMLElement> = (e) => {
@@ -53,35 +80,49 @@ export function UploadDropzone({
     handleFiles(multiple ? files : [files[0]]);
   };
 
+  const showLabel = resolvedLabel.trim().length > 0;
+  const mainPrompt =
+    selectPrompt ?? `Click to select file${multiple ? 's' : ''}`;
+  const subPrompt = secondaryPrompt ?? 'or drag and drop here';
+
   return (
     <div className="space-y-2">
-      <label className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-        {label}
-      </label>
+      {showLabel && (
+        <span className="block text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          {resolvedLabel}
+        </span>
+      )}
       {description && (
         <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
           {description}
         </p>
       )}
       <label
-        className="flex flex-col items-center justify-center gap-2 rounded-lg p-4 cursor-pointer border-2 border-dashed transition-colors duration-150"
-        style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)' }}
-        onDragOver={(e) => e.preventDefault()}
+        className="flex min-h-[132px] flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 cursor-pointer border-2 border-dashed transition-colors duration-150 hover:border-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)]"
+        style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-root)' }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
         onDrop={onDrop}
       >
-        <Upload className="h-6 w-6" style={{ color: 'var(--color-text-muted)' }} />
-        <span className="text-sm font-medium" style={{ color: 'var(--color-text-muted)' }}>
-          Click to select file{multiple ? 's' : ''} or drag and drop
+        <Upload className="h-9 w-9 shrink-0" strokeWidth={1.5} style={{ color: 'var(--color-accent)' }} aria-hidden />
+        <span className="text-center text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+          {mainPrompt}
+        </span>
+        <span className="text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          {subPrompt}
         </span>
         <input
           type="file"
           className="hidden"
           multiple={multiple}
+          accept={accept}
           onChange={onChange}
         />
       </label>
       {error && (
-        <p className="text-xs" style={{ color: '#dc2626' }}>
+        <p className="text-xs" style={{ color: 'var(--color-danger)' }}>
           {error}
         </p>
       )}

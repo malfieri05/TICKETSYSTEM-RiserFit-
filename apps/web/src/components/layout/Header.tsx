@@ -16,15 +16,20 @@ export function Header({ title, action }: HeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 items-center justify-between px-6"
+      className="sticky top-0 z-30 flex h-14 min-h-14 shrink-0 items-center justify-between px-6 box-border"
       style={{
         background: 'var(--color-bg-app-header)',
         boxShadow: 'var(--shadow-app-header)',
       }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         {typeof title === 'string' ? (
-          <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>{title}</h1>
+          <h1
+            className="min-w-0 truncate text-base font-semibold"
+            style={{ color: 'var(--color-text-primary)' }}
+          >
+            {title}
+          </h1>
         ) : (
           title
         )}

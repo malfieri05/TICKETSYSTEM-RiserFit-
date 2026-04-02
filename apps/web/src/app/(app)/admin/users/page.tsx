@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/Button';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { MultiComboBox } from '@/components/ui/MultiComboBox';
 import { EditPencilIcon } from '@/components/ui/EditPencilIcon';
+import { InstantTooltip } from '@/components/tickets/TicketTagCapsule';
 import { usersApi, adminApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import type { UserRole, Department, User } from '@/types';
 
 const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
@@ -352,7 +354,7 @@ export default function AdminUsersPage() {
                 </>
               )}
               {inviteSubmitError && (
-                <p className="text-sm text-red-400">{inviteSubmitError}</p>
+                <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{inviteSubmitError}</p>
               )}
             </div>
             <div className="flex justify-end gap-2 mt-5">
@@ -403,7 +405,7 @@ export default function AdminUsersPage() {
               />
             )}
           </div>
-          <Button size="sm" onClick={openInviteModal}>
+          <Button size="md" onClick={openInviteModal}>
             <Plus className="h-4 w-4" />
             Add new user
           </Button>
@@ -422,24 +424,24 @@ export default function AdminUsersPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)' }}>
-                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Email</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Name</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Role</th>
-                  <th className="text-left px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Expires</th>
-                  <th className="text-right px-4 py-2 text-xs font-semibold uppercase" style={{ color: 'var(--color-text-muted)' }}>Actions</th>
+                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: POLISH_THEME.tableHeaderBg }}>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Email</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Name</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Role</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Expires</th>
+                  <th className={POLISH_CLASS.adminTableHeaderRight} style={{ color: POLISH_THEME.theadText }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {pendingInvites.map((inv, i) => (
-                  <tr key={inv.id} style={{ borderTop: i > 0 ? '1px solid var(--color-border-subtle)' : undefined }}>
-                    <td className="px-4 py-2" style={{ color: 'var(--color-text-primary)' }}>{inv.emailNormalized}</td>
-                    <td className="px-4 py-2" style={{ color: 'var(--color-text-muted)' }}>{inv.seedName}</td>
-                    <td className="px-4 py-2" style={{ color: 'var(--color-text-muted)' }}>{inv.assignedRole}</td>
-                    <td className="px-4 py-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                  <tr key={inv.id} className={POLISH_CLASS.adminRow} style={{ borderTop: i > 0 ? `1px solid ${POLISH_THEME.innerBorder}` : undefined }}>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-primary)' }}>{inv.emailNormalized}</td>
+                    <td className="px-4 py-3" style={{ color: POLISH_THEME.metaSecondary }}>{inv.seedName}</td>
+                    <td className="px-4 py-3" style={{ color: POLISH_THEME.metaSecondary }}>{inv.assignedRole}</td>
+                    <td className="px-4 py-3 text-xs" style={{ color: POLISH_THEME.metaMuted }}>
                       {new Date(inv.expiresAt).toLocaleString()}
                     </td>
-                    <td className="px-4 py-2 text-right space-x-1">
+                    <td className="px-4 py-3 text-right space-x-1">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -473,7 +475,7 @@ export default function AdminUsersPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        style={{ color: '#dc2626' } as React.CSSProperties}
+                        style={{ color: 'var(--color-danger)' } as React.CSSProperties}
                         onClick={async () => {
                           if (!confirm('Revoke this invitation?')) return;
                           await adminApi.invitations.revoke(inv.id);
@@ -502,13 +504,13 @@ export default function AdminUsersPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Name</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Visibility</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>Actions</th>
+                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Name</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Email</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Role</th>
+                  <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Visibility</th>
+                  <th className={POLISH_CLASS.adminTableHeaderRight} style={{ color: POLISH_THEME.theadText }}>Status</th>
+                  <th className={POLISH_CLASS.adminTableHeaderRight} style={{ color: POLISH_THEME.theadText }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -522,8 +524,8 @@ export default function AdminUsersPage() {
                   return (
                   <tr
                     key={u.id}
-                    className="transition-colors duration-150 hover:bg-[var(--color-bg-surface)]"
-                    style={{ borderTop: i > 0 ? '1px solid var(--color-border-default)' : undefined }}
+                    className={POLISH_CLASS.adminRow}
+                    style={{ borderTop: i > 0 ? `1px solid ${POLISH_THEME.rowBorder}` : undefined }}
                   >
                     <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{u.displayName}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{u.email}</td>
@@ -533,48 +535,53 @@ export default function AdminUsersPage() {
                           {roleDisplayLabel(draftRole, draftDepartments.length ? draftDepartments : null)}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <button
-                            type="button"
-                            className={cn(
-                              'relative h-9 w-9 shrink-0 rounded-full border-2 border-blue-600',
-                              'flex items-center justify-center bg-[var(--color-bg-surface)]',
-                              'hover:bg-blue-50/90 dark:hover:bg-blue-950/40 transition-colors duration-200',
-                              'disabled:opacity-50 disabled:pointer-events-none',
-                            )}
-                            title={isEditable ? 'cancel edit' : 'edit'}
-                            aria-label={isEditable ? 'Cancel edit' : 'Edit'}
-                            disabled={isSaving}
-                            onClick={() => {
-                              if (isEditable) {
-                                setRoleDrafts((prev) => ({ ...prev, [u.id]: u.role }));
-                                setDepartmentDrafts((prev) => ({ ...prev, [u.id]: u.departments ?? [] }));
-                                setEditableRows((prev) => ({ ...prev, [u.id]: false }));
-                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
-                              } else {
-                                setEditableRows((prev) => ({ ...prev, [u.id]: true }));
-                                setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
-                              }
-                            }}
+                          <InstantTooltip
+                            content={isEditable ? 'Cancel editing' : 'Edit user permissions'}
+                            compact
+                            className="inline-flex shrink-0"
                           >
-                            <span
+                            <button
+                              type="button"
                               className={cn(
-                                'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
-                                isEditable ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100',
+                                'relative h-9 w-9 shrink-0 rounded-full border-2 border-blue-600',
+                                'flex items-center justify-center bg-[var(--color-bg-surface)]',
+                                'hover:bg-blue-50/90 dark:hover:bg-blue-950/40 transition-colors duration-200',
+                                'disabled:opacity-50 disabled:pointer-events-none',
                               )}
-                              aria-hidden={isEditable}
+                              aria-label={isEditable ? 'Cancel editing' : 'Edit user permissions'}
+                              disabled={isSaving}
+                              onClick={() => {
+                                if (isEditable) {
+                                  setRoleDrafts((prev) => ({ ...prev, [u.id]: u.role }));
+                                  setDepartmentDrafts((prev) => ({ ...prev, [u.id]: u.departments ?? [] }));
+                                  setEditableRows((prev) => ({ ...prev, [u.id]: false }));
+                                  setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                                } else {
+                                  setEditableRows((prev) => ({ ...prev, [u.id]: true }));
+                                  setRowMessages((prev) => ({ ...prev, [u.id]: '' }));
+                                }
+                              }}
                             >
-                              <EditPencilIcon className="text-blue-600" />
-                            </span>
-                            <span
-                              className={cn(
-                                'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
-                                isEditable ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none',
-                              )}
-                              aria-hidden={!isEditable}
-                            >
-                              <X className="h-4 w-4 text-blue-600" strokeWidth={2.5} />
-                            </span>
-                          </button>
+                              <span
+                                className={cn(
+                                  'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
+                                  isEditable ? 'opacity-0 scale-90 pointer-events-none' : 'opacity-100 scale-100',
+                                )}
+                                aria-hidden={isEditable}
+                              >
+                                <EditPencilIcon className="text-blue-600" />
+                              </span>
+                              <span
+                                className={cn(
+                                  'absolute inset-0 flex items-center justify-center transition-all duration-200 ease-out',
+                                  isEditable ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none',
+                                )}
+                                aria-hidden={!isEditable}
+                              >
+                                <X className="h-4 w-4 text-blue-600" strokeWidth={2.5} />
+                              </span>
+                            </button>
+                          </InstantTooltip>
                           <Select
                             value={draftRole}
                             onChange={(e) => {
@@ -622,7 +629,7 @@ export default function AdminUsersPage() {
                         {rowMessage && (
                           <span
                             className="text-[11px]"
-                            style={{ color: rowMessage === 'Saved' ? '#16a34a' : '#dc2626' }}
+                            style={{ color: rowMessage === 'Saved' ? POLISH_THEME.success : 'var(--color-danger)' }}
                           >
                             {rowMessage}
                           </span>
@@ -647,7 +654,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3 text-right">
                       <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium"
                         style={u.isActive
-                          ? { background: 'rgba(34,197,94,0.12)', color: '#16a34a' }
+                          ? { background: 'rgba(34,197,94,0.12)', color: POLISH_THEME.success }
                           : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}>
                         {u.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -657,7 +664,7 @@ export default function AdminUsersPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          style={{ color: '#dc2626' } as React.CSSProperties}
+                          style={{ color: 'var(--color-danger)' } as React.CSSProperties}
                           onClick={() => setDeactivateConfirmUserId(u.id)}
                           loading={deactivateMut.isPending && deactivateConfirmUserId === u.id}
                         >
@@ -837,7 +844,7 @@ function ManageLocationsModal({
                     <Button
                       variant="ghost"
                       size="sm"
-                      style={{ color: '#dc2626' } as React.CSSProperties}
+                      style={{ color: 'var(--color-danger)' } as React.CSSProperties}
                       onClick={() => removeScopeMut.mutate(s.studioId)}
                       disabled={removeScopeMut.isPending}
                     >

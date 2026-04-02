@@ -20,6 +20,7 @@ import {
   SUBTASK_UPDATE,
   SUBTASK_VIEW,
 } from '../../policy/capabilities/capability-keys';
+import { FirstResponseService } from '../../common/first-response/first-response.service';
 
 const TICKET_FOR_VISIBILITY_SELECT = {
   id: true,
@@ -62,6 +63,7 @@ export class SubtasksService {
     private subtaskWorkflow: SubtaskWorkflowService,
     private visibility: TicketVisibilityService,
     private policy: PolicyService,
+    private firstResponse: FirstResponseService,
   ) {}
 
   async create(ticketId: string, dto: CreateSubtaskDto, actor: RequestUser) {
@@ -245,6 +247,18 @@ export class SubtasksService {
               subtaskId,
             )
           : [];
+
+        if (dto.status && dto.status !== previousStatus) {
+          await this.firstResponse.recordFirstSubtaskStatusChange(
+            tx,
+            subtask.ticketId,
+            subtaskId,
+            previousStatus,
+            dto.status,
+            now,
+          );
+        }
+
         return { updated: out, becameReadyIds };
       },
     );

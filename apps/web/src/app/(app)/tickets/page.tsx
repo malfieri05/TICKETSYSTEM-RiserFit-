@@ -17,7 +17,7 @@ import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/hooks/useAuth';
-import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS, FEED_COL_WIDTHS } from '@/lib/polish';
 
 const PAGE_SIZE = 20;
 
@@ -27,8 +27,6 @@ const FILTER_KEYS: (keyof TicketFilters)[] = [
   'departmentId', 'ticketClass', 'supportTopicId', 'maintenanceCategoryId', 'studioId', 'state',
   'createdAfter', 'createdBefore',
 ];
-
-const FEED_COLGROUP_WIDTHS = ['9%', '35%', '10%', '11%', '10%', '9%', '9%', '7%'] as const;
 
 export default function TicketsPage() {
   const { user } = useAuth();
@@ -303,7 +301,7 @@ export default function TicketsPage() {
                     <span>{label}:</span>
                     <span
                       className="text-sm font-medium tabular-nums"
-                      style={{ color: active ? '#22c55e' : 'var(--color-text-primary)' }}
+                      style={{ color: active ? POLISH_THEME.success : 'var(--color-text-primary)' }}
                     >
                       {count}
                     </span>
@@ -390,7 +388,7 @@ export default function TicketsPage() {
             <div className="flex-1 min-h-0 flex flex-col">
               <table className="w-full text-sm table-fixed">
                 <colgroup>
-                  {FEED_COLGROUP_WIDTHS.map((w, idx) => (
+                  {FEED_COL_WIDTHS.map((w, idx) => (
                     <col key={`thead-col-${idx}`} style={{ width: w }} />
                   ))}
                 </colgroup>
@@ -405,7 +403,7 @@ export default function TicketsPage() {
               <div className="ticket-feed-body-scroll flex-1 min-h-0 overflow-y-auto">
                 <table className="w-full text-sm table-fixed">
                   <colgroup>
-                    {FEED_COLGROUP_WIDTHS.map((w, idx) => (
+                    {FEED_COL_WIDTHS.map((w, idx) => (
                       <col key={`tbody-col-${idx}`} style={{ width: w }} />
                     ))}
                   </colgroup>

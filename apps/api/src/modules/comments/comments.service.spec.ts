@@ -49,9 +49,14 @@ describe('CommentsService', () => {
         update: jest.fn(),
         create: jest.fn(),
       },
+      user: { findMany: jest.fn().mockResolvedValue([]) },
+      userDepartment: { findMany: jest.fn().mockResolvedValue([]) },
+      userStudioScope: { findMany: jest.fn().mockResolvedValue([]) },
+      ticketWatcher: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((fn) =>
         typeof fn === 'function' ? fn(prisma) : Promise.resolve(),
       ),
+      $executeRaw: jest.fn(),
     } as unknown as jest.Mocked<PrismaService>;
 
     visibility = { assertCanView: jest.fn() };
@@ -65,9 +70,13 @@ describe('CommentsService', () => {
       { emit: jest.fn() } as unknown as DomainEventsService,
       {
         extractMentions: jest.fn().mockResolvedValue([]),
+        extractMentionsForTicket: jest.fn().mockResolvedValue([]),
       } as unknown as MentionParserService,
       visibility as unknown as TicketVisibilityService,
       policy as never,
+      {
+        recordNonRequesterComment: jest.fn().mockResolvedValue(undefined),
+      } as never,
     );
   });
 

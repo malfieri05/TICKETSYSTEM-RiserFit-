@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Inbox as InboxIcon, ChevronLeft, ChevronRight } from 'lucide-react';
-import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS, FEED_COL_WIDTHS } from '@/lib/polish';
 import { ticketsApi, invalidateTicketLists } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
@@ -130,7 +130,12 @@ export default function InboxPage() {
   );
 
   const ticketList = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
@@ -170,7 +175,12 @@ export default function InboxPage() {
   );
 
   const initialSkeleton = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (

@@ -71,6 +71,28 @@ export class LeaseRuleSetService {
     });
   }
 
+  /** Studio IDs that have a non-archived ruleset (draft or published). */
+  async getStudioIdsWithActiveRulesets(): Promise<string[]> {
+    const grouped = await this.prisma.leaseRuleSet.groupBy({
+      by: ['studioId'],
+      where: {
+        status: {
+          in: [LeaseRuleSetStatus.DRAFT, LeaseRuleSetStatus.PUBLISHED],
+        },
+      },
+    });
+    return grouped.map((g) => g.studioId);
+  }
+
+  /** Studio IDs with a currently published ruleset. */
+  async getStudioIdsWithPublishedRulesets(): Promise<string[]> {
+    const grouped = await this.prisma.leaseRuleSet.groupBy({
+      by: ['studioId'],
+      where: { status: LeaseRuleSetStatus.PUBLISHED },
+    });
+    return grouped.map((g) => g.studioId);
+  }
+
   async getRulesetWithRulesAndTerms(rulesetId: string) {
     const ruleset = await this.prisma.leaseRuleSet.findUnique({
       where: { id: rulesetId },

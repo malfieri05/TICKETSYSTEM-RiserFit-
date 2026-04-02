@@ -185,7 +185,20 @@ export default function AdminMarketsPage() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="Locations" />
+      <Header
+        title={
+          <h1 className="min-w-0 truncate text-base font-semibold">
+            <span style={{ color: 'var(--color-text-primary)' }}>Locations: </span>
+            <span
+              className="tabular-nums"
+              style={{ color: 'var(--color-accent)' }}
+              aria-live="polite"
+            >
+              {isLoading ? '…' : locations.length}
+            </span>
+          </h1>
+        }
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <div

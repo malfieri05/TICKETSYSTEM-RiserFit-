@@ -1,13 +1,14 @@
 'use client';
 
-import { useState, useRef, FormEvent } from 'react';
+import { useState, useRef, FormEvent, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { aiApi } from '@/lib/api';
 
 type IngestMode = 'text' | 'file' | 'pdf';
@@ -57,9 +58,76 @@ function SourceTypeBadge({ type }: { type: string }) {
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
+const INGEST_MODE_ORDER = ['pdf', 'text', 'file'] as const satisfies readonly IngestMode[];
+
+function ingestModeLabel(m: IngestMode): string {
+  if (m === 'text') return 'Paste Text';
+  if (m === 'pdf') return 'Handbook PDF';
+  return 'Upload File';
+}
+
+function KnowledgeBaseAboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)' }}
+      onClick={onClose}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="knowledge-base-about-title"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl p-6 shadow-xl"
+        style={{
+          background: 'var(--color-bg-surface-raised)',
+          border: '1px solid var(--color-border-default)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <h2 id="knowledge-base-about-title" className="text-base font-semibold pr-2" style={{ color: 'var(--color-text-primary)' }}>
+            What is &apos;Knowledge base&apos;?
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-[var(--color-bg-surface)]"
+            style={{ color: 'var(--color-text-muted)' }}
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="space-y-3 text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
+          <ul className="list-disc space-y-2 pl-4">
+            <li>
+              Upload any company documents or information that you want the &apos;AI Assistant&apos; to have access to.
+            </li>
+          </ul>
+          <p>
+            This allows the bot to answer any questions from users on company specific content.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function KnowledgeBasePage() {
   const qc = useQueryClient();
-  const [mode, setMode] = useState<IngestMode>('text');
+  const [mode, setMode] = useState<IngestMode>('pdf');
   const [title, setTitle] = useState('');
   const [textContent, setTextContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -67,6 +135,8 @@ export default function KnowledgeBasePage() {
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [knowledgeBaseInfoOpen, setKnowledgeBaseInfoOpen] = useState(false);
+  const closeKnowledgeBaseInfo = useCallback(() => setKnowledgeBaseInfoOpen(false), []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,9 +234,38 @@ export default function KnowledgeBasePage() {
 
   const docs: DocRow[] = data ?? [];
 
+  const canIngest =
+    title.trim().length > 0 &&
+    (mode === 'text'
+      ? textContent.trim().length > 0
+      : mode === 'pdf'
+        ? pdfFile != null
+        : file != null);
+
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="Knowledge Base" />
+      <Header
+        title={
+          <div className="flex min-w-0 items-center gap-2">
+            <h1
+              className="min-w-0 truncate text-base font-semibold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Knowledge Base
+            </h1>
+            <button
+              type="button"
+              onClick={() => setKnowledgeBaseInfoOpen(true)}
+              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-btn-ghost-hover-bg)] hover:text-[var(--color-accent-hover)]"
+              style={{ color: 'var(--color-accent)' }}
+              aria-label="What is Knowledge base? Opens an explanation."
+            >
+              <Info className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
+            </button>
+          </div>
+        }
+      />
+      <KnowledgeBaseAboutModal open={knowledgeBaseInfoOpen} onClose={closeKnowledgeBaseInfo} />
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
 
@@ -177,21 +276,20 @@ export default function KnowledgeBasePage() {
             Add Knowledge Document
           </h2>
 
-          {/* Mode toggle */}
-          <div className="flex rounded-lg p-1 mb-4 w-fit gap-1" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-            {(['text', 'file', 'pdf'] as IngestMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => { setMode(m); setIngestResult(null); }}
-                className="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
-                style={mode === m
-                  ? { background: 'var(--color-accent)', color: '#ffffff' }
-                  : { color: 'var(--color-text-muted)' }}
-              >
-                {m === 'text' ? 'Paste Text' : m === 'pdf' ? 'Handbook PDF' : 'Upload File'}
-              </button>
-            ))}
-          </div>
+          <SlidingSegmentedControl
+            options={INGEST_MODE_ORDER.map((m) => ({
+              value: m,
+              label: ingestModeLabel(m),
+            }))}
+            value={mode}
+            onChange={(v) => {
+              setMode(v as IngestMode);
+              setIngestResult(null);
+            }}
+            aria-label="Document ingest method"
+            size="md"
+            className="mb-4 w-fit"
+          />
 
           <form onSubmit={handleIngest} className="space-y-4">
             <div>
@@ -307,7 +405,7 @@ export default function KnowledgeBasePage() {
               </div>
             )}
 
-            <Button type="submit" disabled={ingesting}>
+            <Button type="submit" disabled={ingesting || !canIngest}>
               {ingesting ? <><Loader2 className="h-4 w-4 animate-spin" />Processing…</> : <><Upload className="h-4 w-4" />Ingest Document</>}
             </Button>
           </form>

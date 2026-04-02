@@ -28,8 +28,10 @@
   --color-input-border-hover: #4a586d;
   --color-focus-ring: rgba(74, 142, 212, 0.4);
   --color-row-selected: rgba(52, 120, 196, 0.18);
+  --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+  --color-success: #16a34a;
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.32), 0 8px 28px -16px rgba(0, 0, 0, 0.55);
@@ -61,6 +63,10 @@
   --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.55), -4px 0 16px rgba(0, 0, 0, 0.35);
   /* Drawer tab strip — depth only below (no halo above; flush with header chrome) */
   --shadow-drawer-tabbar: 0 14px 36px -12px rgba(0, 0, 0, 0.55), 0 6px 16px -10px rgba(0, 0, 0, 0.4);
+  /* Assistant input: “Ask Rovi” pale capsule (Zia-style), dark theme */
+  --color-rovi-ask-pill-bg: rgba(52, 120, 196, 0.16);
+  --color-rovi-ask-pill-border: rgba(120, 170, 220, 0.42);
+  --color-rovi-ask-pill-icon-stroke: #9eb4d0;
 }
 
 [data-theme="light"] {
@@ -90,8 +96,10 @@
   --color-input-border-hover: #b4c1d2;
   --color-focus-ring: rgba(40, 104, 184, 0.24);
   --color-row-selected: rgba(40, 104, 184, 0.12);
+  --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
+  --color-success: #15803d;
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(16, 24, 40, 0.06), 0 10px 24px -14px rgba(16, 24, 40, 0.18);
@@ -121,6 +129,11 @@
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12), -2px 0 12px rgba(0, 0, 0, 0.06);
   /* Downward-biased only — separates tab strip from scroll body, not from header above */
   --shadow-drawer-tabbar: 0 12px 28px -10px rgba(16, 24, 40, 0.14), 0 4px 12px -8px rgba(16, 24, 40, 0.08);
+  /* Assistant input: “Ask Rovi” pale periwinkle capsule (matches Zia reference) */
+  --color-rovi-ask-pill-bg: #e8f2fc;
+  /* Stronger than prior #b8d0eb so the capsule reads on white / pale blue */
+  --color-rovi-ask-pill-border: color-mix(in srgb, var(--color-accent) 38%, #94b8d8);
+  --color-rovi-ask-pill-icon-stroke: #4a6d94;
 }
 
 * {
@@ -217,6 +230,14 @@ body {
 }
 [data-theme="dark"] tr.ticket-feed-table-row[data-selected="true"] {
   background: var(--color-row-selected);
+}
+
+/* Admin data table rows: consistent hover across themes */
+[data-theme="light"] tr.admin-table-row:hover {
+  background: rgba(40, 104, 184, 0.055);
+}
+[data-theme="dark"] tr.admin-table-row:hover {
+  background: var(--color-bg-surface);
 }
 
 .surface-card {

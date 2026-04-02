@@ -15,6 +15,7 @@ import { CreateCommentDto } from './dto/create-comment.dto';
 import { PolicyService } from '../../policy/policy.service';
 import { COMMENT_ADD_PUBLIC } from '../../policy/capabilities/capability-keys';
 import { mapCommentToResponse } from '../../common/serializers/comment-response';
+import { FirstResponseService } from '../../common/first-response/first-response.service';
 
 const TICKET_FOR_VISIBILITY_SELECT = {
   id: true,
@@ -45,6 +46,7 @@ export class CommentsService {
     private mentionParser: MentionParserService,
     private visibility: TicketVisibilityService,
     private policy: PolicyService,
+    private firstResponse: FirstResponseService,
   ) {}
 
   async create(ticketId: string, dto: CreateCommentDto, actor: RequestUser) {
@@ -120,6 +122,14 @@ export class CommentsService {
         where: { id: ticketId },
         data: { updatedAt: new Date() },
       });
+
+      await this.firstResponse.recordNonRequesterComment(
+        tx,
+        ticketId,
+        ticket.requesterId,
+        actor.id,
+        created.createdAt,
+      );
 
       return created;
     });

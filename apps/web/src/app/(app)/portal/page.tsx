@@ -4,7 +4,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket, CheckCircle2, Clock, Search, MapPin } from 'lucide-react';
+import { Ticket, CheckCircle2, Clock, Search, MapPin, MessageCircle } from 'lucide-react';
 import {
   ticketsApi,
   dashboardApi,
@@ -23,7 +23,7 @@ import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
-import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS, FEED_COL_WIDTHS } from '@/lib/polish';
 
 const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
 const PAGE_SIZE = 20;
@@ -321,7 +321,12 @@ export default function PortalPage() {
   );
 
   const myTicketList = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
@@ -366,7 +371,12 @@ export default function PortalPage() {
   );
 
   const myTableSkeleton = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
@@ -493,7 +503,12 @@ export default function PortalPage() {
   );
 
   const studioTicketList = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
@@ -538,7 +553,12 @@ export default function PortalPage() {
   );
 
   const studioTableSkeleton = (
-    <table className="w-full text-sm">
+    <table className="w-full text-sm table-fixed">
+      <colgroup>
+        {FEED_COL_WIDTHS.map((w, i) => (
+          <col key={i} style={{ width: w }} />
+        ))}
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
           {CANONICAL_FEED_HEADERS.map((h) => (
@@ -665,7 +685,7 @@ export default function PortalPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <StatCard
                     label="Open Tickets"
                     value={dashSummary.openTickets}
@@ -677,6 +697,13 @@ export default function PortalPage() {
                     value={dashSummary.completedTickets}
                     icon={CheckCircle2}
                     iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                  />
+                  <StatCard
+                    label="Avg First Response"
+                    value={formatHoursLabel(dashSummary.avgFirstResponseHours)}
+                    sub="Last 30 days"
+                    icon={MessageCircle}
+                    iconStyle={{ background: 'rgba(14,165,233,0.14)', color: '#0284c7' }}
                   />
                   <StatCard
                     label="Avg Completion"

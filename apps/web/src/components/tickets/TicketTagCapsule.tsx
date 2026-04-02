@@ -13,7 +13,8 @@ import { POLISH_THEME } from '@/lib/polish';
 const pill = POLISH_THEME.ticketTagCapsule;
 
 const TOOLTIP_GAP = 6;
-const TOOLTIP_Z = 200;
+/** Above sticky app chrome (e.g. header z-30) and overflow stacks */
+const TOOLTIP_Z = 300;
 
 /** Exported for panel tooltip line spacing; base 11px × 1.75 × 0.9 */
 export const TICKET_TAG_TOOLTIP_FONT_PX = 11 * 1.75 * 0.9;
@@ -27,13 +28,27 @@ type InstantTooltipProps = {
    * Short hints (e.g. control labels): smaller type and padding; same theme + above placement.
    */
   compact?: boolean;
+  /** Default centered above target; `left` aligns with trigger’s left edge (e.g. dashboard help). */
+  align?: 'center' | 'left';
+  /** Override tooltip `maxWidth` (non-compact default: min(360px, …)). */
+  maxWidth?: string;
+  /** Set on the portaled tooltip node for `aria-describedby` on the trigger. */
+  tooltipId?: string;
 };
 
 /**
  * Hover label with no delay, portaled to `document.body` so it is not clipped
  * by ticket feed `overflow` regions. Rounded panel, centered text, always above target.
  */
-export function InstantTooltip({ content, children, className, compact }: InstantTooltipProps) {
+export function InstantTooltip({
+  content,
+  children,
+  className,
+  compact,
+  align = 'center',
+  maxWidth: maxWidthProp,
+  tooltipId,
+}: InstantTooltipProps) {
   const wrapRef = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -44,9 +59,9 @@ export function InstantTooltip({ content, children, className, compact }: Instan
     const r = el.getBoundingClientRect();
     setPos({
       top: r.top - TOOLTIP_GAP,
-      left: r.left + r.width / 2,
+      left: align === 'left' ? r.left : r.left + r.width / 2,
     });
-  }, []);
+  }, [align]);
 
   const show = useCallback(() => {
     updatePos();
@@ -67,22 +82,29 @@ export function InstantTooltip({ content, children, className, compact }: Instan
     };
   }, [open, updatePos, content]);
 
+  const textAlign = align === 'left' ? 'text-left' : 'text-center';
+  const transform =
+    align === 'left' ? 'translateY(-100%)' : 'translate(-50%, -100%)';
+  const maxWidth =
+    maxWidthProp ?? (compact ? undefined : 'min(360px, calc(100vw - 1rem))');
+
   const tooltip =
     open && typeof document !== 'undefined'
       ? createPortal(
           <span
+            id={tooltipId}
             role="tooltip"
             className={
               compact
-                ? 'pointer-events-none fixed whitespace-nowrap rounded-lg px-2.5 py-1.5 text-center text-xs font-medium leading-tight shadow-[var(--shadow-panel)]'
-                : 'pointer-events-none fixed whitespace-pre-line rounded-2xl px-3 py-2 text-center font-medium leading-snug shadow-[var(--shadow-panel)]'
+                ? `pointer-events-none fixed whitespace-nowrap rounded-lg px-2.5 py-1.5 ${textAlign} text-xs font-medium leading-tight shadow-[var(--shadow-panel)]`
+                : `pointer-events-none fixed whitespace-pre-line rounded-lg px-3 py-2 ${textAlign} font-medium leading-snug shadow-[var(--shadow-panel)]`
             }
             style={{
               top: pos.top,
               left: pos.left,
-              transform: 'translate(-50%, -100%)',
+              transform,
               zIndex: TOOLTIP_Z,
-              maxWidth: compact ? undefined : 'min(360px, calc(100vw - 1rem))',
+              maxWidth,
               wordBreak: compact ? undefined : 'break-word',
               fontSize: compact ? undefined : `${TICKET_TAG_TOOLTIP_FONT_PX}px`,
               background: 'var(--color-bg-surface-raised)',
@@ -100,6 +122,7 @@ export function InstantTooltip({ content, children, className, compact }: Instan
     <span
       ref={wrapRef}
       className={className}
+      aria-describedby={open && tooltipId ? tooltipId : undefined}
       onMouseEnter={show}
       onMouseLeave={hide}
       onFocus={show}

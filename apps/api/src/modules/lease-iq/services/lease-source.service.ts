@@ -1,7 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { PrismaService } from '../../../common/database/prisma.service';
+import {
+  tryCreateS3ClientFromConfig,
+  type ResolvedS3,
+} from '../../../common/storage/s3-client-from-config';
 import {
   LeaseSourceType,
   LeaseSource,
@@ -9,25 +13,24 @@ import {
 
 @Injectable()
 export class LeaseSourceService {
-  private s3: S3Client | null = null;
-  private bucket: string | null = null;
+  private readonly logger = new Logger(LeaseSourceService.name);
+  private readonly s3: ResolvedS3 | null;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    const accessKey = this.config.get<string>('S3_ACCESS_KEY_ID');
-    const secretKey = this.config.get<string>('S3_SECRET_ACCESS_KEY');
-    if (accessKey && secretKey) {
-      const endpoint = this.config.get<string>('S3_ENDPOINT');
-      this.s3 = new S3Client({
-        region: this.config.get<string>('S3_REGION') ?? 'us-east-1',
-        credentials: { accessKeyId: accessKey, secretAccessKey: secretKey },
-        requestChecksumCalculation: 'WHEN_REQUIRED',
-        responseChecksumValidation: 'WHEN_REQUIRED',
-        ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
-      });
-      this.bucket = this.config.get<string>('S3_BUCKET') ?? null;
+    const { s3, endpointInvalid } = tryCreateS3ClientFromConfig(this.config);
+    if (endpointInvalid) {
+      this.logger.warn(
+        'S3_ENDPOINT is set but is not a valid URL. Lease IQ PDFs will not be retained in object storage until fixed.',
+      );
+    }
+    this.s3 = s3;
+    if (!s3) {
+      this.logger.warn(
+        'S3 is not fully configured (bucket + keys). Lease IQ will still extract text from uploaded PDFs, but originals will not be stored in S3.',
+      );
     }
   }
 
@@ -56,11 +59,11 @@ export class LeaseSourceService {
     const rawText = await this.extractTextFromPdf(file.buffer);
     let fileStoragePath: string | null = null;
 
-    if (this.s3 && this.bucket) {
+    if (this.s3) {
       const key = `lease-iq/${studioId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.pdf`;
-      await this.s3.send(
+      await this.s3.client.send(
         new PutObjectCommand({
-          Bucket: this.bucket,
+          Bucket: this.s3.bucket,
           Key: key,
           Body: file.buffer,
           ContentType: file.mimetype || 'application/pdf',

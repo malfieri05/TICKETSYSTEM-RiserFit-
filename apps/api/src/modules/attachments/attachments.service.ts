@@ -14,39 +14,16 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PrismaService } from '../../common/database/prisma.service';
+import {
+  tryCreateS3ClientFromConfig,
+  normalizeS3Endpoint,
+  isCloudflareR2Endpoint,
+} from '../../common/storage/s3-client-from-config';
 import { RequestUploadUrlDto } from './dto/attachments.dto';
 
 const MAX_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
 const UPLOAD_URL_TTL = 300; // 5 minutes — presigned upload URL lifetime
 const DOWNLOAD_URL_TTL = 900; // 15 minutes — presigned download URL lifetime
-
-/** Strip quotes / paste junk so R2 endpoint survives bad .env lines (e.g. `- https://...`). */
-function normalizeS3Endpoint(raw: string | undefined): string | undefined {
-  if (raw == null) return undefined;
-  let e = String(raw).trim();
-  if (!e) return undefined;
-  e = e.replace(/^["']|["']$/g, '');
-  e = e.replace(/^\s*[=:-]+\s*/, '');
-  e = e.replace(/^\s*-\s+/, '');
-  if (!/^https?:\/\//i.test(e)) {
-    e = `https://${e}`;
-  }
-  try {
-    const url = new URL(e);
-    if (!url.hostname) return undefined;
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return undefined;
-  }
-}
-
-function isCloudflareR2Endpoint(endpoint: string): boolean {
-  try {
-    return /\.r2\.cloudflarestorage\.com$/i.test(new URL(endpoint).hostname);
-  } catch {
-    return false;
-  }
-}
 
 @Injectable()
 export class AttachmentsService {
@@ -58,49 +35,22 @@ export class AttachmentsService {
     private prisma: PrismaService,
     private config: ConfigService,
   ) {
-    const accessKeyId = this.config.get<string>('S3_ACCESS_KEY_ID')?.trim();
-    const secretAccessKey = this.config
-      .get<string>('S3_SECRET_ACCESS_KEY')
-      ?.trim();
-    const bucket = this.config.get<string>('S3_BUCKET')?.trim();
     const rawEndpoint = this.config.get<string>('S3_ENDPOINT')?.trim();
-    const endpoint = normalizeS3Endpoint(rawEndpoint);
-    if (rawEndpoint && !endpoint) {
+    const { s3, endpointInvalid } = tryCreateS3ClientFromConfig(this.config);
+    if (endpointInvalid) {
       this.logger.warn(
         'S3_ENDPOINT is set but is not a valid URL. Fix it (e.g. https://<ACCOUNT_ID>.r2.cloudflarestorage.com with no leading dash or spaces).',
       );
     }
-
-    // Empty string in .env becomes "" — ?? 'us-east-1' does not run; R2 needs "auto" per Cloudflare docs.
-    const rawRegion = this.config.get<string>('S3_REGION')?.trim();
-    const region =
-      rawRegion && rawRegion.length > 0
-        ? rawRegion
-        : endpoint
-          ? 'auto'
-          : 'us-east-1';
-
-    if (accessKeyId && secretAccessKey && bucket) {
-      const isR2 = endpoint ? isCloudflareR2Endpoint(endpoint) : false;
-      // R2 and some S3-compatible providers reject default AWS SDK v3.729+ checksum headers.
-      // Cloudflare's aws-sdk-js-v3 example uses virtual-hosted style (no forcePathStyle); MinIO etc. need path-style.
-      this.s3 = new S3Client({
-        region,
-        credentials: {
-          accessKeyId,
-          secretAccessKey,
-        },
-        requestChecksumCalculation: 'WHEN_REQUIRED',
-        responseChecksumValidation: 'WHEN_REQUIRED',
-        ...(endpoint
-          ? {
-              endpoint,
-              ...(isR2 ? {} : { forcePathStyle: true as const }),
-            }
-          : {}),
-      });
-      this.bucket = bucket;
+    if (s3) {
+      this.s3 = s3.client;
+      this.bucket = s3.bucket;
+      const endpoint = normalizeS3Endpoint(rawEndpoint);
+      const rawRegion = this.config.get<string>('S3_REGION')?.trim();
+      const region =
+        rawRegion && rawRegion.length > 0 ? rawRegion : endpoint ? 'auto' : 'us-east-1';
       if (endpoint) {
+        const isR2 = isCloudflareR2Endpoint(endpoint);
         this.logger.log(
           `S3 client: custom endpoint host=${new URL(endpoint).hostname} region=${region} pathStyle=${!isR2}`,
         );
@@ -109,7 +59,7 @@ export class AttachmentsService {
       this.s3 = null;
       this.bucket = '';
       this.logger.warn(
-        'S3 is not configured (missing S3_BUCKET and/or keys). Ticket attachments and KB file storage are disabled until env vars are set.',
+        'S3 is not configured (missing S3_BUCKET and/or keys). Ticket attachments, KB file storage, and Lease IQ PDF retention are disabled until env vars are set.',
       );
     }
   }

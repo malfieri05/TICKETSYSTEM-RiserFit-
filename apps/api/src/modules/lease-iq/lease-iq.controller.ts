@@ -106,6 +106,16 @@ export class LeaseIQController {
 
   // ─── Rulesets and rules ───────────────────────────────────────────────────
 
+  /** Coverage for admin UI: draft/published (row icon) + published-only (aggregate count). */
+  @Get('studios-with-rulesets')
+  async studiosWithRulesets() {
+    const [studioIds, publishedStudioIds] = await Promise.all([
+      this.leaseRuleSet.getStudioIdsWithActiveRulesets(),
+      this.leaseRuleSet.getStudioIdsWithPublishedRulesets(),
+    ]);
+    return { studioIds, publishedStudioIds };
+  }
+
   @Get('studios/:studioId/rulesets')
   async listRulesets(@Param('studioId') studioId: string) {
     return this.leaseRuleSet.getRulesetsByStudio(studioId);

@@ -205,12 +205,33 @@ export default function LocationProfilePage() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header
-        title={profile?.studio?.name ?? 'Location Profile'}
-        action={
-          <Button variant="ghost" size="sm" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
-          </Button>
+        title={
+          <div className="flex min-w-0 items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 border text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
+              style={{
+                borderColor: 'var(--color-accent)',
+              }}
+              onClick={() => router.back()}
+              aria-label="Go back"
+            >
+              <ArrowLeft className="h-4 w-4 shrink-0 text-inherit" aria-hidden />
+              Back
+            </Button>
+            <span
+              aria-hidden
+              className="h-5 w-px shrink-0 self-center opacity-80"
+              style={{ background: 'var(--color-accent)' }}
+            />
+            <h1
+              className="min-w-0 truncate text-base font-semibold"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              Location info:
+            </h1>
+          </div>
         }
       />
 

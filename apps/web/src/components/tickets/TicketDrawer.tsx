@@ -66,9 +66,9 @@ function PanelTagHoverTooltipContent({
         <span className="font-bold underline">Added</span>
         <span className="font-bold">:</span>
         {` `}
-        <span style={{ color: '#3b82f6' }}>{whenDate}</span>
+        <span style={{ color: POLISH_THEME.info }}>{whenDate}</span>
         <span style={{ color: 'var(--color-text-primary)' }}>{' · '}</span>
-        <span style={{ color: '#3b82f6' }}>{whenTime}</span>
+        <span style={{ color: POLISH_THEME.info }}>{whenTime}</span>
       </span>
       <span>
         <span className="font-bold underline">By</span>
