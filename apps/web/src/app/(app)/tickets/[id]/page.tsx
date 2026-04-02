@@ -221,7 +221,7 @@ export default function TicketDetailPage() {
           </Button>
 
           {/* Panel header — title primary, ID + status secondary, metadata tertiary, progress inline */}
-          <div className="rounded-xl p-5" style={{ ...panel, boxShadow: 'var(--shadow-panel)' }}>
+          <div className="dashboard-card rounded-xl p-5" style={{ ...panel, boxShadow: 'var(--shadow-panel)' }}>
             {/* Primary: title */}
             <h1 className="text-xl font-semibold leading-snug" style={{ color: 'var(--color-text-primary)', letterSpacing: '-0.01em' }}>
               {ticket.title}
@@ -419,7 +419,7 @@ export default function TicketDetailPage() {
             {activeTab === 'subtasks' && (
               <div className={POLISH_CLASS.sectionGap}>
                 {/* Progress header */}
-                <div className="rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--color-bg-surface)', border: `1px solid ${POLISH_THEME.innerBorder}` }}>
+                <div className="dashboard-card rounded-xl px-4 py-3 flex items-center justify-between" style={{ background: 'var(--color-bg-surface)', border: `1px solid ${POLISH_THEME.innerBorder}` }}>
                   {(() => {
                     const list = subtasksList ?? ticket.subtasks;
                     const total = list.length;
@@ -458,7 +458,7 @@ export default function TicketDetailPage() {
                   <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>No subtasks yet.</p>
                 )}
                 {(subtasksList ?? ticket.subtasks).map((subtask) => (
-                  <div key={subtask.id} id={`subtask-${subtask.id}`} className="rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
+                  <div key={subtask.id} id={`subtask-${subtask.id}`} className="dashboard-card rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-[var(--color-text-primary)]')}
                         style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: 'var(--color-text-muted)', textDecoration: 'line-through' } : undefined}>
@@ -494,7 +494,7 @@ export default function TicketDetailPage() {
                 ))}
 
                 {canManage && (
-                  <div className="rounded-xl p-3 flex gap-2" style={panel}>
+                  <div className="dashboard-card rounded-xl p-3 flex gap-2" style={panel}>
                     <Input
                       placeholder="Add a subtask..."
                       value={newSubtask}
@@ -519,7 +519,7 @@ export default function TicketDetailPage() {
             {activeTab === 'submission' && (
               <div className="space-y-4">
                 {formResponses.length > 0 ? (
-                  <div className="rounded-xl p-4 space-y-2" style={panel}>
+                  <div className="dashboard-card rounded-xl p-4 space-y-2" style={panel}>
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.theadText }}>Submitted form data</p>
                     <dl className="space-y-1.5 text-sm">
                       {formResponses.map((r) => (
@@ -542,24 +542,28 @@ export default function TicketDetailPage() {
 
             {/* ── History ─── */}
             {activeTab === 'history' && (
-              <div className="space-y-2">
-                {(historyRes?.data ?? []).length === 0 && (
-                  <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>No history yet.</p>
-                )}
-                {(historyRes?.data ?? []).map((entry) => (
-                  <div key={entry.id} className="flex gap-3 text-sm">
-                    <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: 'var(--color-border-default)' }} />
-                    <div>
-                      <span className="font-medium text-[var(--color-text-primary)]">{entry.actor?.displayName ?? 'System'}</span>
-                      {' '}
-                      <span style={{ color: POLISH_THEME.metaMuted }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
-                      <span className="block text-xs" style={{ color: POLISH_THEME.theadText }}>
-                        {format(new Date(entry.createdAt), 'MMM d, yyyy h:mm a')}
-                      </span>
+              (historyRes?.data ?? []).length === 0 ? (
+                <p className="text-sm text-center py-6" style={{ color: POLISH_THEME.theadText }}>No history yet.</p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {(historyRes?.data ?? []).map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="flex items-start gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-sm transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] dark:hover:shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+                    >
+                      <div className="mt-1.5 h-2 w-2 rounded-full shrink-0" style={{ background: 'var(--color-border-default)' }} />
+                      <div className="min-w-0 flex-1">
+                        <span className="font-medium text-[var(--color-text-primary)]">{entry.actor?.displayName ?? 'System'}</span>
+                        {' '}
+                        <span style={{ color: POLISH_THEME.metaMuted }}>{entry.action.toLowerCase().split('_').join(' ')}</span>
+                        <span className="block text-xs" style={{ color: POLISH_THEME.theadText }}>
+                          {format(new Date(entry.createdAt), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
 
             </div>{/* end key={activeTab} animation wrapper */}

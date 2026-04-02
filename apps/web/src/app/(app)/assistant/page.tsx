@@ -157,7 +157,7 @@ export default function AssistantPage() {
         {/* Input box — wider than capsule strip */}
         <form onSubmit={handleWelcomeFormSubmit} className="w-full max-w-[52rem]">
         <div
-          className="rounded-xl overflow-hidden flex flex-col focus-within:ring-2 focus-within:ring-[var(--color-accent)] transition-shadow"
+          className="dashboard-card rounded-xl overflow-hidden flex flex-col focus-within:ring-2 focus-within:ring-[var(--color-accent)] transition-shadow"
           style={{
             background: 'var(--color-bg-surface)',
             border: '1px solid var(--color-border-default)',

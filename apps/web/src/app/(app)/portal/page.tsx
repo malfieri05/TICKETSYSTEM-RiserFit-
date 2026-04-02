@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
@@ -21,9 +22,11 @@ import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
+import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
-import { POLISH_THEME, POLISH_CLASS, FEED_COL_WIDTHS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
 
 const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
 const PAGE_SIZE = 20;
@@ -44,7 +47,7 @@ function StatCard({
   iconStyle: React.CSSProperties;
 }) {
   return (
-    <div className="rounded-xl p-5 flex items-start gap-4" style={panel}>
+    <div className="dashboard-card rounded-xl p-5 flex items-start gap-4" style={panel}>
       <div className="rounded-lg p-2.5 shrink-0" style={iconStyle}>
         <Icon className="h-5 w-5" />
       </div>
@@ -88,6 +91,7 @@ export default function PortalPage() {
   const qc = useQueryClient();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showTicketIdColumn, toggleTicketIdColumn] = useTicketFeedIdColumnVisible();
   const handleSelect = useCallback((id: string) => {
     setSelectedId((prev) => (prev === id ? null : id));
   }, []);
@@ -290,7 +294,7 @@ export default function PortalPage() {
         />
       </div>
       {myHasFilters && (
-        <Button variant="ghost" size="md" onClick={clearMyFilters}>
+        <Button variant="outlineAccent" size="md" onClick={clearMyFilters}>
           Clear filters
         </Button>
       )}
@@ -305,7 +309,7 @@ export default function PortalPage() {
           <p className="text-xs text-center max-w-sm" style={{ color: POLISH_THEME.metaMuted }}>
             Try adjusting your filters or search.
           </p>
-          <Button variant="ghost" size="sm" onClick={clearMyFilters}>
+          <Button variant="outlineAccent" size="sm" onClick={clearMyFilters}>
             Clear filters
           </Button>
         </>
@@ -321,70 +325,53 @@ export default function PortalPage() {
   );
 
   const myTicketList = (
-    <table className="w-full text-sm table-fixed">
-      <colgroup>
-        {FEED_COL_WIDTHS.map((w, i) => (
-          <col key={i} style={{ width: w }} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-          {CANONICAL_FEED_HEADERS.map((h) => (
-            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {myTickets.map((ticket) => {
-          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
-          const studioName = ticket.studio?.name ?? '';
-          const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
-          const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
-          const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-          const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-          return (
-            <TicketTableRow
-              key={ticket.id}
-              id={ticket.id}
-              title={ticket.title}
-              subLabel={subLabel}
-              status={ticket.status}
-              dueDate={ticket.dueDate}
-              createdAt={ticket.createdAt}
-              tags={ticket.tags ?? []}
-              canAddTag={canAddTag}
-              onAddTag={canAddTag ? handleAddTag : undefined}
-              isAddingTag={
-                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
-              }
-              commentCount={ticket._count?.comments ?? 0}
-              completedSubtasks={completedSubtasks}
-              totalSubtasks={totalSubtasks}
-              requesterDisplayName={requesterDisplayName}
-              isSelected={selectedId === ticket.id}
-              onSelect={handleSelect}
-            />
-          );
-        })}
-      </tbody>
-    </table>
+    <TicketFeedSelectionRail selectedId={selectedId}>
+      <table className={POLISH_CLASS.feedTable}>
+        <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+        <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+        <tbody>
+          {myTickets.map((ticket) => {
+            const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
+            const studioName = ticket.studio?.name ?? '';
+            const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
+            const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
+            const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+            const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+            return (
+              <TicketTableRow
+                key={ticket.id}
+                id={ticket.id}
+                title={ticket.title}
+                subLabel={subLabel}
+                status={ticket.status}
+                dueDate={ticket.dueDate}
+                createdAt={ticket.createdAt}
+                tags={ticket.tags ?? []}
+                canAddTag={canAddTag}
+                onAddTag={canAddTag ? handleAddTag : undefined}
+                isAddingTag={
+                  addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+                }
+                commentCount={ticket._count?.comments ?? 0}
+                completedSubtasks={completedSubtasks}
+                totalSubtasks={totalSubtasks}
+                requesterDisplayName={requesterDisplayName}
+                isSelected={selectedId === ticket.id}
+                showIdColumn={showTicketIdColumn}
+                onSelect={handleSelect}
+              />
+            );
+          })}
+        </tbody>
+      </table>
+    </TicketFeedSelectionRail>
   );
 
   const myTableSkeleton = (
-    <table className="w-full text-sm table-fixed">
-      <colgroup>
-        {FEED_COL_WIDTHS.map((w, i) => (
-          <col key={i} style={{ width: w }} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-          {CANONICAL_FEED_HEADERS.map((h) => (
-            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-          ))}
-        </tr>
-      </thead>
-      <TicketsTableSkeletonRows count={6} />
+    <table className={POLISH_CLASS.feedTable}>
+      <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+      <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+      <TicketsTableSkeletonRows count={6} showIdColumn={showTicketIdColumn} />
     </table>
   );
 
@@ -503,70 +490,53 @@ export default function PortalPage() {
   );
 
   const studioTicketList = (
-    <table className="w-full text-sm table-fixed">
-      <colgroup>
-        {FEED_COL_WIDTHS.map((w, i) => (
-          <col key={i} style={{ width: w }} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-          {CANONICAL_FEED_HEADERS.map((h) => (
-            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {studioTickets.map((ticket) => {
-          const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
-          const studioName = ticket.studio?.name ?? '';
-          const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
-          const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
-          const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-          const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-          return (
-            <TicketTableRow
-              key={ticket.id}
-              id={ticket.id}
-              title={ticket.title}
-              subLabel={subLabel}
-              status={ticket.status}
-              dueDate={ticket.dueDate}
-              createdAt={ticket.createdAt}
-              tags={ticket.tags ?? []}
-              canAddTag={canAddTag}
-              onAddTag={canAddTag ? handleAddTag : undefined}
-              isAddingTag={
-                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
-              }
-              commentCount={ticket._count?.comments ?? 0}
-              completedSubtasks={completedSubtasks}
-              totalSubtasks={totalSubtasks}
-              requesterDisplayName={requesterDisplayName}
-              isSelected={selectedId === ticket.id}
-              onSelect={handleSelect}
-            />
-          );
-        })}
-      </tbody>
-    </table>
+    <TicketFeedSelectionRail selectedId={selectedId}>
+      <table className={POLISH_CLASS.feedTable}>
+        <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+        <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+        <tbody>
+          {studioTickets.map((ticket) => {
+            const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
+            const studioName = ticket.studio?.name ?? '';
+            const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
+            const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
+            const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+            const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+            return (
+              <TicketTableRow
+                key={ticket.id}
+                id={ticket.id}
+                title={ticket.title}
+                subLabel={subLabel}
+                status={ticket.status}
+                dueDate={ticket.dueDate}
+                createdAt={ticket.createdAt}
+                tags={ticket.tags ?? []}
+                canAddTag={canAddTag}
+                onAddTag={canAddTag ? handleAddTag : undefined}
+                isAddingTag={
+                  addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+                }
+                commentCount={ticket._count?.comments ?? 0}
+                completedSubtasks={completedSubtasks}
+                totalSubtasks={totalSubtasks}
+                requesterDisplayName={requesterDisplayName}
+                isSelected={selectedId === ticket.id}
+                showIdColumn={showTicketIdColumn}
+                onSelect={handleSelect}
+              />
+            );
+          })}
+        </tbody>
+      </table>
+    </TicketFeedSelectionRail>
   );
 
   const studioTableSkeleton = (
-    <table className="w-full text-sm table-fixed">
-      <colgroup>
-        {FEED_COL_WIDTHS.map((w, i) => (
-          <col key={i} style={{ width: w }} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-          {CANONICAL_FEED_HEADERS.map((h) => (
-            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-          ))}
-        </tr>
-      </thead>
-      <TicketsTableSkeletonRows count={6} />
+    <table className={POLISH_CLASS.feedTable}>
+      <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+      <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+      <TicketsTableSkeletonRows count={6} showIdColumn={showTicketIdColumn} />
     </table>
   );
 
@@ -716,7 +686,7 @@ export default function PortalPage() {
 
                 {/* By Location breakdown */}
                 {dashSummary.byLocation.length > 0 && (
-                  <div className="rounded-xl p-5" style={panel}>
+                  <div className="dashboard-card rounded-xl p-5" style={panel}>
                     <div className="flex items-center gap-2 mb-4">
                       <MapPin className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
                       <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>

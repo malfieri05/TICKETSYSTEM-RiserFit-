@@ -80,7 +80,7 @@ export default function NewWorkflowTemplatePage() {
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
-        <div className="rounded-xl p-6 space-y-4" style={panel}>
+        <div className="dashboard-card rounded-xl p-6 space-y-4" style={panel}>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Select ticket context</h2>
           <ComboBox
             label="Ticket type"

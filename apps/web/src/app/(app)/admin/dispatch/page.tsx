@@ -42,7 +42,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+    <div className="dashboard-card rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
       <div className="flex items-center gap-2 mb-4">
         <BarChart2 className="h-4 w-4 text-[var(--color-text-secondary)]" />
         <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
@@ -212,7 +212,7 @@ export default function DispatchPage() {
         className="sticky top-0 z-10 shrink-0 px-6 py-4"
         style={{ background: 'var(--color-bg-page)', borderBottom: '1px solid var(--color-border-default)' }}
       >
-        <div className="rounded-xl p-4 flex flex-wrap gap-3 items-end" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+        <div className="dashboard-card rounded-xl p-4 flex flex-wrap gap-3 items-end" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
           <ComboBox
             placeholder="All Studios"
             options={studios.map((s) => ({ value: s.id, label: s.name }))}
@@ -255,7 +255,7 @@ export default function DispatchPage() {
             />
           </div>
           {(filters.studioId || filters.marketId || filters.maintenanceCategoryId || filters.createdAfter || filters.createdBefore) && (
-            <Button variant="ghost" size="sm" onClick={() => setFilters(emptyFilters)}>
+            <Button variant="outlineAccent" size="sm" onClick={() => setFilters(emptyFilters)}>
               Clear filters
             </Button>
           )}
@@ -462,7 +462,7 @@ export default function DispatchPage() {
                   key={g.id}
                   type="button"
                   onClick={() => router.push(`/admin/dispatch/groups/${g.id}`)}
-                  className="w-full rounded-xl p-4 text-left hover:opacity-90 transition-opacity"
+                  className="dashboard-card w-full rounded-xl p-4 text-left hover:opacity-90 transition-opacity"
                   style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
                 >
                   <div className="flex items-center justify-between gap-3">

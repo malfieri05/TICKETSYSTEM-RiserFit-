@@ -79,7 +79,7 @@ export function TicketFeedLayout({
               right: 0,
               height: 2,
               zIndex: 5,
-              background: `linear-gradient(90deg, transparent, var(--color-accent), transparent)`,
+              background: `linear-gradient(90deg, transparent, var(--color-feed-shimmer), transparent)`,
               backgroundSize: '200% 100%',
               animation: 'shimmer 1.4s ease-in-out infinite',
             }}

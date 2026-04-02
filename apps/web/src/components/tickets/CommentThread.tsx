@@ -380,7 +380,7 @@ const MentionComposer = memo(function MentionComposer({
 
   return (
     <div
-      className="rounded-[var(--radius-lg)] overflow-hidden"
+      className="dashboard-card rounded-[var(--radius-lg)] overflow-hidden"
       style={{
         background: POLISH_THEME.listBg,
         border: `1px solid ${POLISH_THEME.listBorder}`,

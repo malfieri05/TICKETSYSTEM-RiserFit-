@@ -110,7 +110,7 @@ export default function HandbookPage() {
                 </div>
               )}
               <div
-                className="rounded-xl px-4 py-3 max-w-[85%]"
+                className={`rounded-xl px-4 py-3 max-w-[85%] ${m.role === 'assistant' ? 'dashboard-card' : ''}`}
                 style={{
                   background: m.role === 'user' ? 'var(--color-accent)' : 'var(--color-bg-surface-raised)',
                   border: m.role === 'assistant' ? '1px solid var(--color-border-default)' : 'none',
@@ -159,7 +159,7 @@ export default function HandbookPage() {
                 <BookMarked className="h-4 w-4 text-white" />
               </div>
               <div
-                className="rounded-xl px-4 py-3"
+                className="dashboard-card rounded-xl px-4 py-3"
                 style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
               >
                 <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--color-accent)' }} />

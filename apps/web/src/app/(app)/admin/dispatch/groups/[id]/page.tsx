@@ -99,7 +99,7 @@ export default function DispatchGroupDetailPage() {
           </Button>
 
           {/* Group header */}
-          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-panel)' }}>
+          <div className="dashboard-card rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', boxShadow: 'var(--shadow-panel)' }}>
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
                 <h1 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
@@ -180,7 +180,7 @@ export default function DispatchGroupDetailPage() {
           </div>
 
           {/* Item list */}
-          <div className="rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          <div className="dashboard-card rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                 Tickets ({items.length})

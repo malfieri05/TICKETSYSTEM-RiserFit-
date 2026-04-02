@@ -2,12 +2,10 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Bell,
   Settings,
-  LogOut,
   BarChart2,
   BookOpen,
   Home,
@@ -15,8 +13,6 @@ import {
   LayoutGrid,
   BookMarked,
   Inbox,
-  Sun,
-  Moon,
   Activity,
   ChevronRight,
   Mail,
@@ -27,7 +23,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
 import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
 import { BrandMark } from '@/components/layout/BrandMark';
-import type { Department } from '@/types';
 
 type PortalTab = 'my' | 'studio' | 'dashboard';
 
@@ -90,49 +85,13 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
   },
 ];
 
-const THEME_STORAGE_KEY = 'theme';
-
-/** Map department enum to display label. Never show raw "DEPARTMENT_USER". */
-function departmentToLabel(d?: Department): string {
-  if (d === 'HR') return 'HR';
-  if (d === 'OPERATIONS') return 'Operations';
-  if (d === 'MARKETING') return 'Marketing';
-  return 'Unassigned Department';
-}
-
-/** Single line under user name: Admin | Studio User | department name (never raw enum). */
-function userRoleDisplayLabel(role: string | undefined, departments?: Department[]): string {
-  if (role === 'ADMIN') return 'Admin';
-  if (role === 'STUDIO_USER') return 'Studio User';
-  if (role === 'DEPARTMENT_USER') return departmentToLabel(departments?.[0]);
-  return 'User';
-}
-
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const router = useRouter();
   const { unreadCount } = useNotificationCount();
   const { isOpen: isNotificationsPanelOpen, open: openNotificationsPanel, close: closeNotificationsPanel } = useNotificationsPanel();
-
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
-  useEffect(() => {
-    const t = document.documentElement.getAttribute('data-theme');
-    if (t === 'light' || t === 'dark') setTheme(t);
-  }, []);
-
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_STORAGE_KEY, next);
-    document.documentElement.setAttribute('data-theme', next);
-  };
-
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
-  };
 
   const isAdmin = user?.role === 'ADMIN';
   const isStudioUser = user?.role === 'STUDIO_USER';
@@ -145,21 +104,21 @@ export function Sidebar() {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col"
+      className="layout-sidebar fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col"
       style={{
         background: 'var(--sidebar-glass-bg)',
         borderRight: '1px solid var(--sidebar-glass-border)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
       }}
     >
       {/* Logo */}
       <div
         className="flex h-14 items-center gap-2.5 px-5"
-        style={{ borderBottom: '1px solid var(--color-border-default)' }}
+        style={{ borderBottom: '1px solid var(--sidebar-divider)' }}
       >
         <BrandMark size="sm" />
-        <span className="font-bold tracking-tight" style={{ color: 'var(--sidebar-text)' }}>Riser Fitness</span>
+        <span className="font-bold tracking-tight" style={{ color: 'var(--sidebar-text-active)' }}>
+          Riser Fitness
+        </span>
       </div>
 
       {/* Nav */}
@@ -199,7 +158,7 @@ export function Sidebar() {
                 style={{
                   background: 'transparent',
                   color: 'var(--sidebar-text)',
-                  borderLeft: '3px solid transparent',
+                  borderLeft: '4px solid transparent',
                 }}
               >
                 <span className="flex items-center gap-3 min-w-0">
@@ -208,7 +167,10 @@ export function Sidebar() {
                 </span>
                 <ChevronRight
                   className="h-4 w-4 shrink-0 ml-auto transition-transform duration-200 ease-out"
-                  style={{ color: 'var(--sidebar-text)', transform: isNotificationsPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  style={{
+                    color: 'var(--sidebar-text-secondary)',
+                    transform: isNotificationsPanelOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
                 />
               </button>
             );
@@ -221,7 +183,7 @@ export function Sidebar() {
               className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
               style={{
                 background: active ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-                color: active ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+                color: active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
                 borderLeft: `4px solid ${active ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
               }}
             >
@@ -238,7 +200,7 @@ export function Sidebar() {
             className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
               background: pathname === actionableNavItem.href ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-              color: pathname === actionableNavItem.href ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              color: pathname === actionableNavItem.href ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
               borderLeft: `4px solid ${pathname === actionableNavItem.href ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
@@ -254,7 +216,7 @@ export function Sidebar() {
             className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
               background: pathname === '/assistant' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-              color: pathname === '/assistant' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              color: pathname === '/assistant' ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
               borderLeft: `4px solid ${pathname === '/assistant' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
@@ -270,7 +232,7 @@ export function Sidebar() {
             className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
               background: pathname === '/handbook' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-              color: pathname === '/handbook' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              color: pathname === '/handbook' ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
               borderLeft: `4px solid ${pathname === '/handbook' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
@@ -303,7 +265,7 @@ export function Sidebar() {
                       className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
                       style={{
                         background: active ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-                        color: active ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+                        color: active ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
                         borderLeft: `4px solid ${active ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
                       }}
                     >
@@ -325,7 +287,7 @@ export function Sidebar() {
             className="sidebar-nav-item flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium"
             style={{
               background: pathname === '/assistant' ? 'var(--sidebar-nav-active-bg)' : 'transparent',
-              color: pathname === '/assistant' ? 'var(--color-text-primary)' : 'var(--sidebar-text)',
+              color: pathname === '/assistant' ? 'var(--sidebar-text-active)' : 'var(--sidebar-text)',
               borderLeft: `4px solid ${pathname === '/assistant' ? 'var(--sidebar-nav-active-border)' : 'transparent'}`,
             }}
           >
@@ -334,41 +296,6 @@ export function Sidebar() {
           </Link>
         )}
       </nav>
-
-      {/* User footer — theme toggle + user + logout */}
-      <div style={{ borderTop: '1px solid var(--color-border-default)' }} className="p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[var(--color-bg-surface-raised)]"
-            style={{ color: 'var(--sidebar-text)' }}
-            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </button>
-        </div>
-        <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold shrink-0" style={{ background: 'var(--color-accent)', color: '#ffffff' }}>
-            {user?.displayName?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium" style={{ color: 'var(--sidebar-text)' }}>{user?.displayName}</p>
-            <p className="truncate text-[11px]" style={{ color: 'var(--sidebar-text-secondary)' }}>
-              {userRoleDisplayLabel(user?.role, user?.departments)}
-            </p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="transition-colors hover:opacity-80"
-            style={{ color: 'var(--sidebar-text)' }}
-            title="Sign out"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
     </aside>
   );
 }

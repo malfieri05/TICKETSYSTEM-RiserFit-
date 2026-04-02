@@ -26,7 +26,7 @@ interface Props {
 export function DispatchRecommendationPanel({ ticketId, ticket, canManage, variant = 'detail' }: Props) {
   const router = useRouter();
   const qc = useQueryClient();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showCreateFlow, setShowCreateFlow] = useState(false);
   const [groupNotes, setGroupNotes] = useState('');
@@ -65,6 +65,9 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
   if (!isMaintenance) return null;
 
   const panelBorder = `1px solid ${POLISH_THEME.listBorder}`;
+  /** Match tab body behind comments: drawer slide-over vs full ticket page */
+  const sectionHeaderBg =
+    variant === 'drawer' ? 'var(--color-bg-drawer-canvas)' : 'var(--color-bg-page)';
 
   const handleCreateGroup = () => {
     const tradeType = ticket.dispatchTradeType;
@@ -83,31 +86,47 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
   };
 
   return (
-    <div className="mt-3 pt-3" style={{ borderTop: panelBorder }}>
+    <div
+      className="dashboard-card mt-3 rounded-[var(--radius-lg)] overflow-hidden"
+      style={{
+        background: 'var(--color-bg-surface)',
+        border: `1px solid ${POLISH_THEME.listBorder}`,
+        borderLeft: `3px solid ${POLISH_THEME.accent}`,
+        boxShadow: POLISH_THEME.shadowCard,
+      }}
+    >
       <button
         type="button"
-        className="flex items-center gap-2 w-full text-left"
+        className="flex items-center gap-2 w-full text-left px-3.5 py-2.5"
+        style={{
+          background: sectionHeaderBg,
+          borderBottom: expanded ? `1px solid ${POLISH_THEME.innerBorder}` : 'none',
+        }}
         onClick={() => setExpanded(!expanded)}
       >
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <Package className="h-4 w-4" style={{ color: POLISH_THEME.accent }} />
-        <span className="text-xs font-medium" style={{ color: POLISH_THEME.metaSecondary }}>
+        <Package className="h-3.5 w-3.5 shrink-0" style={{ color: POLISH_THEME.accent }} />
+        <span className="text-[10px] font-bold uppercase tracking-[0.12em] flex-1" style={{ color: 'var(--color-text-primary)' }}>
           Dispatch
         </span>
         {rec && (rec.summary.sameLocationCount > 0 || rec.summary.nearbyCount > 0) && (
-          <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(52,120,196,0.1)', color: POLISH_THEME.accent }}>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(52,120,196,0.1)', color: POLISH_THEME.accent }}>
             {rec.summary.sameLocationCount + rec.summary.nearbyCount} candidates
           </span>
+        )}
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--color-text-primary)' }} />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--color-text-primary)' }} />
         )}
       </button>
 
       {expanded && (
-        <div className="mt-2 space-y-3">
+        <div className="px-3.5 py-3 space-y-3">
           {/* Trade type + readiness editors */}
           {canManage && (
             <div className="flex flex-wrap gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] font-medium block mb-1" style={{ color: POLISH_THEME.metaDim }}>Trade Type</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.1em] block mb-1" style={{ color: POLISH_THEME.metaDim }}>Trade Type</label>
                 <Select
                   value={ticket.dispatchTradeType ?? ''}
                   onChange={(e) => updateMut.mutate({ dispatchTradeType: e.target.value || undefined })}
@@ -120,7 +139,7 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
                 </Select>
               </div>
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] font-medium block mb-1" style={{ color: POLISH_THEME.metaDim }}>Readiness</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.1em] block mb-1" style={{ color: POLISH_THEME.metaDim }}>Readiness</label>
                 <Select
                   value={ticket.dispatchReadiness ?? ''}
                   onChange={(e) => updateMut.mutate({ dispatchReadiness: e.target.value || undefined })}
@@ -142,7 +161,16 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
 
           {/* Summary message (empty states) */}
           {rec?.summary.message && (
-            <p className="text-xs" style={{ color: POLISH_THEME.metaDim }}>{rec.summary.message}</p>
+            <p
+              className="text-xs px-3 py-2 rounded-[var(--radius-md)]"
+              style={{
+                color: POLISH_THEME.metaDim,
+                background: 'var(--color-bg-surface-inset)',
+                border: `1px solid ${POLISH_THEME.innerBorder}`,
+              }}
+            >
+              {rec.summary.message}
+            </p>
           )}
 
           {/* Same-location candidates */}

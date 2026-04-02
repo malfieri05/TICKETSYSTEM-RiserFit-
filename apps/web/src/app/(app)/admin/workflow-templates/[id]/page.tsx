@@ -328,7 +328,7 @@ export default function WorkflowTemplateDetailPage() {
         </Button>
 
         {/* Context & name */}
-        <div className="rounded-xl p-4" style={panel}>
+        <div className="dashboard-card rounded-xl p-4" style={panel}>
           <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide">Context</p>
           <p className="text-sm text-[var(--color-text-primary)] mt-0.5">{contextLabel}</p>
           {editingName ? (
@@ -366,7 +366,7 @@ export default function WorkflowTemplateDetailPage() {
         </div>
 
         {stats != null && (
-          <div className="rounded-xl p-4" style={panel}>
+          <div className="dashboard-card rounded-xl p-4" style={panel}>
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Usage & execution</h3>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div>
@@ -386,7 +386,7 @@ export default function WorkflowTemplateDetailPage() {
         )}
 
         {/* Workflow preview — execution order + dependencies */}
-        <div className="rounded-xl p-4" style={panel}>
+        <div className="dashboard-card rounded-xl p-4" style={panel}>
           <div className="flex items-center justify-between gap-2 mb-3">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Workflow preview</h3>
             <Button
@@ -427,7 +427,7 @@ export default function WorkflowTemplateDetailPage() {
 
         {/* DAG visualization */}
         {sortedSubtasks.length > 0 && (
-          <div className="rounded-xl p-4" style={panel}>
+          <div className="dashboard-card rounded-xl p-4" style={panel}>
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Dependency graph</h3>
               <Button
@@ -478,7 +478,7 @@ export default function WorkflowTemplateDetailPage() {
         )}
 
         {/* Subtask templates — draggable + move up/down */}
-        <div className="rounded-xl p-4" style={panel}>
+        <div className="dashboard-card rounded-xl p-4" style={panel}>
           <div className="flex items-center justify-between gap-2 mb-3">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Subtask templates</h3>
             <Button
@@ -601,7 +601,7 @@ export default function WorkflowTemplateDetailPage() {
         </div>
 
         {/* Dependencies — cycle-safe add */}
-        <div className="rounded-xl p-4" style={panel}>
+        <div className="dashboard-card rounded-xl p-4" style={panel}>
           <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Dependencies</h3>
           <p className="text-xs text-[var(--color-text-muted)] mb-2">Define which subtask must complete before another can start. Cycles are not allowed.</p>
           {deps.length > 0 && (

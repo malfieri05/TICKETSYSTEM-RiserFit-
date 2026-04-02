@@ -108,7 +108,7 @@ export default function SystemMonitoringPage() {
       <div className="flex-1 p-6 space-y-6 overflow-auto">
         {/* Intro + environment summary */}
         <div
-          className="rounded-xl p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+          className="dashboard-card rounded-xl p-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
           style={{
             background: 'var(--color-bg-surface)',
             border: '1px solid var(--color-border-default)',
@@ -208,7 +208,7 @@ export default function SystemMonitoringPage() {
               return (
                 <div
                   key={svc.id}
-                  className="rounded-xl p-4 flex flex-col gap-3"
+                  className="dashboard-card rounded-xl p-4 flex flex-col gap-3"
                   style={{
                     background: 'var(--color-bg-surface)',
                     border: '1px solid var(--color-border-default)',

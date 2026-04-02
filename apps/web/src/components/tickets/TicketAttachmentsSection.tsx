@@ -83,7 +83,7 @@ export function TicketAttachmentsSection({
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
+      className="dashboard-card rounded-xl overflow-hidden"
       style={{
         background:
           variant === 'drawer'

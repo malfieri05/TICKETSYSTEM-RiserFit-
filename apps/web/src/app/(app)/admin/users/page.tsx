@@ -411,7 +411,7 @@ export default function AdminUsersPage() {
           </Button>
         </div>
 
-        <div className="mb-6 rounded-xl overflow-hidden" style={panel}>
+        <div className="dashboard-card mb-6 rounded-xl overflow-hidden" style={panel}>
           <div className="px-4 py-3 text-sm font-semibold" style={{ background: 'var(--color-bg-content-header)', color: 'var(--color-text-primary)' }}>
             Pending invitations
           </div>
@@ -492,7 +492,7 @@ export default function AdminUsersPage() {
           )}
         </div>
 
-        <div className="rounded-xl overflow-hidden" style={panel}>
+        <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />

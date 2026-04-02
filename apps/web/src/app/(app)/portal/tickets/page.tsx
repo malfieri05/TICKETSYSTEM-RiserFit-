@@ -162,14 +162,14 @@ export default function PortalTicketsPage() {
               className="w-44"
             />
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <Button variant="outlineAccent" size="sm" onClick={clearFilters}>
                 Clear filters
               </Button>
             )}
           </div>
 
           {/* Table */}
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          <div className="dashboard-card rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-48 gap-2">
                 <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
@@ -181,7 +181,7 @@ export default function PortalTicketsPage() {
                   <>
                     <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets found</p>
                     <p className="text-xs text-center">Try adjusting your filters.</p>
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                    <Button variant="outlineAccent" size="sm" onClick={clearFilters}>
                       Clear filters
                     </Button>
                   </>

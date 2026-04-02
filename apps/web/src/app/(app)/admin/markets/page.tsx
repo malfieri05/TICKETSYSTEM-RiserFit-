@@ -12,6 +12,7 @@ import { ComboBox } from '@/components/ui/ComboBox';
 import { MarketSearchSelect } from '@/components/ui/MarketSearchSelect';
 import { MaintenanceCountWithTooltip } from '@/components/ui/MaintenanceCountWithTooltip';
 import { LocationLink } from '@/components/ui/LocationLink';
+import { POLISH_THEME } from '@/lib/polish';
 import dynamic from 'next/dynamic';
 
 const LocationsMap = dynamic(
@@ -188,7 +189,7 @@ export default function AdminMarketsPage() {
       <Header
         title={
           <h1 className="min-w-0 truncate text-base font-semibold">
-            <span style={{ color: 'var(--color-text-primary)' }}>Locations: </span>
+            <span style={{ color: 'var(--color-text-app-header)' }}>Locations: </span>
             <span
               className="tabular-nums"
               style={{ color: 'var(--color-accent)' }}
@@ -227,7 +228,7 @@ export default function AdminMarketsPage() {
           </div>
 
           {showAddForm && (
-            <div className="rounded-xl p-4 space-y-3" style={panel}>
+            <div className="dashboard-card rounded-xl p-4 space-y-3" style={panel}>
               <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>Add Location</h3>
               <ComboBox
                 label="State"
@@ -329,34 +330,53 @@ export default function AdminMarketsPage() {
               />
             </div>
           ) : (
-            <div className="rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col" style={panel}>
+            <div className="dashboard-card rounded-xl overflow-hidden flex-1 min-h-0 flex flex-col" style={panel}>
               <div className="flex-1 overflow-y-auto">
-                {filteredLocations.map((loc) => (
-                  <button
-                    key={loc.id}
-                    type="button"
-                    className="w-full text-left flex flex-col gap-0.5 px-4 py-3 border-b cursor-pointer transition-colors duration-150 hover:bg-[var(--color-bg-surface-raised)]"
-                    style={{ borderColor: 'var(--color-border-default)' }}
-                    onClick={() =>
-                      setSelectedStudio({
-                        id: loc.id,
-                        name: loc.name,
-                        formattedAddress: loc.formattedAddress ?? null,
-                        marketName: loc.marketName,
-                        latitude: loc.latitude ?? null,
-                        longitude: loc.longitude ?? null,
-                        activeMaintenanceCount: loc.activeMaintenanceCount ?? 0,
-                        activeMaintenanceCategoryNames: loc.activeMaintenanceCategoryNames ?? [],
-                      })
-                    }
-                  >
-                    <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>{loc.name} <MaintenanceCountWithTooltip count={loc.activeMaintenanceCount ?? 0} categoryNames={loc.activeMaintenanceCategoryNames ?? []} /></span>
-                    {loc.formattedAddress && (
-                      <span className="text-xs truncate" style={{ color: 'var(--color-text-muted)' }}>{loc.formattedAddress}</span>
-                    )}
-                    <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>{loc.marketName}</span>
-                  </button>
-                ))}
+                {filteredLocations.map((loc) => {
+                  const isSelected = selectedStudio?.id === loc.id;
+                  return (
+                    <button
+                      key={loc.id}
+                      type="button"
+                      className="flex w-full cursor-pointer items-center gap-2 border-b px-4 py-3 text-left transition-colors duration-150 last:border-b-0 hover:bg-[var(--color-bg-surface-raised)]"
+                      style={{
+                        borderColor: 'var(--color-border-default)',
+                        background: isSelected ? POLISH_THEME.adminStudioListSelectedBg : undefined,
+                        borderLeft: isSelected ? '3px solid var(--color-accent)' : '3px solid transparent',
+                      }}
+                      onClick={() =>
+                        setSelectedStudio({
+                          id: loc.id,
+                          name: loc.name,
+                          formattedAddress: loc.formattedAddress ?? null,
+                          marketName: loc.marketName,
+                          latitude: loc.latitude ?? null,
+                          longitude: loc.longitude ?? null,
+                          activeMaintenanceCount: loc.activeMaintenanceCount ?? 0,
+                          activeMaintenanceCategoryNames: loc.activeMaintenanceCategoryNames ?? [],
+                        })
+                      }
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                          {loc.name}{' '}
+                          <MaintenanceCountWithTooltip
+                            count={loc.activeMaintenanceCount ?? 0}
+                            categoryNames={loc.activeMaintenanceCategoryNames ?? []}
+                          />
+                        </span>
+                        {loc.formattedAddress && (
+                          <span className="truncate text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                            {loc.formattedAddress}
+                          </span>
+                        )}
+                        <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
+                          {loc.marketName}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

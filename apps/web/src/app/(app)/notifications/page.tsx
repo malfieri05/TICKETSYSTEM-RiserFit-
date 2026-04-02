@@ -81,7 +81,7 @@ export default function NotificationsPage() {
             <p className="text-xs text-center max-w-sm" style={{ color: 'var(--color-text-secondary)' }}>When ticket and subtask updates happen, they'll appear here.</p>
           </div>
         ) : (
-          <div className="rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
+          <div className="dashboard-card rounded-xl overflow-hidden" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
             {notifications.map((notif, i) => (
               <div
                 key={notif.id}

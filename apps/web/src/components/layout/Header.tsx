@@ -1,9 +1,9 @@
 'use client';
 
 import { Bell } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { useNotificationCount } from '@/hooks/useNotifications';
 import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
+import { ProfileMenu } from '@/components/layout/ProfileMenu';
 
 interface HeaderProps {
   title: React.ReactNode;
@@ -26,7 +26,7 @@ export function Header({ title, action }: HeaderProps) {
         {typeof title === 'string' ? (
           <h1
             className="min-w-0 truncate text-base font-semibold"
-            style={{ color: 'var(--color-text-primary)' }}
+            style={{ color: 'var(--color-text-app-header)' }}
           >
             {title}
           </h1>
@@ -36,20 +36,38 @@ export function Header({ title, action }: HeaderProps) {
       </div>
       <div className="flex items-center gap-2">
         {action}
-        <button
-          type="button"
-          onClick={openNotificationsPanel}
-          className="header-nav-link focus-ring relative rounded-[var(--radius-md)] p-2 transition-colors"
-          style={{ color: 'var(--color-text-muted)' }}
-          aria-label="Open notifications"
-        >
-          <Bell className="h-5 w-5" />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-              {unreadCount > 9 ? '9+' : unreadCount}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-4 pl-1">
+          <button
+            type="button"
+            onClick={openNotificationsPanel}
+            className="header-nav-link focus-ring relative overflow-visible rounded-[var(--radius-md)] p-2 transition-colors"
+            style={{ color: 'var(--color-text-app-header-muted)' }}
+            aria-label={
+              unreadCount > 0
+                ? `Open notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
+                : 'Open notifications'
+            }
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 box-border flex size-5 items-center justify-center rounded-full bg-red-500 font-bold leading-none text-white tabular-nums">
+                <span
+                  className={
+                    unreadCount > 9 ? 'text-[9px] leading-none' : 'text-[10px] leading-none'
+                  }
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              </span>
+            )}
+          </button>
+          <span
+            className="h-5 w-px shrink-0"
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+            aria-hidden
+          />
+          <ProfileMenu />
+        </div>
       </div>
     </header>
   );

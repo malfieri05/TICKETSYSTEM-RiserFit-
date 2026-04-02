@@ -4,7 +4,7 @@ import type { TicketStatus, TicketPriority, SubtaskStatus } from '@/types';
 type BadgeStyle = { bg: string; text: string; ring: string };
 
 const statusStyles: Record<TicketStatus, BadgeStyle> = {
-  NEW:                    { bg: 'rgba(59,130,246,0.15)',  text: '#3b82f6', ring: 'rgba(59,130,246,0.3)' },
+  NEW:                    { bg: 'rgba(74,222,128,0.24)',  text: '#22c55e', ring: 'rgba(34,197,94,0.4)' },
   TRIAGED:                { bg: 'rgba(168,85,247,0.15)',  text: '#a855f7', ring: 'rgba(168,85,247,0.3)' },
   IN_PROGRESS:            { bg: 'rgba(234,179,8,0.15)',   text: '#ca8a04', ring: 'rgba(234,179,8,0.3)' },
   WAITING_ON_REQUESTER:   { bg: 'rgba(249,115,22,0.15)',  text: '#ea580c', ring: 'rgba(249,115,22,0.3)' },

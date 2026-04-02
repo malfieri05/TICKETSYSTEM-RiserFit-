@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import { memo, useState, useCallback, useRef, useLayoutEffect, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import {
   format,
@@ -243,6 +243,23 @@ export const CANONICAL_FEED_HEADERS = [
   { label: 'Requester', key: 'requester' },
 ] as const;
 
+const FEED_HEADER_COUNT = CANONICAL_FEED_HEADERS.length;
+
+/**
+ * Per-`<th>` chrome for the canonical feed header row: chrome background + rounded top corners;
+ * light bottom rule only (no dark outline on top/sides).
+ */
+export function getFeedTheadThStyle(index: number, total: number = FEED_HEADER_COUNT): CSSProperties {
+  const isFirst = index === 0;
+  const isLast = index === total - 1;
+  return {
+    background: POLISH_THEME.tableHeaderBg,
+    borderBottom: `1px solid ${POLISH_THEME.listBorder}`,
+    ...(isFirst ? { borderTopLeftRadius: 'var(--radius-lg)' } : {}),
+    ...(isLast ? { borderTopRightRadius: 'var(--radius-lg)' } : {}),
+  };
+}
+
 export interface TicketTableRowProps {
   id: string;
   title: string;
@@ -265,6 +282,8 @@ export interface TicketTableRowProps {
   requesterDisplayName: string;
   /** Highlight the row as selected (used by drawer-based ticket list). Defaults to false. */
   isSelected?: boolean;
+  /** When false, ID cell is a slim placeholder (column collapsed). Defaults to true. */
+  showIdColumn?: boolean;
   onSelect: (id: string) => void;
 }
 
@@ -284,6 +303,7 @@ function TicketTableRowComponent({
   totalSubtasks,
   requesterDisplayName,
   isSelected = false,
+  showIdColumn = true,
   onSelect,
 }: TicketTableRowProps) {
   const pct = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
@@ -320,6 +340,7 @@ function TicketTableRowComponent({
 
   return (
     <tr
+      data-ticket-id={id}
       onClick={() => onSelect(id)}
       role="button"
       tabIndex={0}
@@ -331,9 +352,23 @@ function TicketTableRowComponent({
         background: isSelected ? POLISH_THEME.rowSelected : undefined,
       }}
     >
-      {/* 1. ID */}
-      <td className={`${POLISH_CLASS.cellPadding} text-xs font-mono whitespace-nowrap`} style={cellDim}>
-        {formatTicketId(id)}
+      {/* 1. ID — width/col animate via TicketFeedColgroup; text fades for smooth expand/collapse */}
+      <td
+        className={`py-3.5 align-middle text-xs font-mono transition-[padding-left,padding-right] duration-300 ease-out ${
+          showIdColumn ? 'px-4' : 'px-2'
+        }`}
+        style={cellDim}
+      >
+        <div
+          className="whitespace-nowrap transition-[max-width,opacity] duration-300 ease-out"
+          style={{
+            maxWidth: showIdColumn ? '12rem' : 0,
+            opacity: showIdColumn ? 1 : 0,
+            overflow: 'hidden',
+          }}
+        >
+          {formatTicketId(id)}
+        </div>
       </td>
 
       {/* 2. Title (+ optional sub-label); comment icon + count inline when there are comments */}

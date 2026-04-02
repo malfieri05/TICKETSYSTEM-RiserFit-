@@ -42,9 +42,6 @@ function SimulateLockedTooltipContent() {
 
 type TabId = 'source' | 'rules' | 'playground';
 
-/** Same fill as the selected studio row in the Lease IQ location list */
-const LEASE_IQ_LOCATION_SELECTED_BG = 'rgba(52, 120, 196, 0.12)';
-
 const LEASE_IQ_PDF_MAX_BYTES = 10 * 1024 * 1024;
 
 function formatLeasePdfBytes(bytes: number): string {
@@ -216,14 +213,14 @@ export default function LeaseIQPage() {
           <div className="flex min-w-0 items-center gap-2">
             <h1
               className="min-w-0 truncate text-base font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
+              style={{ color: 'var(--color-text-app-header)' }}
             >
               Lease IQ
             </h1>
             <button
               type="button"
               onClick={() => setLeaseIqInfoOpen(true)}
-              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-btn-ghost-hover-bg)] hover:text-[var(--color-accent-hover)]"
+              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-app-header-info-hover-bg)] hover:text-[var(--color-app-header-info-hover-fg)]"
               style={{ color: 'var(--color-accent)' }}
               aria-label="What is Lease IQ? Opens an explanation."
             >
@@ -262,7 +259,7 @@ export default function LeaseIQPage() {
               aria-controls="lease-iq-studio-list"
             />
           </div>
-          <div className="flex min-h-0 flex-1 flex-col rounded-xl overflow-hidden" style={panel}>
+          <div className="dashboard-card flex min-h-0 flex-1 flex-col rounded-xl overflow-hidden" style={panel}>
             <div id="lease-iq-studio-list" className="min-h-[12rem] flex-1 overflow-y-auto">
               {studios.length === 0 ? (
                 <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
@@ -281,7 +278,7 @@ export default function LeaseIQPage() {
                     style={{
                       borderColor: 'var(--color-border-default)',
                       background:
-                        studioId === s.id ? LEASE_IQ_LOCATION_SELECTED_BG : undefined,
+                        studioId === s.id ? POLISH_THEME.adminStudioListSelectedBg : undefined,
                       borderLeft:
                         studioId === s.id ? '3px solid var(--color-accent)' : '3px solid transparent',
                     }}
@@ -334,7 +331,7 @@ export default function LeaseIQPage() {
             <div className="p-6">
               {selectedStudio && (
                 <div
-                  className="mb-5 rounded-xl px-4 py-3"
+                  className="dashboard-card mb-5 rounded-xl px-4 py-3"
                   style={{
                     background: 'var(--color-bg-surface)',
                     border: '1px solid var(--color-border-default)',
@@ -490,7 +487,7 @@ function SourceTab({
             aria-selected={sourceMode === 'upload'}
             className="flex-1 rounded-l-[var(--radius-md)] px-3 font-medium transition-colors duration-150"
             style={{
-              background: sourceMode === 'upload' ? LEASE_IQ_LOCATION_SELECTED_BG : 'transparent',
+              background: sourceMode === 'upload' ? POLISH_THEME.adminStudioListSelectedBg : 'transparent',
               color: sourceMode === 'upload' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
               borderRight: `1px solid var(--color-border-default)`,
             }}
@@ -504,7 +501,7 @@ function SourceTab({
             aria-selected={sourceMode === 'paste'}
             className="flex-1 rounded-r-[var(--radius-md)] px-3 font-medium transition-colors duration-150"
             style={{
-              background: sourceMode === 'paste' ? LEASE_IQ_LOCATION_SELECTED_BG : 'transparent',
+              background: sourceMode === 'paste' ? POLISH_THEME.adminStudioListSelectedBg : 'transparent',
               color: sourceMode === 'paste' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
             }}
             onClick={() => setSourceMode('paste')}

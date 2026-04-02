@@ -39,7 +39,7 @@ export default function AdminWorkflowTemplatesListPage() {
         }
       />
       <div className="p-6 max-w-4xl">
-        <div className="rounded-xl overflow-hidden" style={panel}>
+        <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />

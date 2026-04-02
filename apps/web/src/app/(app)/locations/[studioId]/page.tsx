@@ -11,10 +11,13 @@ import { locationsApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
+import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
+import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
 import { useAuth } from '@/hooks/useAuth';
 
 type ViewTab = 'active' | 'completed';
@@ -35,7 +38,7 @@ function ProfileSection({
 }) {
   return (
     <div
-      className="rounded-xl border overflow-hidden"
+      className="dashboard-card rounded-xl border overflow-hidden"
       style={{
         background: POLISH_THEME.listBg,
         borderColor: POLISH_THEME.listBorder,
@@ -122,6 +125,7 @@ export default function LocationProfilePage() {
   const [viewTab, setViewTab] = useState<ViewTab>('active');
   const [page, setPage] = useState(1);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [showTicketIdColumn, toggleTicketIdColumn] = useTicketFeedIdColumnVisible();
   const [openSections, setOpenSections] = useState({
     studioDetails: false,
     ownership: false,
@@ -227,7 +231,7 @@ export default function LocationProfilePage() {
             />
             <h1
               className="min-w-0 truncate text-base font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
+              style={{ color: 'var(--color-text-app-header)' }}
             >
               Location info:
             </h1>
@@ -425,15 +429,10 @@ export default function LocationProfilePage() {
                 style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBg }}
               >
                 {ticketsLoading ? (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-                        {CANONICAL_FEED_HEADERS.map((h) => (
-                          <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <TicketsTableSkeletonRows count={5} />
+                  <table className={POLISH_CLASS.feedTable}>
+                    <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+                    <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+                    <TicketsTableSkeletonRows count={5} showIdColumn={showTicketIdColumn} />
                   </table>
                 ) : tickets.length === 0 ? (
                   <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-2`}>
@@ -446,43 +445,41 @@ export default function LocationProfilePage() {
                   </div>
                 ) : (
                   <>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-                          {CANONICAL_FEED_HEADERS.map((h) => (
-                            <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {tickets.map((ticket) => {
-                          const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
-                          const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
-                          return (
-                            <TicketTableRow
-                              key={ticket.id}
-                              id={ticket.id}
-                              title={ticket.title}
-                              status={ticket.status}
-                              dueDate={ticket.dueDate}
-                              createdAt={ticket.createdAt}
-                              tags={ticket.tags ?? []}
-                              canAddTag={canAddTag}
-                              onAddTag={canAddTag ? handleAddTag : undefined}
-                              isAddingTag={
-                                addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
-                              }
-                              commentCount={ticket._count?.comments ?? 0}
-                              completedSubtasks={completedSubtasks}
-                              totalSubtasks={totalSubtasks}
-                              requesterDisplayName={ticket.requester?.displayName ?? '—'}
-                              isSelected={selectedTicketId === ticket.id}
-                              onSelect={handleSelect}
-                            />
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    <TicketFeedSelectionRail selectedId={selectedTicketId}>
+                      <table className={POLISH_CLASS.feedTable}>
+                        <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+                        <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+                        <tbody>
+                          {tickets.map((ticket) => {
+                            const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
+                            const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
+                            return (
+                              <TicketTableRow
+                                key={ticket.id}
+                                id={ticket.id}
+                                title={ticket.title}
+                                status={ticket.status}
+                                dueDate={ticket.dueDate}
+                                createdAt={ticket.createdAt}
+                                tags={ticket.tags ?? []}
+                                canAddTag={canAddTag}
+                                onAddTag={canAddTag ? handleAddTag : undefined}
+                                isAddingTag={
+                                  addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
+                                }
+                                commentCount={ticket._count?.comments ?? 0}
+                                completedSubtasks={completedSubtasks}
+                                totalSubtasks={totalSubtasks}
+                                requesterDisplayName={ticket.requester?.displayName ?? '—'}
+                                isSelected={selectedTicketId === ticket.id}
+                                showIdColumn={showTicketIdColumn}
+                                onSelect={handleSelect}
+                              />
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </TicketFeedSelectionRail>
                     {totalPages > 1 && (
                       <div
                         className="flex items-center justify-between px-4 py-3"

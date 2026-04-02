@@ -87,17 +87,28 @@ export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
  * Column count matches CANONICAL_FEED_HEADERS so there is no horizontal shift
  * when the real data replaces the skeleton.
  */
-export function TicketsTableSkeletonRows({ count = 5 }: { count?: number }) {
+export function TicketsTableSkeletonRows({
+  count = 5,
+  showIdColumn = true,
+}: {
+  count?: number;
+  /** Match TicketTableRow / TicketFeedThead ID column visibility. */
+  showIdColumn?: boolean;
+}) {
   return (
     <>
       <style>{SKELETON_STYLE}</style>
       <tbody>
         {Array.from({ length: count }).map((_, i) => (
           <tr key={i} style={{ borderBottom: `1px solid ${POLISH_THEME.rowBorder}` }}>
-            {/* ID */}
-            <td className={POLISH_CLASS.cellPadding}>
-              <div className="h-3 rounded w-16" style={skeletonRow} />
-            </td>
+            {/* ID or slim column when collapsed */}
+            {showIdColumn ? (
+              <td className={POLISH_CLASS.cellPadding}>
+                <div className="h-3 rounded w-16" style={skeletonRow} />
+              </td>
+            ) : (
+              <td className="px-2 py-3.5 transition-[padding-left,padding-right] duration-300 ease-out" aria-hidden />
+            )}
             {/* Title (wider — comments inline in real rows) */}
             <td className={POLISH_CLASS.cellPadding}>
               <div className="flex items-center gap-2 min-w-0">

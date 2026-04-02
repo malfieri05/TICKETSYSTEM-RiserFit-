@@ -38,14 +38,9 @@
   --shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.4), 0 14px 34px -20px rgba(0, 0, 0, 0.7);
   --color-scrollbar-thumb: #333333;
   --color-scrollbar-thumb-hover: #555555;
-  /* Sidebar liquid glass + nav states */
-  --sidebar-glass-bg: rgba(17, 17, 17, 0.85);
-  --sidebar-glass-border: rgba(42, 42, 42, 0.9);
-  --sidebar-nav-hover: rgba(52, 120, 196, 0.11);
-  --sidebar-nav-active-bg: rgba(52, 120, 196, 0.22);
-  --sidebar-nav-active-border: var(--color-accent);
-  --sidebar-text: #ffffff;
-  --sidebar-text-secondary: rgba(255, 255, 255, 0.85);
+  /* Top app bar — matches page text scale (dark theme bar is near-black) */
+  --color-text-app-header: var(--color-text-primary);
+  --color-text-app-header-muted: var(--color-text-muted);
   /* Content headers: ticket feed thead, admin table thead, in-page tab tracks, drawer title strip */
   --color-bg-content-header: #111111;
   --color-bg-table-header: var(--color-bg-content-header);
@@ -59,6 +54,11 @@
   --shadow-app-header:
     0 1px 0 0 rgba(52, 120, 196, 0.22),
     0 4px 16px rgba(0, 0, 0, 0.42);
+  /* Header “info” (ⓘ) circle — hover on dark chrome */
+  --color-app-header-info-hover-bg: rgba(255, 255, 255, 0.1);
+  --color-app-header-info-hover-fg: var(--color-accent-hover);
+  /* Ticket feed shimmer bar — green in dark mode */
+  --color-feed-shimmer: #22c55e;
   /* Ticket drawer / slide-over — depth from the main canvas */
   --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.55), -4px 0 16px rgba(0, 0, 0, 0.35);
   /* Drawer tab strip — depth only below (no halo above; flush with header chrome) */
@@ -67,6 +67,27 @@
   --color-rovi-ask-pill-bg: rgba(52, 120, 196, 0.16);
   --color-rovi-ask-pill-border: rgba(120, 170, 220, 0.42);
   --color-rovi-ask-pill-icon-stroke: #9eb4d0;
+  /* Stat card icon tokens — dark mode */
+  --stat-icon-indigo-bg: rgba(52, 120, 196, 0.2);
+  --stat-icon-indigo-fg: #3478c4;
+  --stat-icon-green-bg: rgba(34, 197, 94, 0.18);
+  --stat-icon-green-fg: #16a34a;
+  --stat-icon-amber-bg: rgba(245, 158, 11, 0.18);
+  --stat-icon-amber-fg: #d97706;
+  --stat-icon-red-bg: rgba(239, 68, 68, 0.18);
+  --stat-icon-red-fg: #dc2626;
+  --stat-icon-sky-bg: rgba(14, 165, 233, 0.2);
+  --stat-icon-sky-fg: #0284c7;
+  /* Left rail — same language as main surfaces (dark mode unchanged) */
+  --sidebar-glass-bg: var(--color-bg-surface);
+  --sidebar-glass-border: var(--color-border-default);
+  --sidebar-divider: var(--color-border-default);
+  --sidebar-nav-hover: var(--color-btn-ghost-hover-bg);
+  --sidebar-nav-active-bg: var(--color-row-selected);
+  --sidebar-nav-active-border: var(--color-accent);
+  --sidebar-text: var(--color-text-secondary);
+  --sidebar-text-secondary: var(--color-text-muted);
+  --sidebar-text-active: var(--color-text-primary);
 }
 
 [data-theme="light"] {
@@ -106,26 +127,29 @@
   --shadow-raised: 0 2px 8px rgba(16, 24, 40, 0.1), 0 20px 38px -20px rgba(16, 24, 40, 0.22);
   --color-scrollbar-thumb: #c4c4c4;
   --color-scrollbar-thumb-hover: #a3a3a3;
-  /* Sidebar: rich gray for contrast with blue accent */
-  --sidebar-glass-bg: #dce0e4;
-  --sidebar-glass-border: #c8ccd2;
-  --sidebar-nav-hover: rgba(40, 104, 184, 0.08);
-  --sidebar-nav-active-bg: rgba(40, 104, 184, 0.16);
-  --sidebar-nav-active-border: var(--color-accent);
-  --sidebar-text: #171717;
-  --sidebar-text-secondary: #525252;
-  /* Content headers — same band as ticket feed thead */
-  --color-bg-content-header: #dee4ec;
+  /* Content / tables — richer blue-gray so thead, chrome, and section headers
+     clearly stand apart from both the dark app header and the white cards     */
+  --color-bg-content-header: #b8c8dc;
   --color-bg-table-header: var(--color-bg-content-header);
+  /* Drawer strips, table chrome — same family as content header */
   --color-bg-chrome: var(--color-bg-content-header);
-  --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 50%, var(--color-bg-page) 50%);
-  --color-feed-accent-border: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  /* Sticky page header — same family as table header, ~10% lighter (toward white) */
-  --color-bg-app-header: color-mix(in srgb, var(--color-bg-table-header) 90%, white);
+  /* Slightly lifted inset on the slate app header only (e.g. view tabs) */
+  --color-bg-header-embed: #3d445c;
+  /* Ticket feed shimmer bar — blue in light mode */
+  --color-feed-shimmer: var(--color-accent);
+  --color-bg-drawer-canvas: color-mix(in srgb, var(--color-bg-chrome) 40%, var(--color-bg-page) 60%);
+  /* Stronger accent rule — was 16%, now clearly visible on light surfaces */
+  --color-feed-accent-border: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  /* App header — deepen slightly for a more authoritative top bar */
+  --color-bg-app-header: #252d42;
+  --color-text-app-header: #ffffff;
+  --color-text-app-header-muted: rgba(255, 255, 255, 0.72);
+  /* Header “info” (ⓘ) circle — hover on navy bar (light mode) */
+  --color-app-header-info-hover-bg: rgba(255, 255, 255, 0.18);
+  --color-app-header-info-hover-fg: #ffffff;
   --shadow-app-header:
-    0 1px 0 0 color-mix(in srgb, var(--color-accent) 20%, transparent),
-    0 2px 8px rgba(0, 0, 0, 0.05),
-    0 8px 24px -8px rgba(0, 0, 0, 0.08);
+    0 1px 0 0 rgba(0, 0, 0, 0.32),
+    0 4px 18px rgba(0, 0, 0, 0.22);
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12), -2px 0 12px rgba(0, 0, 0, 0.06);
   /* Downward-biased only — separates tab strip from scroll body, not from header above */
   --shadow-drawer-tabbar: 0 12px 28px -10px rgba(16, 24, 40, 0.14), 0 4px 12px -8px rgba(16, 24, 40, 0.08);
@@ -134,6 +158,27 @@
   /* Stronger than prior #b8d0eb so the capsule reads on white / pale blue */
   --color-rovi-ask-pill-border: color-mix(in srgb, var(--color-accent) 38%, #94b8d8);
   --color-rovi-ask-pill-icon-stroke: #4a6d94;
+  /* Stat card icon tokens — saturated for light mode legibility */
+  --stat-icon-indigo-bg: rgba(37, 99, 235, 0.13);
+  --stat-icon-indigo-fg: #1d4ed8;
+  --stat-icon-green-bg: rgba(21, 128, 61, 0.13);
+  --stat-icon-green-fg: #15803d;
+  --stat-icon-amber-bg: rgba(180, 83, 9, 0.12);
+  --stat-icon-amber-fg: #b45309;
+  --stat-icon-red-bg: rgba(220, 38, 38, 0.12);
+  --stat-icon-red-fg: #b91c1c;
+  --stat-icon-sky-bg: rgba(3, 105, 161, 0.12);
+  --stat-icon-sky-fg: #0369a1;
+  /* Left rail — match app header navy; white labels (light mode only) */
+  --sidebar-glass-bg: var(--color-bg-app-header);
+  --sidebar-glass-border: rgba(255, 255, 255, 0.12);
+  --sidebar-divider: rgba(255, 255, 255, 0.12);
+  --sidebar-nav-hover: rgba(255, 255, 255, 0.1);
+  --sidebar-nav-active-bg: rgba(255, 255, 255, 0.16);
+  --sidebar-nav-active-border: #93b4e8;
+  --sidebar-text: #ffffff;
+  --sidebar-text-secondary: #ffffff;
+  --sidebar-text-active: #ffffff;
 }
 
 * {
@@ -145,6 +190,12 @@ body {
   background: var(--color-bg-page);
   color: var(--color-text-primary);
   line-height: 1.45;
+}
+
+/* Light mode: rich directional gradient replaces flat page colour */
+[data-theme="light"] body {
+  background: linear-gradient(150deg, #f0f5fb 0%, #e8eef7 55%, #ecf1f8 100%);
+  background-attachment: fixed;
 }
 
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -162,8 +213,12 @@ body {
   background: var(--color-bg-surface-raised);
   color: var(--color-text-secondary);
 }
+[data-theme="light"] .header-nav-link:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-app-header);
+}
 
-/* Sidebar nav: faint blue hover when not selected; no transform to avoid layout glitch */
+/* Sidebar nav: uses sidebar-specific tokens so hover works correctly on the dark rail in both themes */
 .sidebar-nav-item {
   transition: background-color var(--duration-base) ease-out, color var(--duration-base) ease-out;
 }
@@ -244,7 +299,12 @@ body {
   background: var(--color-bg-surface-raised);
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shadow-dashboard-card);
+  transition: box-shadow 220ms ease-out, transform 220ms ease-out;
+}
+.surface-card:hover {
+  box-shadow: var(--shadow-dashboard-card-hover);
+  transform: translateY(-2px);
 }
 
 .surface-inset {
@@ -268,15 +328,14 @@ body {
  */
 .ticket-tags-lateral-scroll {
   box-sizing: content-box;
-  height: 1.75rem; /* 28px — matches h-7 + button */
+  height: 1.75rem; /* 28px — matches h-7 + button; no padding-bottom so box stays 28px and capsules center-align with Status column */
   display: flex;
   align-items: center;
-  padding-bottom: 10px;
   scrollbar-width: thin;
   scrollbar-color: var(--color-border-default) transparent;
 }
 .ticket-tags-lateral-scroll::-webkit-scrollbar {
-  height: 5px;
+  height: 4px; /* sits within the 28px box at its bottom edge */
 }
 .ticket-tags-lateral-scroll::-webkit-scrollbar-thumb {
   border-radius: 9999px;
@@ -292,4 +351,22 @@ body {
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scrollbar-gutter: stable;
+}
+
+/* Dashboard: floating card effect — resting shadow + hover lift */
+[data-theme="light"] {
+  --shadow-dashboard-card: 0 1px 3px rgba(16, 24, 40, 0.06), 0 6px 20px rgba(16, 24, 40, 0.08);
+  --shadow-dashboard-card-hover: 0 4px 10px rgba(16, 24, 40, 0.10), 0 14px 36px rgba(16, 24, 40, 0.13);
+}
+[data-theme="dark"] {
+  --shadow-dashboard-card: 0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 20px rgba(0, 0, 0, 0.48);
+  --shadow-dashboard-card-hover: 0 4px 12px rgba(0, 0, 0, 0.52), 0 14px 36px rgba(0, 0, 0, 0.68);
+}
+.dashboard-card {
+  box-shadow: var(--shadow-dashboard-card);
+  transition: box-shadow 220ms ease-out, transform 220ms ease-out;
+}
+.dashboard-card:hover {
+  box-shadow: var(--shadow-dashboard-card-hover);
+  transform: translateY(-2px);
 }

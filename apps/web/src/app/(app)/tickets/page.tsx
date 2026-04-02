@@ -11,13 +11,16 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
-import { TicketTableRow, CANONICAL_FEED_HEADERS, getThClass } from '@/components/tickets/TicketRow';
+import { TicketTableRow } from '@/components/tickets/TicketRow';
+import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/hooks/useAuth';
-import { POLISH_THEME, POLISH_CLASS, FEED_COL_WIDTHS } from '@/lib/polish';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
 
 const PAGE_SIZE = 20;
 
@@ -39,6 +42,7 @@ export default function TicketsPage() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 300);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showTicketIdColumn, toggleTicketIdColumn] = useTicketFeedIdColumnVisible();
   const hasInitializedFromUrl = useRef(false);
   const listContainerRef = useRef<HTMLDivElement>(null);
 
@@ -272,17 +276,22 @@ export default function TicketsPage() {
       <Header
         title={
           <div className="flex items-center gap-3">
-            <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>Tickets</h1>
+            <h1 className="text-base font-semibold" style={{ color: 'var(--color-text-app-header)' }}>Tickets</h1>
             <div
-              className="relative inline-flex items-center rounded-[var(--radius-md)] border p-1"
-              style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-chrome)' }}
+              className="relative inline-flex items-center rounded-[var(--radius-md)] p-1"
+              style={{
+                background: 'var(--color-bg-header-embed)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25)',
+              }}
             >
               <div
-                className="absolute top-1 bottom-1 w-[136px] rounded-[calc(var(--radius-md)-2px)] border transition-transform duration-[var(--duration-base)] ease-out"
+                className="absolute top-1 bottom-1 w-[136px] rounded-[calc(var(--radius-md)-2px)] transition-transform duration-[var(--duration-base)] ease-out"
                 style={{
                   transform: viewTab === 'active' ? 'translateX(0)' : 'translateX(136px)',
-                  background: 'var(--color-bg-surface)',
-                  borderColor: 'var(--color-border-default)',
+                  background: 'rgba(255,255,255,0.10)',
+                  border: '1px solid rgba(255,255,255,0.14)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
                 }}
               />
               {([
@@ -296,12 +305,12 @@ export default function TicketsPage() {
                     onClick={() => { setViewTab(key); setFilters((f) => ({ ...f, status: undefined, page: 1 })); setSelectedId(null); }}
                     data-active={active}
                     className="focus-ring relative z-10 inline-flex w-[136px] items-center justify-center gap-1.5 px-3 py-1 text-sm font-medium transition-colors"
-                    style={{ color: active ? 'var(--color-text-primary)' : 'var(--color-text-muted)' }}
+                    style={{ color: active ? 'var(--color-text-app-header)' : 'var(--color-text-app-header-muted)' }}
                   >
                     <span>{label}:</span>
                     <span
-                      className="text-sm font-medium tabular-nums"
-                      style={{ color: active ? POLISH_THEME.success : 'var(--color-text-primary)' }}
+                      className="text-sm font-semibold tabular-nums"
+                      style={{ color: active ? '#86efac' : 'var(--color-text-app-header-muted)' }}
                     >
                       {count}
                     </span>
@@ -375,7 +384,7 @@ export default function TicketsPage() {
                 />
               </div>
               {hasActiveFilters && (
-                <Button variant="ghost" size="md" onClick={clearAllFilters}>
+                <Button variant="outlineAccent" size="md" onClick={clearAllFilters}>
                   Clear filters
                 </Button>
               )}
@@ -386,27 +395,16 @@ export default function TicketsPage() {
           hasTickets={tickets.length > 0}
           ticketList={
             <div className="flex-1 min-h-0 flex flex-col">
-              <table className="w-full text-sm table-fixed">
-                <colgroup>
-                  {FEED_COL_WIDTHS.map((w, idx) => (
-                    <col key={`thead-col-${idx}`} style={{ width: w }} />
-                  ))}
-                </colgroup>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-                    {CANONICAL_FEED_HEADERS.map((h) => (
-                      <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-                    ))}
-                  </tr>
-                </thead>
+              <table className={POLISH_CLASS.feedTable}>
+                <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+                <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
               </table>
-              <div className="ticket-feed-body-scroll flex-1 min-h-0 overflow-y-auto">
-                <table className="w-full text-sm table-fixed">
-                  <colgroup>
-                    {FEED_COL_WIDTHS.map((w, idx) => (
-                      <col key={`tbody-col-${idx}`} style={{ width: w }} />
-                    ))}
-                  </colgroup>
+              <TicketFeedSelectionRail
+                selectedId={selectedId}
+                scrollContainerClassName="ticket-feed-body-scroll flex-1 min-h-0 overflow-y-auto"
+              >
+                <table className={POLISH_CLASS.feedTable}>
+                  <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
                   <tbody>
                     {tickets.map((ticket) => {
                       const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
@@ -430,13 +428,14 @@ export default function TicketsPage() {
                           totalSubtasks={totalSubtasks}
                           requesterDisplayName={ticket.requester.displayName || ticket.requester.email || '—'}
                           isSelected={selectedId === ticket.id}
+                          showIdColumn={showTicketIdColumn}
                           onSelect={handleSelect}
                         />
                       );
                     })}
                   </tbody>
                 </table>
-              </div>
+              </TicketFeedSelectionRail>
             </div>
           }
           emptyState={
@@ -445,7 +444,7 @@ export default function TicketsPage() {
                 <>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">No tickets match your current filters</p>
                   <p className="text-xs text-center">Try adjusting your filters or search.</p>
-                  <Button variant="ghost" size="sm" onClick={clearAllFilters}>
+                  <Button variant="outlineAccent" size="sm" onClick={clearAllFilters}>
                     Clear filters
                   </Button>
                 </>
@@ -498,15 +497,10 @@ export default function TicketsPage() {
             ) : null
           }
           initialSkeleton={
-            <table className="w-full text-sm">
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
-                  {CANONICAL_FEED_HEADERS.map((h) => (
-                    <th key={h.key} className={getThClass(h.key)} style={{ color: POLISH_THEME.theadText }}>{h.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <TicketsTableSkeletonRows count={8} />
+            <table className={POLISH_CLASS.feedTable}>
+              <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
+              <TicketFeedThead showIdColumn={showTicketIdColumn} onToggleIdColumn={toggleTicketIdColumn} />
+              <TicketsTableSkeletonRows count={8} showIdColumn={showTicketIdColumn} />
             </table>
           }
         />

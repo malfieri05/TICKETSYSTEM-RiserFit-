@@ -42,11 +42,17 @@ export const POLISH_THEME = {
   metaSecondary: 'var(--color-text-secondary)',
   metaMuted: 'var(--color-text-muted)',
   metaDim: 'var(--color-text-muted)',
-  theadText: 'var(--color-text-muted)',
+  /** Table / feed column headers — primary text so light-mode bar reads black, not washed-out muted */
+  theadText: 'var(--color-text-primary)',
   accent: 'var(--color-accent)',
   listContainerShadow: 'var(--shadow-panel)',
   /** Always-green color used for progress bars across feed and panel. */
   progressGreen: '#16a34a',
+  /**
+   * Selected row in admin studio/location side lists (Lease IQ, Locations).
+   * Pairs with `borderLeft: 3px solid var(--color-accent)`. Hover uses `hover:bg-[var(--color-bg-surface-raised)]`.
+   */
+  adminStudioListSelectedBg: 'rgba(52, 120, 196, 0.12)',
   /** Elevated card shadow — used on panel shell and ticket detail header. */
   shadowElevated: 'var(--shadow-elevated)',
   /** Subtle card shadow for list containers. */
@@ -92,8 +98,22 @@ export const FEED_COL_WIDTHS = [
   '7%',   // Requester
 ] as const;
 
+/** Same 8 columns when ID is collapsed to a slim expand control (sums to 100%). */
+export const FEED_COL_WIDTHS_ID_COLLAPSED = [
+  '4%',   // expand control
+  '40%',  // Title (absorbs hidden ID)
+  '10%',  // Created
+  '11%',  // Tags
+  '10%',  // Status
+  '9%',   // Due date
+  '9%',   // Progress
+  '7%',   // Requester
+] as const;
+
 /** Tailwind-compatible class names for consistent layout */
 export const POLISH_CLASS = {
+  /** Ticket feed tables — `border-separate` + zero spacing so `<th>` corner radii render (outline follows rounded card) */
+  feedTable: 'w-full text-sm table-fixed border-separate border-spacing-0',
   /** Table th/td cell padding */
   cellPadding: 'px-4 py-3.5',
   /** Table header text style */

@@ -65,22 +65,22 @@ function StatCard({
 }) {
   const tipId = useId();
   const iconStyle = {
-    indigo: { background: 'rgba(52,120,196,0.15)', color: '#3478c4' },
-    green: { background: 'rgba(34,197,94,0.12)', color: '#16a34a' },
-    amber: { background: 'rgba(245,158,11,0.12)', color: '#d97706' },
-    red: { background: 'rgba(239,68,68,0.12)', color: '#dc2626' },
-    sky: { background: 'rgba(14,165,233,0.14)', color: '#0284c7' },
+    indigo: { background: 'var(--stat-icon-indigo-bg)', color: 'var(--stat-icon-indigo-fg)' },
+    green:  { background: 'var(--stat-icon-green-bg)',  color: 'var(--stat-icon-green-fg)'  },
+    amber:  { background: 'var(--stat-icon-amber-bg)',  color: 'var(--stat-icon-amber-fg)'  },
+    red:    { background: 'var(--stat-icon-red-bg)',    color: 'var(--stat-icon-red-fg)'    },
+    sky:    { background: 'var(--stat-icon-sky-bg)',    color: 'var(--stat-icon-sky-fg)'    },
   }[color];
 
   const headerRow = (
     <>
       <div
-        className="rounded-lg p-2.5 shrink-0 lg:p-3"
+        className="rounded-xl p-3 shrink-0"
         style={iconStyle}
       >
         <Icon className="h-5 w-5 lg:h-6 lg:w-6" />
       </div>
-      <p className="text-xs lg:text-[0.8125rem] text-[var(--color-text-secondary)] font-medium uppercase tracking-wide leading-tight pt-0.5 min-w-0">
+      <p className="text-[0.7rem] lg:text-xs text-[var(--color-text-secondary)] font-bold uppercase tracking-[0.1em] leading-tight pt-0.5 min-w-0">
         {label}
       </p>
     </>
@@ -89,12 +89,13 @@ function StatCard({
   return (
     <div
       className={cn(
-        'rounded-xl p-5 lg:p-6 flex flex-col min-h-[8.5rem]',
+        'dashboard-card rounded-xl p-5 lg:p-6 flex flex-col min-h-[8.5rem]',
         className,
       )}
       style={{
         background: 'var(--color-bg-surface)',
         border: '1px solid var(--color-border-default)',
+        borderTop: '2px solid var(--color-feed-accent-border)',
       }}
     >
       {headerTooltip ? (
@@ -106,7 +107,7 @@ function StatCard({
           className="block w-full shrink-0"
         >
           <div
-            className="flex items-start gap-4 w-full cursor-help rounded-lg -mx-1 -mt-1 px-1 pt-1 pb-0.5 transition-colors duration-150 outline-none hover:bg-[var(--color-bg-surface-inset)] focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]"
+            className="flex w-full shrink-0 cursor-help items-start gap-4 outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]"
             tabIndex={0}
           >
             {headerRow}
@@ -116,7 +117,7 @@ function StatCard({
         <div className="flex items-start gap-4 w-full shrink-0">{headerRow}</div>
       )}
       <div className="flex-1 flex items-center justify-center px-1 pt-1">
-        <p className="text-2xl font-bold text-[var(--color-text-primary)] text-center tabular-nums lg:text-3xl">
+        <p className="text-3xl font-bold text-[var(--color-text-primary)] text-center tabular-nums lg:text-4xl">
           {value}
         </p>
       </div>
@@ -140,11 +141,11 @@ function HorizontalBar({
     <div className="flex items-center gap-3 text-sm">
       <span className="w-36 text-[var(--color-text-secondary)] truncate shrink-0">{label}</span>
       <div
-        className="flex-1 rounded-full h-2 overflow-hidden"
+        className="flex-1 rounded-full h-2.5 overflow-hidden"
         style={{ background: 'var(--color-border-default)' }}
       >
         <div
-          className="h-2 rounded-full transition-all"
+          className="h-2.5 rounded-full transition-all"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
@@ -155,7 +156,7 @@ function HorizontalBar({
 
 /** Fixed visual height; header stays put, list scrolls inside. */
 const BREAKDOWN_PANEL_CLASS =
-  'flex min-h-[12rem] h-[min(22rem,60vh)] flex-col overflow-hidden rounded-xl p-5';
+  'dashboard-card flex min-h-[12rem] h-[min(22rem,60vh)] flex-col overflow-hidden rounded-xl p-5';
 
 function BreakdownPanelScrollBody({
   isEmpty,
@@ -669,67 +670,68 @@ export default function DashboardPage() {
               ) : (
                 <div className="grid min-h-[20rem] w-full grid-cols-1 items-stretch gap-4 min-w-0 sm:grid-cols-2 md:grid-cols-3 xl:min-h-0 xl:h-full xl:grid-cols-4 xl:grid-rows-[1fr_1fr]">
                   <div
-                    className="col-span-full flex min-h-[8.5rem] w-full shrink-0 items-stretch rounded-xl p-5 sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1 xl:min-h-0 xl:h-full xl:p-6"
+                    className="dashboard-card col-span-full flex min-h-[8.5rem] w-full shrink-0 flex-col rounded-xl px-6 py-4 sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1 xl:min-h-0 xl:h-full"
                     style={{
                       background: 'var(--color-bg-surface)',
                       border: '1px solid var(--color-border-default)',
                     }}
                   >
-                    <div className="flex h-full w-full min-h-0 flex-col items-center justify-center gap-2">
-                      <div className="flex w-full min-w-0 flex-row flex-wrap items-center justify-center gap-2 sm:gap-3 overflow-x-auto py-0.5 [scrollbar-width:thin]">
-                        <p className="shrink-0 whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-[var(--color-text-muted)]">
-                          Timeframe
-                        </p>
-                        <SlidingSegmentedControl
-                          options={KPI_PRESET_OPTIONS}
-                          value={manualRange ? null : preset}
-                          onChange={(v) => selectPreset(v as Preset)}
-                          aria-label="Date range preset"
-                          size="sm"
-                          className="w-fit max-w-full shrink-0"
+                    {/* Card label */}
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)] mb-3 shrink-0">
+                      Timeframe
+                    </p>
+                    {/* Controls — vertically centred in remaining space */}
+                    <div className="flex flex-1 flex-col items-center justify-center gap-3 min-h-0">
+                      {/* Preset buttons */}
+                      <SlidingSegmentedControl
+                        options={KPI_PRESET_OPTIONS}
+                        value={manualRange ? null : preset}
+                        onChange={(v) => selectPreset(v as Preset)}
+                        aria-label="Date range preset"
+                        size="sm"
+                        className="w-fit max-w-full shrink-0"
+                      />
+                      {/* Custom date range — single row, subordinate to presets */}
+                      <div className="flex shrink-0 flex-wrap items-center justify-center gap-2">
+                        <label
+                          htmlFor="kpi-range-from"
+                          className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
+                        >
+                          From
+                        </label>
+                        <input
+                          id="kpi-range-from"
+                          type="date"
+                          value={rangeFrom}
+                          onChange={(e) => onDateFromChange(e.target.value)}
+                          className="shrink-0 rounded-lg border px-2.5 py-1.5 text-sm"
+                          style={{
+                            borderColor: 'var(--color-border-default)',
+                            background: 'var(--color-bg-surface-inset)',
+                            color: 'var(--color-text-primary)',
+                            width: '8.5rem',
+                          }}
                         />
-                      </div>
-                      <div className="flex w-full min-w-0 flex-row flex-wrap items-center justify-center gap-3 sm:gap-4">
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <label
-                            htmlFor="kpi-range-from"
-                            className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]"
-                          >
-                            From
-                          </label>
-                          <input
-                            id="kpi-range-from"
-                            type="date"
-                            value={rangeFrom}
-                            onChange={(e) => onDateFromChange(e.target.value)}
-                            className="w-[7.5rem] shrink-0 rounded-lg border px-2 py-1 text-sm sm:w-[8.25rem] sm:py-1.5"
-                            style={{
-                              borderColor: 'var(--color-border-default)',
-                              background: 'var(--color-bg-surface)',
-                              color: 'var(--color-text-primary)',
-                            }}
-                          />
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                          <label
-                            htmlFor="kpi-range-to"
-                            className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-[var(--color-text-muted)]"
-                          >
-                            To
-                          </label>
-                          <input
-                            id="kpi-range-to"
-                            type="date"
-                            value={rangeTo}
-                            onChange={(e) => onDateToChange(e.target.value)}
-                            className="w-[7.5rem] shrink-0 rounded-lg border px-2 py-1 text-sm sm:w-[8.25rem] sm:py-1.5"
-                            style={{
-                              borderColor: 'var(--color-border-default)',
-                              background: 'var(--color-bg-surface)',
-                              color: 'var(--color-text-primary)',
-                            }}
-                          />
-                        </div>
+                        <span className="text-[var(--color-text-muted)] text-xs select-none">→</span>
+                        <label
+                          htmlFor="kpi-range-to"
+                          className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
+                        >
+                          To
+                        </label>
+                        <input
+                          id="kpi-range-to"
+                          type="date"
+                          value={rangeTo}
+                          onChange={(e) => onDateToChange(e.target.value)}
+                          className="shrink-0 rounded-lg border px-2.5 py-1.5 text-sm"
+                          style={{
+                            borderColor: 'var(--color-border-default)',
+                            background: 'var(--color-bg-surface-inset)',
+                            color: 'var(--color-text-primary)',
+                            width: '8.5rem',
+                          }}
+                        />
                       </div>
                     </div>
                   </div>
@@ -787,7 +789,7 @@ export default function DashboardPage() {
             {/* Right: ticket volume — same xl:grid-cols-2 cell = half of 4-col below */}
             <div className="flex min-h-0 w-full min-w-0 flex-col xl:h-full xl:min-h-0">
               <div
-                className="rounded-xl px-6 pt-5 pb-4"
+                className="dashboard-card rounded-xl px-6 pt-5 pb-4"
                 style={{
                   background: 'var(--color-bg-surface)',
                   border: '1px solid var(--color-border-default)',
@@ -795,11 +797,11 @@ export default function DashboardPage() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-1">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] mb-0.5">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
                       Ticket Volume
                     </p>
                     <div className="flex items-baseline gap-3">
-                      <span className="text-3xl font-bold text-[var(--color-text-primary)]">
+                      <span className="text-4xl font-bold text-[var(--color-text-primary)]">
                         {volume.reduce((s, d) => s + d.count, 0).toLocaleString()}
                       </span>
                       <span className="text-sm text-[var(--color-text-muted)]">
@@ -841,9 +843,10 @@ export default function DashboardPage() {
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               {/* ── Support ────────────────────────────────────────── */}
               <div className="flex flex-col gap-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] px-1">
-                  Support
-                </p>
+                <div className="flex items-center gap-2.5 px-1">
+                  <span className="w-[3px] h-[1.1rem] rounded-full shrink-0" style={{ background: '#6366f1' }} />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Support</p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                   {/* Support by Department */}
                   <div
@@ -902,9 +905,10 @@ export default function DashboardPage() {
 
               {/* ── Maintenance ────────────────────────────────────── */}
               <div className="flex flex-col gap-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-muted)] px-1">
-                  Maintenance
-                </p>
+                <div className="flex items-center gap-2.5 px-1">
+                  <span className="w-[3px] h-[1.1rem] rounded-full shrink-0" style={{ background: '#0ea5e9' }} />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">Maintenance</p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                   {/* Maintenance by Location */}
                   <div
@@ -966,7 +970,7 @@ export default function DashboardPage() {
 
             {/* Avg resolution by category */}
             <div
-              className="rounded-xl p-5"
+              className="dashboard-card rounded-xl p-5"
               style={{
                 background: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border-default)',
@@ -1011,7 +1015,7 @@ export default function DashboardPage() {
 
             {/* Completion time by owner */}
             <div
-              className="rounded-xl p-5"
+              className="dashboard-card rounded-xl p-5"
               style={{
                 background: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border-default)',
@@ -1057,7 +1061,7 @@ export default function DashboardPage() {
 
             {/* Workflow timing */}
             <div
-              className="rounded-xl p-5"
+              className="dashboard-card rounded-xl p-5"
               style={{
                 background: 'var(--color-bg-surface)',
                 border: '1px solid var(--color-border-default)',

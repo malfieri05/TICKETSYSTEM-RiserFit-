@@ -70,7 +70,7 @@ export default function AdminWorkflowAnalyticsPage() {
         {/* Workflow Template Analytics */}
         <section>
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Workflow Template Analytics</h2>
-          <div className="rounded-xl overflow-hidden" style={panel}>
+          <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
@@ -116,7 +116,7 @@ export default function AdminWorkflowAnalyticsPage() {
         {/* Department Workflow Metrics */}
         <section>
           <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Department Workflow Metrics</h2>
-          <div className="rounded-xl overflow-hidden" style={panel}>
+          <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
             {loading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
                 <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
@@ -161,7 +161,7 @@ export default function AdminWorkflowAnalyticsPage() {
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <h2 className="text-lg font-semibold text-[var(--color-text-primary)] mb-3">Longest-running subtask types</h2>
-            <div className="rounded-xl overflow-hidden" style={panel}>
+            <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2">
                   <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />

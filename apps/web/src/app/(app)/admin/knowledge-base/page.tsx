@@ -249,14 +249,14 @@ export default function KnowledgeBasePage() {
           <div className="flex min-w-0 items-center gap-2">
             <h1
               className="min-w-0 truncate text-base font-semibold"
-              style={{ color: 'var(--color-text-primary)' }}
+              style={{ color: 'var(--color-text-app-header)' }}
             >
               Knowledge Base
             </h1>
             <button
               type="button"
               onClick={() => setKnowledgeBaseInfoOpen(true)}
-              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-btn-ghost-hover-bg)] hover:text-[var(--color-accent-hover)]"
+              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-app-header-info-hover-bg)] hover:text-[var(--color-app-header-info-hover-fg)]"
               style={{ color: 'var(--color-accent)' }}
               aria-label="What is Knowledge base? Opens an explanation."
             >
@@ -270,7 +270,7 @@ export default function KnowledgeBasePage() {
       <div className="flex-1 p-6 space-y-6 overflow-auto">
 
         {/* ── Ingest panel ── */}
-        <div className="rounded-xl p-6" style={panel}>
+        <div className="dashboard-card rounded-xl p-6" style={panel}>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4 flex items-center gap-2">
             <Plus className="h-4 w-4 text-[var(--color-accent)]" />
             Add Knowledge Document
@@ -412,15 +412,15 @@ export default function KnowledgeBasePage() {
         </div>
 
         {/* ── Document list ── */}
-        <div className="rounded-xl overflow-hidden" style={panel}>
+        <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
           <div className="px-6 py-4 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid var(--color-border-default)' }}>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-[var(--color-text-primary)] flex items-center gap-2">
                 <BookOpen className="h-4 w-4 text-[var(--color-accent)]" />
                 Documents
               </h2>
-              <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
-              <span className="text-xs" style={{ color: 'var(--color-text-muted)' }} title="Short policies produce 1 chunk; longer ones split into multiple. All are used by the Assistant.">
+              <span className="text-sm" style={{ color: 'var(--color-text-primary)' }}>{docs.length} document{docs.length !== 1 ? 's' : ''}</span>
+              <span className="text-xs" style={{ color: 'var(--color-text-primary)' }} title="Short policies produce 1 chunk; longer ones split into multiple. All are used by the Assistant.">
                 (1 chunk = short policy; normal)
               </span>
             </div>
@@ -473,7 +473,7 @@ export default function KnowledgeBasePage() {
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
                   {['Title', 'Source', 'Doc type', 'Chunks', 'Size', 'Uploaded by', 'Added', 'Policy meta', 'Index status', 'Active', ''].map((h) => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>{h}</th>
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>{h}</th>
                   ))}
                 </tr>
               </thead>

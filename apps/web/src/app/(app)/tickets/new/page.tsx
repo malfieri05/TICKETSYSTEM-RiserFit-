@@ -338,7 +338,7 @@ export default function NewTicketPage() {
           Back
         </Button>
 
-        <form onSubmit={handleSubmit} className="rounded-xl p-6 space-y-5" style={panel}>
+        <form onSubmit={handleSubmit} className="dashboard-card rounded-xl p-6 space-y-5" style={panel}>
           <h2 className="text-base font-semibold text-[var(--color-text-primary)]">Create a new ticket</h2>
 
           {/* 1. Ticket class */}

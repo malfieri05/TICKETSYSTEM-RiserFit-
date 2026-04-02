@@ -7,6 +7,7 @@ import { format, parseISO } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare,
   Clock, Plus, User, CheckCircle2, Maximize2, Pencil, Scale, RefreshCw,
+  ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { ticketsApi, subtasksApi, invalidateTicketLists, dispatchApi } from '@/lib/api';
 import type { SubtaskStatus } from '@/types';
@@ -115,6 +116,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   const [editTitleValue, setEditTitleValue] = useState('');
   const [isEditingSubmission, setIsEditingSubmission] = useState(false);
   const [submissionEditValues, setSubmissionEditValues] = useState<Record<string, string>>({});
+  const [leaseIqExpanded, setLeaseIqExpanded] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -124,6 +126,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     setIsEditingTitle(false);
     setIsEditingSubmission(false);
     setSubmissionEditValues({});
+    setLeaseIqExpanded(false);
   }, [displayTicketId]);
 
   useEffect(() => {
@@ -269,23 +272,49 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
       style={{
         width: 'min(828px, 68vw)',
         background: 'var(--color-bg-page)',
-        borderLeft: `1px solid ${POLISH_THEME.listBorder}`,
-        borderTop: `1px solid var(--color-feed-accent-border)`,
+        /* Darken from app-header hue so the seam isn’t a pale “white” line against the navy top bars */
+        borderLeft: '1px solid color-mix(in srgb, var(--color-bg-app-header) 78%, #000000)',
+        /* No top border — keeps drawer header flush with viewport top and same height as <Header /> (h-14) */
         transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
         boxShadow: panelOpen ? POLISH_THEME.drawerShadow : 'none',
         transition: `transform ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}, box-shadow ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}`,
       }}
     >
-      {/* ── Top bar: close — chrome to match title strip (no white band) ───────── */}
+      {/* ── Top bar: ticket # (left) + close — match <Header /> height (h-14) ───────── */}
       <div
-        className="flex items-center justify-end px-5 h-11 shrink-0"
-        style={{ background: 'var(--color-bg-chrome)' }}
+        className="flex h-14 min-h-14 shrink-0 box-border items-center justify-between gap-3 px-6"
+        style={{
+          background: 'var(--color-bg-app-header)',
+          boxShadow: 'var(--shadow-app-header)',
+        }}
       >
+        {displayTicketId ? (
+          <button
+            type="button"
+            className="focus-ring header-nav-link max-w-[min(100%,14rem)] truncate rounded-[var(--radius-md)] py-1 px-1.5 text-left"
+            title="Copy ticket ID to clipboard"
+            onClick={() => {
+              navigator.clipboard.writeText(displayTicketId).catch(() => {});
+            }}
+          >
+            <span
+              className="text-xs font-mono font-medium tabular-nums"
+              style={{
+                color: 'var(--color-text-app-header)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              #{displayTicketId.slice(0, 8)}
+            </span>
+          </button>
+        ) : (
+          <span className="min-w-0 flex-1" aria-hidden />
+        )}
         <button
           onClick={onClose}
           aria-label="Close ticket panel"
-          className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-primary)]"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="focus-ring header-nav-link shrink-0 p-1.5 rounded-[var(--radius-md)] transition-colors"
+          style={{ color: 'var(--color-text-app-header-muted)' }}
         >
           <X className="h-4.5 w-4.5" />
         </button>
@@ -305,17 +334,23 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
           style={{ background: 'var(--color-bg-drawer-canvas)' }}
         >
 
-          {/* ── Header + tab strip: single chrome surface; shadow only under tabs ─ */}
-          <div className="shrink-0 rounded-b-2xl z-[11]" style={{ background: 'var(--color-bg-chrome)' }}>
+          {/* ── Title / metadata / tabs on system surface (white in light mode); shadow on this shell so it follows rounded-b ─ */}
+          <div
+            className="shrink-0 rounded-b-[var(--radius-lg)] z-[11]"
+            style={{
+              background: 'var(--color-bg-surface)',
+              boxShadow: POLISH_THEME.drawerTabBarShadow,
+            }}
+          >
           <div className="px-6 pt-4 pb-3">
             {/* Primary: title (editable when canManage) */}
             {isEditingTitle ? (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   value={editTitleValue}
                   onChange={(e) => setEditTitleValue(e.target.value)}
-                  className="focus-ring text-lg font-bold leading-snug w-full px-3 py-2 rounded-[var(--radius-md)] border focus:outline-none"
+                  className="focus-ring text-lg font-bold leading-snug min-w-0 flex-1 basis-0 px-3 py-2 rounded-[var(--radius-md)] border focus:outline-none"
                   style={{
                     color: 'var(--color-text-primary)',
                     letterSpacing: '-0.01em',
@@ -327,7 +362,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   aria-label="Ticket title"
                   autoFocus
                 />
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 shrink-0 items-center">
                   <Button
                     size="sm"
                     onClick={() => {
@@ -377,75 +412,27 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </div>
             )}
 
-            {/* Secondary: ticket ID (prominent) + status badge — same row */}
-            <div className="flex flex-wrap items-center gap-2 mt-2">
-              <button
-                type="button"
-                className="flex items-center gap-1 group"
-                title="Copy ticket ID to clipboard"
-                onClick={() => {
-                  const id = ticket.id ?? displayTicketId ?? '';
-                  navigator.clipboard.writeText(id).catch(() => {});
-                }}
-              >
-                <span
-                  className="text-xs font-mono px-1.5 py-0.5 rounded"
-                  style={{
-                    color: POLISH_THEME.accent,
-                    background: 'rgba(52,120,196,0.1)',
-                    border: `1px solid rgba(52,120,196,0.2)`,
-                  }}
-                >
-                  #{ticket.id?.slice(0, 8) ?? displayTicketId?.slice(0, 8)}
-                </span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 16 16"
-                  fill="currentColor"
-                  className="h-3 w-3 opacity-0 group-hover:opacity-50 transition-opacity"
-                  style={{ color: POLISH_THEME.metaDim }}
-                >
-                  <path d="M10.5 2.5h-6A1.5 1.5 0 0 0 3 4v8a1.5 1.5 0 0 0 1.5 1.5h6A1.5 1.5 0 0 0 12 12V4a1.5 1.5 0 0 0-1.5-1.5Z"/>
-                  <path d="M12.5 1h-6A1.5 1.5 0 0 0 5 2.5V3h5.5A1.5 1.5 0 0 1 12 4.5V11h.5A1.5 1.5 0 0 0 14 9.5v-7A1.5 1.5 0 0 0 12.5 1Z"/>
-                </svg>
-              </button>
-              <StatusBadge status={ticket.status} />
-            </div>
-
-            {/* Tertiary: created (with year), due date (with year), requester, location */}
-            <p className="text-xs mt-2 flex items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>Created: {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
-              {ticket.requester?.displayName && <span>· {ticket.requester.displayName}</span>}
-              {ticket.studio?.id && ticket.studio?.name && (
-                <>
-                  <span>·</span>
-                  <LocationLink
-                    studioId={ticket.studio.id}
-                    studioName={ticket.studio.name}
-                    className="text-xs"
-                  />
-                </>
-              )}
-              {!ticket.studio?.id && ticket.market?.name && (
-                <span>· {ticket.market.name}</span>
-              )}
-            </p>
-            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>
-                Due Date:{' '}
-                {(() => {
-                  const raw = ticket.dueDate;
-                  if (!raw?.trim()) return '—';
-                  const d = parseISO(raw);
-                  if (Number.isNaN(d.getTime())) return '—';
-                  return format(d, 'MMM d, yyyy');
-                })()}
-              </span>
-            </p>
-
-            {/* Tags (v1: read-only in drawer) */}
-            {ticket.tags && ticket.tags.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5 mt-2 max-w-full">
+            {/* Created / requester / location + tags (tags align right on same row when space allows) */}
+            <div className="mt-2 flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <p className="text-xs flex min-w-0 items-center gap-1 flex-wrap" style={{ color: POLISH_THEME.metaSecondary }}>
+                <span>Created: {format(new Date(ticket.createdAt), 'MMM d, yyyy')}</span>
+                {ticket.requester?.displayName && <span>· {ticket.requester.displayName}</span>}
+                {ticket.studio?.id && ticket.studio?.name && (
+                  <>
+                    <span>·</span>
+                    <LocationLink
+                      studioId={ticket.studio.id}
+                      studioName={ticket.studio.name}
+                      className="text-xs"
+                    />
+                  </>
+                )}
+                {!ticket.studio?.id && ticket.market?.name && (
+                  <span>· {ticket.market.name}</span>
+                )}
+              </p>
+              {ticket.tags && ticket.tags.length > 0 && (
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
                   <span
                     className="text-[10px] font-semibold uppercase tracking-wide shrink-0"
                     style={{ color: POLISH_THEME.metaSecondary }}
@@ -467,85 +454,154 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   ))}
                 </div>
               )}
+            </div>
+            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
+              <span>
+                Due Date:{' '}
+                {(() => {
+                  const raw = ticket.dueDate;
+                  if (!raw?.trim()) return '—';
+                  const d = parseISO(raw);
+                  if (Number.isNaN(d.getTime())) return '—';
+                  return format(d, 'MMM d, yyyy');
+                })()}
+              </span>
+            </p>
 
-            {/* Quaternary: inline progress */}
-            {(() => {
-              const total = ticket.subtasks?.length ?? 0;
-              const done = ticket.subtasks?.filter(
-                (s: { status: string }) => s.status === 'DONE' || s.status === 'SKIPPED',
-              ).length ?? 0;
-              const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-              return total > 0 ? (
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="w-24 h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, background: POLISH_THEME.progressGreen }}
-                    />
-                  </div>
-                  <span className="text-xs tabular-nums" style={{ color: POLISH_THEME.metaDim }}>
-                    {done}/{total} subtasks
-                  </span>
-                </div>
-              ) : null;
-            })()}
+            {/* Status (left) + subtask progress — below due date */}
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              <StatusBadge status={ticket.status} />
+              {(() => {
+                const total = ticket.subtasks?.length ?? 0;
+                const done = ticket.subtasks?.filter(
+                  (s: { status: string }) => s.status === 'DONE' || s.status === 'SKIPPED',
+                ).length ?? 0;
+                const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                if (total === 0) return null;
+                return (
+                  <>
+                    <div className="w-24 h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${pct}%`, background: POLISH_THEME.progressGreen }}
+                      />
+                    </div>
+                    <span className="text-xs tabular-nums" style={{ color: POLISH_THEME.metaDim }}>
+                      {done}/{total} subtasks
+                    </span>
+                  </>
+                );
+              })()}
+            </div>
 
-            {/* Lease IQ (maintenance tickets with location) */}
-            {ticket.leaseIqResult != null && (
-              <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${POLISH_THEME.listBorder}` }}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Scale className="h-4 w-4" style={{ color: POLISH_THEME.metaDim }} />
-                  <span className="text-xs font-medium" style={{ color: POLISH_THEME.metaSecondary }}>Lease IQ</span>
-                  <span
-                    className="text-xs font-medium px-2 py-0.5 rounded"
+            {/* Lease IQ — premium card */}
+            {ticket.leaseIqResult != null && (() => {
+              const resp = ticket.leaseIqResult.suggestedResponsibility;
+              const accentColor =
+                resp === 'LIKELY_LANDLORD' ? '#16a34a'
+                : resp === 'LIKELY_TENANT' ? '#ca8a04'
+                : '#6b7280';
+              const badgeBg =
+                resp === 'LIKELY_LANDLORD' ? 'rgba(34,197,94,0.12)'
+                : resp === 'LIKELY_TENANT' ? 'rgba(234,179,8,0.12)'
+                : 'rgba(148,163,184,0.14)';
+              const badgeBorder =
+                resp === 'LIKELY_LANDLORD' ? 'rgba(34,197,94,0.28)'
+                : resp === 'LIKELY_TENANT' ? 'rgba(234,179,8,0.28)'
+                : 'rgba(148,163,184,0.22)';
+              return (
+                <div
+                  className="mt-3 rounded-[var(--radius-lg)] overflow-hidden"
+                  style={{
+                    background: 'var(--color-bg-surface)',
+                    border: `1px solid ${POLISH_THEME.listBorder}`,
+                    borderLeft: `3px solid ${POLISH_THEME.accent}`,
+                    boxShadow: POLISH_THEME.shadowCard,
+                  }}
+                >
+                  {/* Card header — tap row to expand/collapse (Re-evaluate is separate) */}
+                  <div
+                    className="flex items-center gap-2 px-3.5 py-2.5"
                     style={{
-                      background:
-                        ticket.leaseIqResult.suggestedResponsibility === 'LIKELY_LANDLORD'
-                          ? 'rgba(34,197,94,0.15)'
-                          : ticket.leaseIqResult.suggestedResponsibility === 'LIKELY_TENANT'
-                            ? 'rgba(234,179,8,0.15)'
-                            : 'rgba(148,163,184,0.2)',
-                      color: 'var(--color-text-primary)',
+                      background: 'var(--color-bg-drawer-canvas)',
+                      borderBottom: leaseIqExpanded ? `1px solid ${POLISH_THEME.innerBorder}` : 'none',
                     }}
                   >
-                    {ticket.leaseIqResult.suggestedResponsibility.replace(/_/g, ' ')}
-                  </span>
-                  <span className="text-xs" style={{ color: POLISH_THEME.metaDim }}>
-                    ({ticket.leaseIqResult.confidence} confidence)
-                  </span>
-                  {canManage && (
                     <button
                       type="button"
-                      onClick={() => reEvaluateLeaseIqMut.mutate()}
-                      disabled={reEvaluateLeaseIqMut.isPending}
-                      className="focus-ring text-xs flex items-center gap-1 px-2 py-1 rounded-[var(--radius-md)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                      style={{ color: POLISH_THEME.metaDim }}
+                      onClick={() => setLeaseIqExpanded((e) => !e)}
+                      aria-expanded={leaseIqExpanded}
+                      className="focus-ring flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left"
                     >
-                      {reEvaluateLeaseIqMut.isPending ? (
-                        <span className="animate-spin">↻</span>
-                      ) : (
-                        <RefreshCw className="h-3 w-3" />
-                      )}
-                      Re-evaluate
+                      <Scale className="h-3.5 w-3.5 shrink-0" style={{ color: POLISH_THEME.accent }} />
+                      <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-primary)' }}>
+                        Lease IQ
+                      </span>
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          background: badgeBg,
+                          color: accentColor,
+                          boxShadow: `inset 0 0 0 1px ${badgeBorder}`,
+                        }}
+                      >
+                        {resp.replace(/_/g, ' ')}
+                      </span>
+                      <span className="text-[10px]" style={{ color: 'var(--color-text-primary)' }}>
+                        {ticket.leaseIqResult.confidence} confidence
+                      </span>
                     </button>
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => reEvaluateLeaseIqMut.mutate()}
+                        disabled={reEvaluateLeaseIqMut.isPending}
+                        className="focus-ring flex shrink-0 items-center gap-1 text-[11px] px-2 py-0.5 rounded-[var(--radius-sm)] transition-colors hover:bg-black/5"
+                        style={{ color: 'var(--color-text-primary)' }}
+                      >
+                        {reEvaluateLeaseIqMut.isPending ? (
+                          <span className="animate-spin text-xs">↻</span>
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        Re-evaluate
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setLeaseIqExpanded((e) => !e)}
+                      aria-expanded={leaseIqExpanded}
+                      aria-label={leaseIqExpanded ? 'Collapse Lease IQ' : 'Expand Lease IQ'}
+                      className="focus-ring flex shrink-0 items-center justify-center rounded-[var(--radius-md)] p-1.5 text-[var(--color-text-primary)] transition-colors hover:bg-black/5"
+                    >
+                      {leaseIqExpanded ? (
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+                      )}
+                    </button>
+                  </div>
+                  {leaseIqExpanded && (
+                    <div className="px-3.5 py-3 space-y-2">
+                      <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
+                        {ticket.leaseIqResult.explanation}
+                        {ticket.leaseIqResult.internalResultState === 'NO_RULES_CONFIGURED' && (
+                          <span> Configure lease rules in Admin → Lease IQ for this location.</span>
+                        )}
+                      </p>
+                      {ticket.leaseIqResult.matchedTerms?.length > 0 && (
+                        <p className="text-[11px]" style={{ color: POLISH_THEME.metaDim }}>
+                          Matched: {ticket.leaseIqResult.matchedTerms.join(', ')}
+                        </p>
+                      )}
+                      <p className="text-[10px] italic" style={{ color: POLISH_THEME.metaDim }}>
+                        Not legal advice. Final responsibility determination is yours.
+                      </p>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
-                  {ticket.leaseIqResult.explanation}
-                  {ticket.leaseIqResult.internalResultState === 'NO_RULES_CONFIGURED' && (
-                    <span> Configure lease rules in Admin → Lease IQ for this location.</span>
-                  )}
-                </p>
-                {ticket.leaseIqResult.matchedTerms?.length > 0 && (
-                  <p className="text-xs mt-0.5" style={{ color: POLISH_THEME.metaDim }}>
-                    Matched terms: {ticket.leaseIqResult.matchedTerms.join(', ')}
-                  </p>
-                )}
-                <p className="text-[10px] mt-1 italic" style={{ color: POLISH_THEME.metaDim }}>
-                  This suggestion is not legal advice. Final responsibility determination is yours.
-                </p>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Dispatch Intelligence panel (maintenance tickets in drawer) */}
             <DispatchRecommendationPanel
@@ -561,15 +617,12 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               className="h-px w-full"
               style={{
                 background:
-                  'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--color-border-default) 32%, transparent) 14%, color-mix(in srgb, var(--color-border-default) 32%, transparent) 86%, transparent 100%)',
+                  'linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--color-border-default) 64%, transparent) 14%, color-mix(in srgb, var(--color-border-default) 64%, transparent) 86%, transparent 100%)',
               }}
             />
           </div>
 
-          <div
-            className="sticky top-0 z-[11] shrink-0 flex items-center justify-between px-5 pb-2 pt-1"
-            style={{ boxShadow: POLISH_THEME.drawerTabBarShadow }}
-          >
+          <div className="sticky top-0 z-[11] shrink-0 flex items-center justify-between px-5 pb-2 pt-1">
             <nav
               ref={tabNavRef}
               className="relative flex flex-wrap gap-1 py-2 min-w-0 flex-1"
@@ -653,7 +706,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
                 {/* Progress summary */}
                 <div
-                  className="rounded-[var(--radius-lg)] px-3.5 py-3 flex items-center justify-between"
+                  className="dashboard-card rounded-[var(--radius-lg)] px-3.5 py-3 flex items-center justify-between"
                   style={{
                     background: 'var(--color-bg-surface)',
                     border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -749,7 +802,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
                 {canManage && (
                   <div
-                    className="rounded-[var(--radius-lg)] p-3 flex gap-2"
+                    className="dashboard-card rounded-[var(--radius-lg)] p-3 flex gap-2"
                     style={{
                       background: 'var(--color-bg-surface)',
                       border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -782,7 +835,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               {/* ── Panel 2: Ticket Submission ───────────────────────────────── */}
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
                 <div
-                  className="rounded-[var(--radius-lg)] overflow-hidden"
+                  className="dashboard-card rounded-[var(--radius-lg)] overflow-hidden"
                   style={{
                     background: POLISH_THEME.listBg,
                     border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -794,7 +847,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                     className="flex items-center justify-between px-4 py-3"
                     style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}`, background: POLISH_THEME.tableHeaderBg }}
                   >
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.metaDim }}>
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
                       Submission data
                     </span>
                     {isEditingSubmission ? (
@@ -828,7 +881,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           setIsEditingSubmission(true);
                         }}
                         className="focus-ring p-1.5 rounded-[var(--radius-md)] transition-colors focus:outline-none hover:bg-[var(--color-bg-surface-raised)] hover:text-[var(--color-text-secondary)]"
-                        style={{ color: 'var(--color-text-muted)' }}
+                        style={{ color: 'var(--color-text-primary)' }}
                         aria-label="Edit submission data"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -887,31 +940,31 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
               {/* ── Panel 3: History ─────────────────────────────────────────── */}
               <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
-                {(historyRes?.data ?? []).length === 0 && (
+                {(historyRes?.data ?? []).length === 0 ? (
                   <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No history yet.</p>
-                )}
-                {(historyRes?.data ?? []).map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="flex gap-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)]"
-                    style={{
-                      borderBottom: `1px solid ${POLISH_THEME.listBorder}`,
-                    }}
-                  >
-                    <div className="mt-2 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--color-text-muted)' }} />
-                    <div>
-                      <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                        {entry.actor?.displayName ?? 'System'}
-                      </span>{' '}
-                      <span style={{ color: 'var(--color-text-secondary)' }}>
-                        {entry.action.toLowerCase().replace(/_/g, ' ')}
-                      </span>
-                      <span className="block text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
-                        {format(new Date(entry.createdAt), 'MMM d, yyyy · h:mm a')}
-                      </span>
-                    </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {(historyRes?.data ?? []).map((entry) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-start gap-3 rounded-[var(--radius-md)] px-3 py-2.5 text-sm transition-all duration-150 ease-out hover:bg-[var(--color-bg-surface)] hover:shadow-[0_2px_8px_rgba(0,0,0,0.07)] dark:hover:shadow-[0_2px_8px_rgba(0,0,0,0.35)]"
+                      >
+                        <div className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: 'var(--color-text-muted)' }} />
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+                            {entry.actor?.displayName ?? 'System'}
+                          </span>{' '}
+                          <span style={{ color: 'var(--color-text-secondary)' }}>
+                            {entry.action.toLowerCase().replace(/_/g, ' ')}
+                          </span>
+                          <span className="block text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>
+                            {format(new Date(entry.createdAt), 'MMM d, yyyy · h:mm a')}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
