@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { Bot, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { AiChatPanel } from '@/components/ai/AiChatPanel';
 import { useAuth } from '@/hooks/useAuth';
@@ -101,25 +101,24 @@ export default function AssistantPage() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
+    <div className="assistant-welcome-bg flex h-full min-h-0 flex-col">
       <Header title="AI Assistant" />
-      <div
-        className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-4"
-        style={{
-          backgroundImage: 'radial-gradient(ellipse 60% 50% at 50% 38%, rgba(var(--color-accent-rgb, 52,120,196), 0.05) 0%, transparent 70%)',
-        }}
-      >
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-4">
         {/* Nudge cluster up: flex centers the whole block, but the textarea sits in the lower half — offset so the input sits near the vertical middle of the viewport (below header). */}
         <div className="flex w-full max-w-[52rem] flex-col items-center -translate-y-[clamp(5.5rem,12vmin,9rem)]">
         {/* Greeting: bot mark inline before title */}
         <div className="flex flex-col items-center gap-2 mb-8 w-full max-w-[52rem]">
           <div className="flex flex-row flex-wrap items-center justify-center gap-3">
-            <div
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-              style={{ background: 'var(--color-accent)' }}
-              aria-hidden
-            >
-              <Bot className="h-5 w-5 text-white" strokeWidth={2} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center" aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element -- static Rovi mascot */}
+              <img
+                src="/Rovi.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 object-contain"
+                draggable={false}
+              />
             </div>
             <h1 className="text-2xl font-semibold text-center" style={{ color: 'var(--color-text-primary)' }}>
               Good {getGreeting()}, {firstName}
@@ -157,10 +156,11 @@ export default function AssistantPage() {
         {/* Input box — wider than capsule strip */}
         <form onSubmit={handleWelcomeFormSubmit} className="w-full max-w-[52rem]">
         <div
-          className="dashboard-card rounded-xl overflow-hidden flex flex-col focus-within:ring-2 focus-within:ring-[var(--color-accent)] transition-shadow"
+          className="rounded-xl overflow-hidden flex flex-col border-2 border-transparent focus-within:ring-2 focus-within:ring-[var(--color-accent)] transition-[box-shadow] duration-200"
           style={{
-            background: 'var(--color-bg-surface)',
-            border: '1px solid var(--color-border-default)',
+            background:
+              'linear-gradient(var(--color-bg-surface), var(--color-bg-surface)) padding-box, linear-gradient(118deg, var(--color-accent) 0%, #6366f1 48%, #8b5cf6 100%) border-box',
+            backgroundRepeat: 'no-repeat',
             boxShadow: 'var(--shadow-sm)',
           }}
         >

@@ -11,9 +11,14 @@ import { locationsApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
 import type { TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import {
+  TicketTableRow,
+  ticketRequesterEmail,
+  ticketRequesterPrimaryLine,
+} from '@/components/tickets/TicketRow';
 import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
+import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
@@ -184,6 +189,22 @@ export default function LocationProfilePage() {
       await addTagMut.mutateAsync({ ticketId, label });
     },
     [addTagMut],
+  );
+
+  const removeTagMut = useMutation({
+    mutationFn: ({ ticketId, tagId }: { ticketId: string; tagId: string }) =>
+      ticketsApi.removeTag(ticketId, tagId),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['location-tickets', studioId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleRemoveTag = useCallback(
+    async (ticketId: string, tagId: string) => {
+      await removeTagMut.mutateAsync({ ticketId, tagId });
+    },
+    [removeTagMut],
   );
 
   const operational = profile?.profile?.public;
@@ -464,13 +485,21 @@ export default function LocationProfilePage() {
                                 tags={ticket.tags ?? []}
                                 canAddTag={canAddTag}
                                 onAddTag={canAddTag ? handleAddTag : undefined}
+                                onRemoveTag={canAddTag ? handleRemoveTag : undefined}
+                                removingTagId={
+                                  removeTagMut.isPending &&
+                                  removeTagMut.variables?.ticketId === ticket.id
+                                    ? removeTagMut.variables.tagId
+                                    : null
+                                }
                                 isAddingTag={
                                   addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
                                 }
                                 commentCount={ticket._count?.comments ?? 0}
                                 completedSubtasks={completedSubtasks}
                                 totalSubtasks={totalSubtasks}
-                                requesterDisplayName={ticket.requester?.displayName ?? '—'}
+                                requesterDisplayName={ticketRequesterPrimaryLine(ticket.requester)}
+                                requesterEmail={ticketRequesterEmail(ticket.requester)}
                                 isSelected={selectedTicketId === ticket.id}
                                 showIdColumn={showTicketIdColumn}
                                 onSelect={handleSelect}
@@ -481,32 +510,14 @@ export default function LocationProfilePage() {
                       </table>
                     </TicketFeedSelectionRail>
                     {totalPages > 1 && (
-                      <div
-                        className="flex items-center justify-between px-4 py-3"
-                        style={{ borderTop: '1px solid var(--color-border-default)' }}
-                      >
-                        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                          Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, ticketsTotal)} of {ticketsTotal}
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={page <= 1 || ticketsFetching}
-                            onClick={() => setPage((p) => p - 1)}
-                          >
-                            Previous
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={page >= totalPages || ticketsFetching}
-                            onClick={() => setPage((p) => p + 1)}
-                          >
-                            Next
-                          </Button>
-                        </div>
-                      </div>
+                      <FeedPaginationBar
+                        page={page}
+                        pageSize={PAGE_SIZE}
+                        total={ticketsTotal}
+                        isBusy={ticketsFetching}
+                        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+                        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      />
                     )}
                   </>
                 )}

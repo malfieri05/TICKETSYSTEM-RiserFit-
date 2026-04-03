@@ -11,9 +11,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import {
+  TicketTableRow,
+  ticketRequesterEmail,
+  ticketRequesterPrimaryLine,
+} from '@/components/tickets/TicketRow';
 import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
@@ -201,19 +206,81 @@ export default function TicketsPage() {
   const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
 
   const addTagMut = useMutation({
-    mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
-      ticketsApi.addTag(ticketId, { label }),
-    onSuccess: (_, variables) => {
+    mutationFn: ({ ticketId, label, color }: { ticketId: string; label: string; color: string }) =>
+      ticketsApi.addTag(ticketId, { label, color }),
+    onSuccess: (data, variables) => {
+      // Refresh the individual ticket record (drawer / panel).
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      invalidateTicketLists(qc);
+
+      // Patch the new tag directly into every cached list page so the feed row
+      // updates immediately — without re-fetching or re-sorting the list.
+      qc.setQueriesData<{ tickets: import('@/types').TicketListItem[]; total: number }>(
+        { queryKey: ['tickets'], exact: false },
+        (old) => {
+          if (!old?.tickets) return old;
+          return {
+            ...old,
+            tickets: old.tickets.map((t) =>
+              t.id !== variables.ticketId
+                ? t
+                : {
+                    ...t,
+                    tags: [
+                      ...(t.tags ?? []),
+                      {
+                        id: data.data.tag.id,
+                        name: data.data.tag.name,
+                        color: data.data.tag.color ?? variables.color,
+                        createdAt: new Date().toISOString(),
+                        createdBy: { id: '', name: '' },
+                      },
+                    ],
+                  },
+            ),
+          };
+        },
+      );
     },
   });
 
   const handleAddTag = useCallback(
-    async (ticketId: string, label: string) => {
-      await addTagMut.mutateAsync({ ticketId, label });
+    async (ticketId: string, label: string, color: string) => {
+      await addTagMut.mutateAsync({ ticketId, label, color });
     },
     [addTagMut],
+  );
+
+  const removeTagMut = useMutation({
+    mutationFn: ({ ticketId, tagId }: { ticketId: string; tagId: string }) =>
+      ticketsApi.removeTag(ticketId, tagId),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.setQueriesData<{ tickets: import('@/types').TicketListItem[]; total: number }>(
+        { queryKey: ['tickets'], exact: false },
+        (old) => {
+          if (!old?.tickets) return old;
+          return {
+            ...old,
+            tickets: old.tickets.map((t) =>
+              t.id !== variables.ticketId
+                ? t
+                : {
+                    ...t,
+                    tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
+                  },
+            ),
+          };
+        },
+      );
+      invalidateTicketLists(qc);
+    },
+  });
+
+  const handleRemoveTag = useCallback(
+    async (ticketId: string, tagId: string) => {
+      await removeTagMut.mutateAsync({ ticketId, tagId });
+    },
+    [removeTagMut],
   );
 
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
@@ -333,7 +400,8 @@ export default function TicketsPage() {
                   placeholder="Search tickets or paste ID..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-64 pl-9 shadow-[var(--shadow-panel)]"
+                  elevated
+                  className="w-64 pl-9"
                 />
               </div>
               <ComboBox
@@ -341,6 +409,7 @@ export default function TicketsPage() {
                 options={(taxonomy?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))}
                 value={filters.departmentId ?? ''}
                 onChange={(v) => updateFilter('departmentId', v)}
+                elevated
                 className="w-48"
               />
               <ComboBox
@@ -348,6 +417,7 @@ export default function TicketsPage() {
                 options={supportVsMaintenanceOptions}
                 value={filters.ticketClass ?? ''}
                 onChange={(v) => updateFilter('ticketClass', v)}
+                elevated
                 className="w-48"
               />
               <ComboBox
@@ -355,6 +425,7 @@ export default function TicketsPage() {
                 options={typeOptionsForClass.map((o) => ({ value: o.value, label: o.label }))}
                 value={currentTypeValue}
                 onChange={handleTypeChange}
+                elevated
                 className="w-52"
               />
               <ComboBox
@@ -362,6 +433,7 @@ export default function TicketsPage() {
                 options={locationOptions.map((o) => ({ value: `${o.key === 'state' ? 'state' : 'studio'}-${o.value}`, label: o.label }))}
                 value={currentLocationValue}
                 onChange={handleLocationChange}
+                elevated
                 className="w-48"
               />
               <div className="flex items-center gap-2">
@@ -369,7 +441,7 @@ export default function TicketsPage() {
                   type="date"
                   value={filters.createdAfter ? filters.createdAfter.slice(0, 10) : ''}
                   onChange={(e) => setDateFilter('createdAfter', e.target.value)}
-                  className="rounded-lg border px-3 py-2 text-sm"
+                  className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
                   style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                   title="From date"
                 />
@@ -378,7 +450,7 @@ export default function TicketsPage() {
                   type="date"
                   value={filters.createdBefore ? filters.createdBefore.slice(0, 10) : ''}
                   onChange={(e) => setDateFilter('createdBefore', e.target.value)}
-                  className="rounded-lg border px-3 py-2 text-sm"
+                  className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
                   style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
                   title="To date"
                 />
@@ -420,13 +492,21 @@ export default function TicketsPage() {
                           tags={ticket.tags ?? []}
                           canAddTag={canAddTag}
                           onAddTag={canAddTag ? handleAddTag : undefined}
+                          onRemoveTag={canAddTag ? handleRemoveTag : undefined}
+                          removingTagId={
+                            removeTagMut.isPending &&
+                            removeTagMut.variables?.ticketId === ticket.id
+                              ? removeTagMut.variables.tagId
+                              : null
+                          }
                           isAddingTag={
                             addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
                           }
                           commentCount={ticket._count?.comments ?? 0}
                           completedSubtasks={completedSubtasks}
                           totalSubtasks={totalSubtasks}
-                          requesterDisplayName={ticket.requester.displayName || ticket.requester.email || '—'}
+                          requesterDisplayName={ticketRequesterPrimaryLine(ticket.requester)}
+                          requesterEmail={ticketRequesterEmail(ticket.requester)}
                           isSelected={selectedId === ticket.id}
                           showIdColumn={showTicketIdColumn}
                           onSelect={handleSelect}
@@ -468,32 +548,15 @@ export default function TicketsPage() {
           }
           pagination={
             totalPages > 1 ? (
-              <div
-                className="flex items-center justify-between px-4 py-3 pr-24"
-                style={{ borderTop: '1px solid var(--color-border-default)' }}
-              >
-                <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={(filters.page ?? 1) <= 1 || isFetching}
-                    onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={(filters.page ?? 1) >= totalPages || isFetching}
-                    onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <FeedPaginationBar
+                className="pr-24"
+                page={filters.page ?? 1}
+                pageSize={PAGE_SIZE}
+                total={total}
+                isBusy={isFetching}
+                onPrev={() => setFilters((f) => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
+                onNext={() => setFilters((f) => ({ ...f, page: Math.min(totalPages, (f.page ?? 1) + 1) }))}
+              />
             ) : null
           }
           initialSkeleton={

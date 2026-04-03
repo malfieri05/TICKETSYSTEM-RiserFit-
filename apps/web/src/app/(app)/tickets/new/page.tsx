@@ -267,36 +267,11 @@ export default function NewTicketPage() {
           const failedUploads: string[] = [];
           for (const { file } of stagedFiles) {
             try {
-              const { data } = await attachmentsApi.requestUploadUrl(ticketId, {
-                filename: file.name,
-                mimeType: file.type || 'application/octet-stream',
-                sizeBytes: file.size,
-              });
-              try {
-                await attachmentsApi.uploadToS3(data.uploadUrl, file);
-              } catch (err) {
-                failedUploads.push(file.name);
-                // eslint-disable-next-line no-console
-                console.error('Attachment upload failed at s3-put stage:', file.name, err);
-                continue;
-              }
-              try {
-                await attachmentsApi.confirmUpload(ticketId, {
-                  s3Key: data.s3Key,
-                  filename: file.name,
-                  mimeType: file.type || 'application/octet-stream',
-                  sizeBytes: file.size,
-                });
-              } catch (err) {
-                failedUploads.push(file.name);
-                // eslint-disable-next-line no-console
-                console.error('Attachment upload failed at confirm stage:', file.name, err);
-              }
+              await attachmentsApi.upload(ticketId, file);
             } catch (err) {
               failedUploads.push(file.name);
-              // Non-fatal: log for debugging while keeping ticket creation independent
               // eslint-disable-next-line no-console
-              console.error('Attachment upload failed at upload-url stage:', file.name, err);
+              console.error('Attachment upload failed:', file.name, err);
             }
           }
           if (failedUploads.length > 0) {

@@ -4,10 +4,12 @@ import { InputHTMLAttributes, forwardRef } from 'react';
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Raised shadow for filter bars (search, etc.) */
+  elevated?: boolean;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className, id, ...props }, ref) => {
+  ({ label, error, elevated, className, id, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -22,6 +24,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             'focus-ring block h-9 w-full rounded-[var(--radius-md)] px-3 text-sm placeholder:text-[var(--color-text-muted)] placeholder:opacity-100',
             'transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
             'disabled:opacity-50 disabled:cursor-not-allowed',
+            elevated && 'filter-elevated-shadow',
             error && 'ring-1 ring-red-500',
             className,
           )}
@@ -38,10 +41,11 @@ Input.displayName = 'Input';
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
   error?: string;
+  elevated?: boolean;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, className, id, children, ...props }, ref) => {
+  ({ label, error, elevated, className, id, children, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -56,6 +60,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             'focus-ring block h-9 w-full rounded-[var(--radius-md)] px-3 text-sm',
             'transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
             'disabled:opacity-50 disabled:cursor-not-allowed',
+            elevated && 'filter-elevated-shadow',
             error && 'ring-1 ring-red-500',
             className,
           )}

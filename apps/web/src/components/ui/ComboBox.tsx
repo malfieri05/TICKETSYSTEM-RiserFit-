@@ -21,6 +21,10 @@ export interface ComboBoxProps {
   error?: string;
   /** Optional: allow clearing selection (show empty option). Default true when placeholder is set. */
   clearable?: boolean;
+  /** Raised shadow for filter bars */
+  elevated?: boolean;
+  /** When open, close the list on any scroll outside this control (e.g. page scroll). */
+  closeOnScroll?: boolean;
 }
 
 /**
@@ -38,6 +42,8 @@ export function ComboBox({
   disabled = false,
   error,
   clearable = true,
+  elevated = false,
+  closeOnScroll = false,
 }: ComboBoxProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -96,6 +102,18 @@ export function ComboBox({
   }, [listItems.length, isOpen]);
 
   useEffect(() => {
+    if (!isOpen || !closeOnScroll) return;
+    const onScroll = (e: Event) => {
+      const target = e.target;
+      if (target instanceof Node && containerRef.current?.contains(target)) return;
+      setIsOpen(false);
+      setFilter('');
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  }, [isOpen, closeOnScroll]);
+
+  useEffect(() => {
     if (!isOpen || !listRef.current) return;
     const el = listRef.current.querySelector(`[data-index="${highlightIndex}"]`);
     el?.scrollIntoView({ block: 'nearest' });
@@ -143,6 +161,7 @@ export function ComboBox({
         className={cn(
           'flex items-center rounded-lg border text-sm min-h-[38px]',
           'focus-within:ring-1 focus-within:ring-[var(--color-accent)]',
+          elevated && 'filter-elevated-shadow',
           disabled && 'opacity-50 cursor-not-allowed',
           error && 'ring-1 ring-red-500',
         )}

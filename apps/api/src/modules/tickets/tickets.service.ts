@@ -64,7 +64,7 @@ const TAXONOMY_SELECT = {
 
 type TicketTagRow = {
   createdAt: Date;
-  tag: { id: string; name: string };
+  tag: { id: string; name: string; color: string | null };
   createdBy: { id: string; name: string };
 };
 
@@ -73,6 +73,7 @@ function mapTicketTagsToResponse(
 ): {
   id: string;
   name: string;
+  color: string | null;
   createdAt: string;
   createdBy: { id: string; name: string };
 }[] {
@@ -80,6 +81,7 @@ function mapTicketTagsToResponse(
   return rows.map((r) => ({
     id: r.tag.id,
     name: r.tag.name,
+    color: r.tag.color ?? null,
     createdAt: r.createdAt.toISOString(),
     createdBy: { id: r.createdBy.id, name: r.createdBy.name },
   }));
@@ -91,7 +93,7 @@ const TICKET_TAGS_LIST_SELECT = {
   select: {
     createdAt: true,
     createdBy: { select: { id: true, name: true } },
-    tag: { select: { id: true, name: true } },
+    tag: { select: { id: true, name: true, color: true } },
   },
 } as const;
 
@@ -1674,7 +1676,7 @@ export class TicketsService {
       if (!tagRow) {
         try {
           tagRow = await tx.tag.create({
-            data: { name: labelNormalized },
+            data: { name: labelNormalized, color: dto.color ?? 'orange' },
           });
         } catch (e) {
           if (
@@ -1753,9 +1755,88 @@ export class TicketsService {
     this.logger.log(`Tag added: ticket=${ticketId} tag=${createdTagId}`);
 
     return {
-      tag: { id: createdTagId, name: labelNormalized },
+      tag: { id: createdTagId, name: labelNormalized, color: dto.color ?? 'orange' },
       createdAt: createdAt.toISOString(),
       createdBy: { id: actor.id, name: authorName },
     };
+  }
+
+  async removeTag(ticketId: string, tagId: string, actor: RequestUser) {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: {
+        id: true,
+        requesterId: true,
+        ownerId: true,
+        studioId: true,
+        department: { select: { code: true } },
+        owner: { select: { teamId: true, team: { select: { name: true } } } },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found',
+      });
+    }
+
+    const viewDecision = this.policy.evaluate(TICKET_VIEW, actor, ticket);
+    if (!viewDecision.allowed) {
+      throw new NotFoundException({
+        code: 'TICKET_NOT_FOUND',
+        message: 'Ticket not found',
+      });
+    }
+
+    const tagDecision = this.policy.evaluate(TICKET_ADD_TAG, actor, ticket);
+    if (!tagDecision.allowed) {
+      throw new ForbiddenException({
+        code: 'FORBIDDEN_TAG_CREATION',
+        message: 'You do not have permission to remove tags from this ticket',
+      });
+    }
+
+    const junction = await this.prisma.ticketTag.findUnique({
+      where: {
+        ticketId_tagId: { ticketId, tagId },
+      },
+      select: {
+        tag: { select: { name: true } },
+      },
+    });
+
+    if (!junction) {
+      throw new NotFoundException({
+        code: 'TAG_NOT_ON_TICKET',
+        message: 'Tag is not on this ticket',
+      });
+    }
+
+    const tagName = junction.tag.name;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ticketTag.delete({
+        where: { ticketId_tagId: { ticketId, tagId } },
+      });
+      await tx.ticket.update({
+        where: { id: ticketId },
+        data: { updatedAt: new Date() },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: AuditAction.TICKET_TAG_REMOVED,
+          entityType: 'ticket_tag',
+          entityId: `${ticketId}:${tagId}`,
+          ticketId,
+          oldValues: { tagId, tagName },
+        },
+      });
+    });
+
+    this.logger.log(`Tag removed: ticket=${ticketId} tag=${tagId}`);
+
+    return { ok: true as const };
   }
 }

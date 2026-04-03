@@ -1,5 +1,8 @@
+'use client';
+
 import { cn } from '@/lib/utils';
 import { Clock, AlertTriangle, CheckCircle } from 'lucide-react';
+import { InstantTooltip } from '@/components/tickets/TicketTagCapsule';
 
 export type SlaStatusValue = 'OK' | 'AT_RISK' | 'BREACHED' | 'RESOLVED';
 
@@ -52,17 +55,20 @@ export function SlaBadge({ sla, showTime = false, className }: SlaBadgeProps) {
     ? CheckCircle
     : Clock;
 
+  const tip = `SLA: ${sla.elapsedHours.toFixed(1)}h elapsed of ${sla.targetHours}h target`;
+
   return (
-    <span
-      className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', className)}
-      style={config.style}
-      title={`SLA: ${sla.elapsedHours.toFixed(1)}h elapsed of ${sla.targetHours}h target`}
-    >
-      <Icon className="h-3 w-3 shrink-0" />
-      {showTime && sla.status !== 'RESOLVED'
-        ? formatHours(sla.remainingHours)
-        : config.label}
-    </span>
+    <InstantTooltip content={tip} compact className="inline-flex">
+      <span
+        className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', className)}
+        style={config.style}
+      >
+        <Icon className="h-3 w-3 shrink-0" />
+        {showTime && sla.status !== 'RESOLVED'
+          ? formatHours(sla.remainingHours)
+          : config.label}
+      </span>
+    </InstantTooltip>
   );
 }
 

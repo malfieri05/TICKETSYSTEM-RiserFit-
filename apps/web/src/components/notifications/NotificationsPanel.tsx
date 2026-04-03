@@ -10,6 +10,13 @@ import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/Button';
 import { POLISH_THEME } from '@/lib/polish';
+import {
+  useSidebarCollapse,
+  SIDEBAR_COLLAPSED_WIDTH_PX,
+  SIDEBAR_EXPANDED_WIDTH_PX,
+  SIDEBAR_RAIL_TRANSITION,
+  SIDEBAR_RAIL_TRANSITION_MS,
+} from '@/contexts/SidebarCollapseContext';
 
 const listParams = { limit: 50 };
 
@@ -21,7 +28,9 @@ interface NotificationsPanelProps {
 export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { collapsed } = useSidebarCollapse();
   const [tab, setTab] = useState<'unread' | 'read'>('unread');
+  const leftInset = collapsed ? SIDEBAR_COLLAPSED_WIDTH_PX : SIDEBAR_EXPANDED_WIDTH_PX;
 
   const { data, isLoading } = useNotifications(listParams, { enabled: open });
   const notifications = data?.data?.data ?? [];
@@ -81,15 +90,20 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
       {open && (
         <button
           type="button"
-          className="fixed top-0 right-0 bottom-0 left-[260px] z-[39]"
-          style={{ background: 'rgba(0,0,0,0.35)' }}
+          className="fixed top-0 right-0 bottom-0 z-[39]"
+          style={{
+            background: 'rgba(0,0,0,0.35)',
+            left: leftInset,
+            transition: `left ${SIDEBAR_RAIL_TRANSITION}`,
+          }}
           onClick={onClose}
           aria-label="Close notifications panel"
         />
       )}
       <div
-        className="fixed top-0 left-[260px] z-40 h-full flex flex-col"
+        className="fixed top-0 z-40 flex h-full flex-col"
       style={{
+        left: leftInset,
         width: 'min(400px, 90vw)',
         background: 'var(--color-bg-surface-raised)',
         borderRight: `1px solid ${POLISH_THEME.listBorder}`,
@@ -98,8 +112,8 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
         visibility: open ? 'visible' : 'hidden',
         pointerEvents: open ? 'auto' : 'none',
         transition: open
-          ? 'transform 300ms ease-out, visibility 0s linear 0s'
-          : 'transform 300ms ease-out, visibility 0s linear 300ms',
+          ? `transform ${SIDEBAR_RAIL_TRANSITION}, visibility 0s linear 0s, left ${SIDEBAR_RAIL_TRANSITION}`
+          : `transform ${SIDEBAR_RAIL_TRANSITION}, visibility 0s linear ${SIDEBAR_RAIL_TRANSITION_MS}ms, left ${SIDEBAR_RAIL_TRANSITION}`,
       }}
       aria-hidden={!open}
     >

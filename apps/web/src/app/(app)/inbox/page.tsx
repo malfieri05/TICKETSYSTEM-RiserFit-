@@ -10,14 +10,17 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import {
+  TicketTableRow,
+  ticketRequesterEmail,
+  ticketRequesterPrimaryLine,
+} from '@/components/tickets/TicketRow';
 import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
-import { Button } from '@/components/ui/Button';
-
 const STORAGE_KEY = 'inbox-topics-collapsed';
 const PAGE_SIZE = 20;
 
@@ -64,6 +67,21 @@ export default function InboxPage() {
     [addTagMut],
   );
 
+  const removeTagMut = useMutation({
+    mutationFn: ({ ticketId, tagId }: { ticketId: string; tagId: string }) =>
+      ticketsApi.removeTag(ticketId, tagId),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleRemoveTag = useCallback(
+    async (ticketId: string, tagId: string) => {
+      await removeTagMut.mutateAsync({ ticketId, tagId });
+    },
+    [removeTagMut],
+  );
+
   const canSeeFolders = user?.role === 'DEPARTMENT_USER' || user?.role === 'ADMIN';
   const { data: foldersData } = useQuery({
     queryKey: ['inbox-folders'],
@@ -92,32 +110,14 @@ export default function InboxPage() {
 
   const pagination =
     totalPages > 1 ? (
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderTop: `1px solid ${POLISH_THEME.listBorder}` }}
-      >
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Page {page} of {totalPages} ({total} total)
-        </p>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page <= 1 || isFetching}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages || isFetching}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      <FeedPaginationBar
+        page={page}
+        pageSize={PAGE_SIZE}
+        total={total}
+        isBusy={isFetching}
+        onPrev={() => setPage((p) => Math.max(1, p - 1))}
+        onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+      />
     ) : null;
 
   const emptyState = (
@@ -153,13 +153,21 @@ export default function InboxPage() {
                 tags={ticket.tags ?? []}
                 canAddTag={canAddTag}
                 onAddTag={canAddTag ? handleAddTag : undefined}
+                onRemoveTag={canAddTag ? handleRemoveTag : undefined}
+                removingTagId={
+                  removeTagMut.isPending &&
+                  removeTagMut.variables?.ticketId === ticket.id
+                    ? removeTagMut.variables.tagId
+                    : null
+                }
                 isAddingTag={
                   addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
                 }
                 commentCount={ticket._count?.comments ?? 0}
                 completedSubtasks={completedSubtasks}
                 totalSubtasks={totalSubtasks}
-                requesterDisplayName={ticket.requester.displayName || ticket.requester.email || '—'}
+                requesterDisplayName={ticketRequesterPrimaryLine(ticket.requester)}
+                requesterEmail={ticketRequesterEmail(ticket.requester)}
                 isSelected={selectedId === ticket.id}
                 showIdColumn={showTicketIdColumn}
                 onSelect={handleSelect}

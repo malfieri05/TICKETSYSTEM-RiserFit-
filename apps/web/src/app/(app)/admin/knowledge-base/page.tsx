@@ -1,17 +1,18 @@
 'use client';
 
-import { useState, useRef, FormEvent, useCallback, useEffect } from 'react';
+import { useState, useRef, FormEvent, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
-import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw, Info } from 'lucide-react';
+import { BookOpen, Upload, Trash2, Eye, EyeOff, FileText, Plus, Loader2, CheckCircle, AlertCircle, X, RefreshCw, Globe } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { aiApi } from '@/lib/api';
+import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
 
-type IngestMode = 'text' | 'file' | 'pdf';
+type IngestMode = 'text' | 'file' | 'pdf' | 'url';
 
 interface DocRow {
   id: string;
@@ -58,71 +59,13 @@ function SourceTypeBadge({ type }: { type: string }) {
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
-const INGEST_MODE_ORDER = ['pdf', 'text', 'file'] as const satisfies readonly IngestMode[];
+const INGEST_MODE_ORDER = ['pdf', 'text', 'file', 'url'] as const satisfies readonly IngestMode[];
 
 function ingestModeLabel(m: IngestMode): string {
   if (m === 'text') return 'Paste Text';
   if (m === 'pdf') return 'Handbook PDF';
+  if (m === 'url') return 'Website URL';
   return 'Upload File';
-}
-
-function KnowledgeBaseAboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="knowledge-base-about-title"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl p-6 shadow-xl"
-        style={{
-          background: 'var(--color-bg-surface-raised)',
-          border: '1px solid var(--color-border-default)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 id="knowledge-base-about-title" className="text-base font-semibold pr-2" style={{ color: 'var(--color-text-primary)' }}>
-            What is &apos;Knowledge base&apos;?
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-[var(--color-bg-surface)]"
-            style={{ color: 'var(--color-text-muted)' }}
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="space-y-3 text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
-          <ul className="list-disc space-y-2 pl-4">
-            <li>
-              Upload any company documents or information that you want the &apos;AI Assistant&apos; to have access to.
-            </li>
-          </ul>
-          <p>
-            This allows the bot to answer any questions from users on company specific content.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function KnowledgeBasePage() {
@@ -132,6 +75,7 @@ export default function KnowledgeBasePage() {
   const [textContent, setTextContent] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [urlInput, setUrlInput] = useState('');
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
@@ -190,12 +134,16 @@ export default function KnowledgeBasePage() {
     if (mode === 'text' && !textContent.trim()) return;
     if (mode === 'file' && !file) return;
     if (mode === 'pdf' && !pdfFile) return;
+    if (mode === 'url' && !urlInput.trim()) return;
 
     setIngesting(true);
     setIngestResult(null);
 
     try {
-      if (mode === 'text') {
+      if (mode === 'url') {
+        const res = await aiApi.ingestUrl(title.trim(), urlInput.trim());
+        setIngestResult({ ok: true, message: `✓ Ingested "${title}" from URL — ${res.data.chunksCreated} chunks created` });
+      } else if (mode === 'text') {
         const res = await aiApi.ingestText(title.trim(), textContent.trim());
         setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       } else if (mode === 'pdf') {
@@ -209,7 +157,7 @@ export default function KnowledgeBasePage() {
         const res = await aiApi.ingestFile(title.trim(), file!);
         setIngestResult({ ok: true, message: `✓ Ingested "${title}" — ${res.data.chunksCreated} chunks created` });
       }
-      setTitle(''); setTextContent(''); setFile(null); setPdfFile(null);
+      setTitle(''); setTextContent(''); setUrlInput(''); setFile(null); setPdfFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (pdfInputRef.current) pdfInputRef.current.value = '';
       qc.invalidateQueries({ queryKey: ['ai-documents'] });
@@ -236,11 +184,13 @@ export default function KnowledgeBasePage() {
 
   const canIngest =
     title.trim().length > 0 &&
-    (mode === 'text'
-      ? textContent.trim().length > 0
-      : mode === 'pdf'
-        ? pdfFile != null
-        : file != null);
+    (mode === 'url'
+      ? urlInput.trim().length > 0
+      : mode === 'text'
+        ? textContent.trim().length > 0
+        : mode === 'pdf'
+          ? pdfFile != null
+          : file != null);
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
@@ -253,19 +203,26 @@ export default function KnowledgeBasePage() {
             >
               Knowledge Base
             </h1>
-            <button
-              type="button"
+            <HeaderInfoButton
               onClick={() => setKnowledgeBaseInfoOpen(true)}
-              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-app-header-info-hover-bg)] hover:text-[var(--color-app-header-info-hover-fg)]"
-              style={{ color: 'var(--color-accent)' }}
-              aria-label="What is Knowledge base? Opens an explanation."
-            >
-              <Info className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
-            </button>
+              ariaLabel="What is Knowledge base? Opens an explanation."
+            />
           </div>
         }
       />
-      <KnowledgeBaseAboutModal open={knowledgeBaseInfoOpen} onClose={closeKnowledgeBaseInfo} />
+      <InfoExplainerModal
+        open={knowledgeBaseInfoOpen}
+        onClose={closeKnowledgeBaseInfo}
+        titleId="knowledge-base-about-title"
+        title={<>What is &apos;Knowledge base&apos;?</>}
+      >
+        <ul className="list-disc space-y-2 pl-4">
+          <li>
+            Upload any company documents or information that you want the &apos;AI Assistant&apos; to have access to.
+          </li>
+        </ul>
+        <p>This allows the bot to answer any questions from users on company specific content.</p>
+      </InfoExplainerModal>
 
       <div className="flex-1 p-6 space-y-6 overflow-auto">
 
@@ -303,7 +260,41 @@ export default function KnowledgeBasePage() {
               />
             </div>
 
-            {mode === 'text' ? (
+            {mode === 'url' ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Website URL</label>
+                  <div className="relative max-w-lg">
+                    <Globe
+                      className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
+                      style={{ color: 'var(--color-text-muted)' }}
+                    />
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="https://example.com/page"
+                      className="w-full rounded-lg border pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+                      style={{
+                        background: 'var(--color-bg-surface)',
+                        border: '1px solid var(--color-border-default)',
+                        color: 'var(--color-text-primary)',
+                      }}
+                      required
+                    />
+                  </div>
+                </div>
+                <div
+                  className="flex w-full max-w-lg items-start gap-2 rounded-lg px-3 py-2.5 text-xs"
+                  style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', color: 'var(--color-text-secondary)' }}
+                >
+                  <Globe className="h-3.5 w-3.5 mt-0.5 shrink-0" style={{ color: '#3b82f6' }} />
+                  <span>
+                    The system will fetch the page, strip navigation and ads, extract the readable text content, and index it into the knowledge base — just like a pasted document. The bot does not need live web access.
+                  </span>
+                </div>
+              </div>
+            ) : mode === 'text' ? (
               <div>
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">Content</label>
                 <textarea
@@ -406,7 +397,11 @@ export default function KnowledgeBasePage() {
             )}
 
             <Button type="submit" disabled={ingesting || !canIngest}>
-              {ingesting ? <><Loader2 className="h-4 w-4 animate-spin" />Processing…</> : <><Upload className="h-4 w-4" />Ingest Document</>}
+              {ingesting
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Processing…</>
+                : mode === 'url'
+                  ? <><Globe className="h-4 w-4" />Fetch &amp; Ingest URL</>
+                  : <><Upload className="h-4 w-4" />Ingest Document</>}
             </Button>
           </form>
         </div>

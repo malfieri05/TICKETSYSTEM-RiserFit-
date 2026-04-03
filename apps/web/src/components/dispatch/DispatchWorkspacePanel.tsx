@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { StatusBadge } from '@/components/ui/Badge';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { CreateDispatchGroupModal } from './CreateDispatchGroupModal';
+import { ticketRequesterPrimaryLine } from '@/components/tickets/TicketRow';
 
 const DEFAULT_RADIUS = 10;
 const MIN_RADIUS = 1;
@@ -29,8 +30,7 @@ function normalizeFormResponses(
 
 /** Uniform ticket summary for Grouping Workspace: title, location, #, status, date, requested by, LeaseIQ. */
 function WorkspaceTicketSummary({ ticket }: { ticket: any }) {
-  const requesterName =
-    ticket.requester?.displayName ?? ticket.requester?.name ?? (ticket.requester as { displayName?: string } | undefined)?.displayName ?? '—';
+  const requesterName = ticketRequesterPrimaryLine(ticket.requester);
   const leaseIq = ticket.leaseIqResult;
 
   return (

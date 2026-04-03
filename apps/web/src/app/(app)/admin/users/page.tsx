@@ -391,6 +391,7 @@ export default function AdminUsersPage() {
               }}
               placeholder="User type"
               className="min-w-[160px]"
+              closeOnScroll
             />
             {roleFilter === 'DEPARTMENT_USER' && (
               <ComboBox
@@ -402,6 +403,7 @@ export default function AdminUsersPage() {
                 onChange={setDepartmentFilter}
                 placeholder="Department"
                 className="min-w-[160px]"
+                closeOnScroll
               />
             )}
           </div>

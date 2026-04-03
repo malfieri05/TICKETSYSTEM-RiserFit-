@@ -21,6 +21,7 @@ import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachments
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
+import { RequesterAvatar } from '@/components/tickets/TicketRow';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -208,6 +209,13 @@ export default function TicketDetailPage() {
   const subtaskDone = (ticket.subtasks ?? []).filter((s) => s.status === 'DONE' || s.status === 'SKIPPED').length;
   const subtaskTotal = (ticket.subtasks ?? []).length;
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] }).formResponses ?? [];
+
+  type SubmissionRequester = { displayName?: string; name?: string; email?: string } | null | undefined;
+  const submissionRequester = (ticket.requester ?? null) as SubmissionRequester;
+  const submissionRequesterDisplay =
+    submissionRequester?.displayName?.trim() || submissionRequester?.name?.trim() || '—';
+  const submissionRequesterEmail =
+    submissionRequester?.email && submissionRequester.email.trim() ? submissionRequester.email.trim() : undefined;
 
   return (
     <div className="flex flex-col h-full relative" style={{ background: 'var(--color-bg-page)' }}>
@@ -518,10 +526,34 @@ export default function TicketDetailPage() {
             {/* ── Ticket Submission (read-only form data + attachments) ─── */}
             {activeTab === 'submission' && (
               <div className="space-y-4">
-                {formResponses.length > 0 ? (
-                  <div className="dashboard-card rounded-xl p-4 space-y-2" style={panel}>
-                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: POLISH_THEME.theadText }}>Submitted form data</p>
-                    <dl className="space-y-1.5 text-sm">
+                <div className="dashboard-card rounded-xl overflow-hidden" style={panel}>
+                  <div
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-3"
+                    style={{
+                      borderColor: POLISH_THEME.listBorder,
+                      background: POLISH_THEME.tableHeaderBg,
+                    }}
+                  >
+                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
+                      Submission data
+                    </span>
+                    <span
+                      className="select-none text-xs font-light"
+                      style={{ color: 'var(--color-text-muted)' }}
+                      aria-hidden
+                    >
+                      |
+                    </span>
+                    <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                      Requester:
+                    </span>
+                    <RequesterAvatar
+                      displayName={submissionRequesterDisplay}
+                      tooltipEmail={submissionRequesterEmail}
+                    />
+                  </div>
+                  {formResponses.length > 0 ? (
+                    <dl className="space-y-1.5 p-4 text-sm">
                       {formResponses.map((r) => (
                         <div key={r.fieldKey} className="grid grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)] gap-x-4 gap-y-0.5 items-baseline">
                           <dt className="break-words" style={{ color: 'var(--color-text-muted)' }}>
@@ -531,10 +563,10 @@ export default function TicketDetailPage() {
                         </div>
                       ))}
                     </dl>
-                  </div>
-                ) : (
-                  <p className="text-sm py-4" style={{ color: POLISH_THEME.theadText }}>No submitted form data.</p>
-                )}
+                  ) : (
+                    <p className="px-4 py-6 text-sm" style={{ color: POLISH_THEME.theadText }}>No submitted form data.</p>
+                  )}
+                </div>
 
                 <TicketAttachmentsSection ticketId={id} canManage={canManage} variant="detail" />
               </div>

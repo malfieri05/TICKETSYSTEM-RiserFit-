@@ -17,14 +17,12 @@ import { Select, Input } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachmentsSection';
-import {
-  TicketTagCapsule,
-  TICKET_TAG_TOOLTIP_FONT_PX,
-} from '@/components/tickets/TicketTagCapsule';
+import { TicketTagCapsule, TicketTagHoverMetaContent } from '@/components/tickets/TicketTagCapsule';
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { cn } from '@/lib/utils';
+import { RequesterAvatar } from '@/components/tickets/TicketRow';
 
 interface Props {
   ticketId: string | null;
@@ -43,41 +41,6 @@ type TabKey = (typeof TAB_ORDER)[number];
 /** Submission field key → display label: underscores to spaces, capitalize words. */
 function formatFieldLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** Panel tag hover: bold+underline labels; blue date/time, black interpunct; extra line gap (~+10%). */
-function PanelTagHoverTooltipContent({
-  createdAt,
-  createdByDisplayName,
-}: {
-  createdAt: string;
-  createdByDisplayName: string;
-}) {
-  const d = new Date(createdAt);
-  const whenDate = `${format(d, 'EEE')} ${format(d, 'M/d/yy')}`;
-  const whenTime = format(d, 'h:mm a');
-  const by = createdByDisplayName.trim() || 'Unknown';
-  const lineGapPx = TICKET_TAG_TOOLTIP_FONT_PX * 0.1;
-  return (
-    <div
-      className="flex flex-col items-center text-center"
-      style={{ rowGap: `calc(0.25em + ${lineGapPx}px)` }}
-    >
-      <span>
-        <span className="font-bold underline">Added</span>
-        <span className="font-bold">:</span>
-        {` `}
-        <span style={{ color: POLISH_THEME.info }}>{whenDate}</span>
-        <span style={{ color: 'var(--color-text-primary)' }}>{' · '}</span>
-        <span style={{ color: POLISH_THEME.info }}>{whenTime}</span>
-      </span>
-      <span>
-        <span className="font-bold underline">By</span>
-        <span className="font-bold">:</span>
-        {` ${by}`}
-      </span>
-    </div>
-  );
 }
 
 export function TicketDrawer({ ticketId, onClose }: Props) {
@@ -228,8 +191,23 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
     },
   });
 
+  const removeTagMut = useMutation({
+    mutationFn: (tagId: string) => ticketsApi.removeTag(displayTicketId!, tagId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const formResponses = (ticket as { formResponses?: { fieldKey: string; value: string }[] })?.formResponses ?? [];
+
+  type SubmissionRequester = { displayName?: string; name?: string; email?: string } | null | undefined;
+  const submissionRequester = (ticket?.requester ?? null) as SubmissionRequester;
+  const submissionRequesterDisplay =
+    submissionRequester?.displayName?.trim() || submissionRequester?.name?.trim() || '—';
+  const submissionRequesterEmail =
+    submissionRequester?.email && submissionRequester.email.trim() ? submissionRequester.email.trim() : undefined;
 
   const TABS = useMemo(() => [
     { key: 'subtasks' as const,   label: `Subtasks${ticket ? ` (${ticket.subtasks.length})` : ''}`,   icon: CheckSquare },
@@ -442,12 +420,24 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   {ticket.tags.map((t) => (
                     <span key={t.id} className="max-w-[min(200px,100%)] min-w-0">
                       <TicketTagCapsule
+                        tagId={t.id}
                         name={t.name}
+                        color={t.color}
+                        tooltipTypography="requesterMatch"
+                        removable={canManage}
+                        onRemoveTag={async (tagId) => {
+                          await removeTagMut.mutateAsync(tagId);
+                        }}
+                        isRemoving={
+                          removeTagMut.isPending && removeTagMut.variables === t.id
+                        }
                         hoverText={
-                          <PanelTagHoverTooltipContent
-                            createdAt={t.createdAt}
-                            createdByDisplayName={t.createdBy?.name ?? ''}
-                          />
+                          <div className="flex flex-col items-center text-center">
+                            <TicketTagHoverMetaContent
+                              createdAt={t.createdAt}
+                              createdByDisplayName={t.createdBy?.name ?? ''}
+                            />
+                          </div>
                         }
                       />
                     </span>
@@ -480,7 +470,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 if (total === 0) return null;
                 return (
                   <>
-                    <div className="w-24 h-1 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+                    <div className="w-24 h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                       <div
                         className="h-full rounded-full transition-all"
                         style={{ width: `${pct}%`, background: POLISH_THEME.progressGreen }}
@@ -731,7 +721,7 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           </p>
                         </div>
                         <div className="flex items-center gap-2.5 w-48">
-                          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
+                          <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
                             <div
                               className="h-full rounded-full transition-all duration-300"
                               style={{ width: `${percent}%`, background: POLISH_THEME.progressGreen }}
@@ -844,12 +834,28 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                   }}
                 >
                   <div
-                    className="flex items-center justify-between px-4 py-3"
+                    className="flex items-center justify-between gap-3 px-4 py-3"
                     style={{ borderBottom: `1px solid ${POLISH_THEME.innerBorder}`, background: POLISH_THEME.tableHeaderBg }}
                   >
-                    <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
-                      Submission data
-                    </span>
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: 'var(--color-text-primary)' }}>
+                        Submission data
+                      </span>
+                      <span
+                        className="select-none text-xs font-light"
+                        style={{ color: 'var(--color-text-muted)' }}
+                        aria-hidden
+                      >
+                        |
+                      </span>
+                      <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>
+                        Requester:
+                      </span>
+                      <RequesterAvatar
+                        displayName={submissionRequesterDisplay}
+                        tooltipEmail={submissionRequesterEmail}
+                      />
+                    </div>
                     {isEditingSubmission ? (
                       <div className="flex gap-2">
                         <Button

@@ -35,6 +35,11 @@ export const POLISH_THEME = {
   /** Table thead, card section headers, in-content toolbars (`--color-bg-content-header` in globals.css) */
   contentHeaderBg: 'var(--color-bg-content-header)',
   tableHeaderBg: 'var(--color-bg-content-header)',
+  /**
+   * Main ticket feed column header row and pagination footer — same as drawer tab bodies (Subtasks, etc.):
+   * `--color-bg-drawer-canvas` in globals.css.
+   */
+  feedTheadBg: 'var(--color-bg-drawer-canvas)',
   innerBorder: 'var(--color-border-subtle)',
   rowBorder: 'var(--color-border-default)',
   rowHover: 'var(--color-bg-surface)',
@@ -112,7 +117,7 @@ export const FEED_COL_WIDTHS_ID_COLLAPSED = [
 
 /** Tailwind-compatible class names for consistent layout */
 export const POLISH_CLASS = {
-  /** Ticket feed tables — `border-separate` + zero spacing so `<th>` corner radii render (outline follows rounded card) */
+  /** Ticket feed tables — `border-separate` + zero spacing so `<th>` corner radii render. Row dividers must be on `<td>` (CSS ignores `tr` borders in this model). */
   feedTable: 'w-full text-sm table-fixed border-separate border-spacing-0',
   /** Table th/td cell padding */
   cellPadding: 'px-4 py-3.5',

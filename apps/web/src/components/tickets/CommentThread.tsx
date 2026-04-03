@@ -1,6 +1,15 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, memo, type ReactElement } from 'react';
+import {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  memo,
+  type ReactElement,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Send, Reply as ReplyIcon, ChevronDown, ChevronUp } from 'lucide-react';
@@ -10,6 +19,7 @@ import { Textarea } from '@/components/ui/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { getMutationErrorMessage } from '@/lib/utils';
 import { POLISH_THEME } from '@/lib/polish';
+import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
 
 interface CommentAuthor {
   id: string;
@@ -310,6 +320,11 @@ const MentionComposer = memo(function MentionComposer({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [mentionSearch, setMentionSearch] = useState<string | null>(null);
   const [mentionStart, setMentionStart] = useState<number>(-1);
+  const [menuFixed, setMenuFixed] = useState({
+    left: 0,
+    top: 0,
+    transform: 'translateY(-100%)',
+  });
 
   const { data: mentionableRes } = useQuery({
     queryKey: ['mentionable-users', ticketId, mentionSearch],
@@ -378,6 +393,43 @@ const MentionComposer = memo(function MentionComposer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useLayoutEffect(() => {
+    if (mentionSearch === null || mentionableUsers.length === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const reposition = () => {
+      const ta = textareaRef.current;
+      const menu = dropdownRef.current;
+      if (!ta) return;
+      const tr = ta.getBoundingClientRect();
+      const m = TOOLTIP_VIEWPORT_MARGIN;
+      const w = menu?.getBoundingClientRect().width ?? 288;
+      const h = menu?.getBoundingClientRect().height ?? 160;
+      let left = tr.left + 8;
+      let top = tr.top - 4;
+      let transform = 'translateY(-100%)';
+      left = Math.max(m, Math.min(window.innerWidth - m - w, left));
+      if (h > 0 && top - h < m) {
+        top = tr.bottom + 4;
+        transform = 'translateY(0)';
+      }
+      if (h > 0 && transform === 'translateY(0)' && top + h > window.innerHeight - m) {
+        top = Math.max(m, window.innerHeight - m - h);
+      }
+      setMenuFixed({ left, top, transform });
+    };
+
+    reposition();
+    const raf = requestAnimationFrame(reposition);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [mentionSearch, mentionableUsers.length]);
+
   return (
     <div
       className="dashboard-card rounded-[var(--radius-lg)] overflow-hidden"
@@ -398,44 +450,54 @@ const MentionComposer = memo(function MentionComposer({
           style={{ background: 'transparent', border: 'none', borderRadius: 0 } as React.CSSProperties}
         />
 
-        {/* Mention typeahead dropdown */}
-        {mentionSearch !== null && mentionableUsers.length > 0 && (
-          <div
-            ref={dropdownRef}
-            className="absolute left-2 bottom-full mb-1 w-72 max-h-48 overflow-y-auto rounded-[var(--radius-md)] z-50"
-            style={{
-              background: 'var(--color-bg-surface-raised)',
-              border: `1px solid ${POLISH_THEME.listBorder}`,
-              boxShadow: 'var(--shadow-panel)',
-            }}
-          >
-            {mentionableUsers.map((u) => (
-              <button
-                key={u.id}
-                type="button"
-                className="focus-ring w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer hover:bg-[var(--color-bg-surface)]"
-                style={{ color: 'var(--color-text-primary)' }}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  insertMention(u);
-                }}
-              >
-                <div
-                  className="h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
-                  style={{ background: 'var(--color-accent)', fontSize: '0.6rem' }}
+        {mentionSearch !== null &&
+          mentionableUsers.length > 0 &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div
+              ref={dropdownRef}
+              role="listbox"
+              aria-label="Mention user"
+              className="fixed box-border w-[min(18rem,calc(100vw-1rem))] max-h-48 overflow-y-auto rounded-[var(--radius-md)] [scrollbar-width:thin]"
+              style={{
+                left: menuFixed.left,
+                top: menuFixed.top,
+                transform: menuFixed.transform,
+                zIndex: TOOLTIP_PORTAL_Z_INDEX,
+                background: 'var(--color-bg-surface-raised)',
+                border: `1px solid ${POLISH_THEME.listBorder}`,
+                boxShadow: 'var(--shadow-panel)',
+              }}
+            >
+              {mentionableUsers.map((u) => (
+                <button
+                  key={u.id}
+                  type="button"
+                  role="option"
+                  className="focus-ring w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors cursor-pointer hover:bg-[var(--color-bg-surface)]"
+                  style={{ color: 'var(--color-text-primary)' }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertMention(u);
+                  }}
                 >
-                  {(u.displayName ?? u.email)[0]?.toUpperCase() ?? '?'}
-                </div>
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{u.displayName}</div>
-                  <div className="text-xs truncate" style={{ color: POLISH_THEME.metaDim }}>
-                    {u.email}
+                  <div
+                    className="h-6 w-6 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+                    style={{ background: 'var(--color-accent)', fontSize: '0.6rem' }}
+                  >
+                    {(u.displayName ?? u.email)[0]?.toUpperCase() ?? '?'}
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium break-words">{u.displayName}</div>
+                    <div className="text-xs break-words" style={{ color: POLISH_THEME.metaDim }}>
+                      {u.email}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
       </div>
 
       <div

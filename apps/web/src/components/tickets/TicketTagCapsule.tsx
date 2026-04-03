@@ -4,20 +4,99 @@ import {
   useState,
   useRef,
   useLayoutEffect,
+  useEffect,
   useCallback,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { format } from 'date-fns';
+import { X } from 'lucide-react';
 import { POLISH_THEME } from '@/lib/polish';
+import {
+  TOOLTIP_PORTAL_Z_INDEX,
+  TOOLTIP_VIEWPORT_MARGIN,
+  TOOLTIP_MAX_WIDTH_CLASS,
+  CONFIRM_DIALOG_Z_INDEX_BACKDROP,
+  CONFIRM_DIALOG_Z_INDEX_PANEL,
+} from '@/lib/tooltip-layer';
+import { Button } from '@/components/ui/Button';
 
-const pill = POLISH_THEME.ticketTagCapsule;
+const TAG_COLOR_STYLES: Record<string, { background: string; color: string; boxShadow: string }> = {
+  red:    { background: 'rgba(239,68,68,0.15)',   color: '#dc2626', boxShadow: 'inset 0 0 0 1px rgba(239,68,68,0.3)' },
+  orange: { background: 'rgba(249,115,22,0.15)',  color: '#ea580c', boxShadow: 'inset 0 0 0 1px rgba(249,115,22,0.3)' },
+  yellow: { background: 'rgba(234,179,8,0.15)',   color: '#a16207', boxShadow: 'inset 0 0 0 1px rgba(234,179,8,0.3)' },
+  green:  { background: 'rgba(34,197,94,0.15)',   color: '#15803d', boxShadow: 'inset 0 0 0 1px rgba(34,197,94,0.3)' },
+  blue:   { background: 'rgba(59,130,246,0.15)',  color: '#1d4ed8', boxShadow: 'inset 0 0 0 1px rgba(59,130,246,0.3)' },
+  purple: { background: 'rgba(168,85,247,0.15)',  color: '#7e22ce', boxShadow: 'inset 0 0 0 1px rgba(168,85,247,0.3)' },
+};
+
+function getPillStyle(color?: string | null) {
+  return (color && TAG_COLOR_STYLES[color]) ? TAG_COLOR_STYLES[color] : TAG_COLOR_STYLES.orange;
+}
 
 const TOOLTIP_GAP = 6;
-/** Above sticky app chrome (e.g. header z-30) and overflow stacks */
-const TOOLTIP_Z = 300;
 
 /** Exported for panel tooltip line spacing; base 11px × 1.75 × 0.9 */
 export const TICKET_TAG_TOOLTIP_FONT_PX = 11 * 1.75 * 0.9;
+
+/** Panel + feed tag hover: Added / By lines (same primary/sub scale as RequesterAvatar). */
+export function TicketTagHoverMetaContent({
+  createdAt,
+  createdByDisplayName,
+}: {
+  createdAt: string;
+  createdByDisplayName: string;
+}) {
+  const d = new Date(createdAt);
+  const day = format(d, 'EEE');
+  const whenTime = format(d, 'h:mm a');
+  const shortDate = format(d, 'M/d/yy');
+  const by = createdByDisplayName.trim() || 'Unknown';
+  const muted = 'var(--color-text-muted)';
+  return (
+    <>
+      <div className="text-[11px] font-medium break-words">
+        <span className="italic" style={{ color: muted }}>
+          Added:{' '}
+        </span>
+        <span style={{ color: POLISH_THEME.info }}>{day}</span>
+        <span style={{ color: muted }}>{' · '}</span>
+        <span style={{ color: POLISH_THEME.info }}>{whenTime}</span>
+        <span style={{ color: muted }}>{' · '}</span>
+        <span style={{ color: POLISH_THEME.info }}>{shortDate}</span>
+      </div>
+      <div className="mt-1.5 text-[11px] font-medium break-words" style={{ color: muted }}>
+        <span className="italic">By:</span>
+        <span className="not-italic"> {by}</span>
+      </div>
+    </>
+  );
+}
+
+/** Feed row: same tooltip chrome as panel; tag name in quotes above Added/By. */
+export function FeedTagHoverTooltipContent({
+  name,
+  createdAt,
+  createdByDisplayName,
+}: {
+  name: string;
+  createdAt: string;
+  createdByDisplayName: string;
+}) {
+  return (
+    <div className="flex flex-col items-center text-center">
+      <div
+        className="font-semibold break-words"
+        style={{ color: 'var(--color-text-primary)' }}
+      >
+        &ldquo;{name}&rdquo;
+      </div>
+      <div className="mt-2.5 flex w-full flex-col items-center">
+        <TicketTagHoverMetaContent createdAt={createdAt} createdByDisplayName={createdByDisplayName} />
+      </div>
+    </div>
+  );
+}
 
 type InstantTooltipProps = {
   content: ReactNode;
@@ -30,15 +109,28 @@ type InstantTooltipProps = {
   compact?: boolean;
   /** Default centered above target; `left` aligns with trigger’s left edge (e.g. dashboard help). */
   align?: 'center' | 'left';
-  /** Override tooltip `maxWidth` (non-compact default: min(360px, …)). */
+  /** Override tooltip `max-width` (CSS value for inline style). */
   maxWidth?: string;
   /** Set on the portaled tooltip node for `aria-describedby` on the trigger. */
   tooltipId?: string;
+  /** Default `above`; use `below` for triggers near the top of the viewport (e.g. maintenance count). */
+  placement?: 'above' | 'below';
+  /**
+   * When true, do not flip to the opposite vertical side when near the viewport edge
+   * (tooltip stays above/below per `placement`; position is clamped instead).
+   */
+  preventPlacementFlip?: boolean;
+  /**
+   * `tagDefault`: larger line-height scale for tag labels (legacy panel).
+   * `requesterMatch`: same base/sub text scale as RequesterAvatar (`text-xs` + 11px muted subline).
+   */
+  typography?: 'tagDefault' | 'requesterMatch';
 };
 
 /**
  * Hover label with no delay, portaled to `document.body` so it is not clipped
- * by ticket feed `overflow` regions. Rounded panel, centered text, always above target.
+ * by overflow regions. Clamps horizontally (and flips above/below when needed) so the panel
+ * keeps a readable width and stays on-screen.
  */
 export function InstantTooltip({
   content,
@@ -48,65 +140,131 @@ export function InstantTooltip({
   align = 'center',
   maxWidth: maxWidthProp,
   tooltipId,
+  placement: placementProp = 'above',
+  preventPlacementFlip = false,
+  typography = 'tagDefault',
 }: InstantTooltipProps) {
   const wrapRef = useRef<HTMLSpanElement>(null);
+  const panelRef = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, transform: 'translate(-50%, -100%)' });
 
-  const updatePos = useCallback(() => {
-    const el = wrapRef.current;
-    if (!el || typeof window === 'undefined') return;
-    const r = el.getBoundingClientRect();
-    setPos({
-      top: r.top - TOOLTIP_GAP,
-      left: align === 'left' ? r.left : r.left + r.width / 2,
-    });
-  }, [align]);
+  const reposition = useCallback(() => {
+    const wrap = wrapRef.current;
+    const panel = panelRef.current;
+    if (!wrap || typeof window === 'undefined') return;
+    const tr = wrap.getBoundingClientRect();
+    const m = TOOLTIP_VIEWPORT_MARGIN;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    let placementEff: 'above' | 'below' = placementProp;
+
+    let top =
+      placementEff === 'below' ? tr.bottom + TOOLTIP_GAP : tr.top - TOOLTIP_GAP;
+    let transform: string =
+      placementEff === 'below'
+        ? align === 'center'
+          ? 'translate(-50%, 0)'
+          : 'translate(0, 0)'
+        : align === 'center'
+          ? 'translate(-50%, -100%)'
+          : 'translateY(-100%)';
+
+    let left = align === 'center' ? tr.left + tr.width / 2 : tr.left;
+
+    if (panel) {
+      const pr = panel.getBoundingClientRect();
+      const w = pr.width;
+      const h = pr.height;
+
+      if (w > 0) {
+        if (align === 'center') {
+          const half = w / 2;
+          const cx = tr.left + tr.width / 2;
+          left = Math.max(m + half, Math.min(vw - m - half, cx));
+        } else {
+          left = Math.max(m, Math.min(vw - m - w, left));
+        }
+      }
+
+      if (h > 0) {
+        if (!preventPlacementFlip) {
+          if (placementEff === 'above') {
+            const topEdge = top - h;
+            if (topEdge < m) {
+              placementEff = 'below';
+              top = tr.bottom + TOOLTIP_GAP;
+              transform =
+                align === 'center' ? 'translate(-50%, 0)' : 'translate(0, 0)';
+            }
+          } else if (top + h > vh - m) {
+            placementEff = 'above';
+            top = tr.top - TOOLTIP_GAP;
+            transform =
+              align === 'center' ? 'translate(-50%, -100%)' : 'translateY(-100%)';
+          }
+        }
+
+        if (placementEff === 'above') {
+          const topEdge = top - h;
+          if (topEdge < m) {
+            top = m + h;
+          }
+        } else if (top + h > vh - m) {
+          top = vh - m - h;
+        }
+      }
+    }
+
+    setPos({ top, left, transform });
+  }, [align, placementProp, preventPlacementFlip]);
 
   const show = useCallback(() => {
-    updatePos();
     setOpen(true);
-  }, [updatePos]);
+  }, []);
 
   const hide = useCallback(() => setOpen(false), []);
 
   useLayoutEffect(() => {
     if (!open) return;
-    updatePos();
-    const onScroll = () => updatePos();
-    window.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', updatePos);
+    reposition();
+    const raf = requestAnimationFrame(() => reposition());
+    const onMove = () => reposition();
+    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', onMove);
     return () => {
-      window.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', updatePos);
+      cancelAnimationFrame(raf);
+      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', onMove);
     };
-  }, [open, updatePos, content]);
+  }, [open, reposition, content]);
 
   const textAlign = align === 'left' ? 'text-left' : 'text-center';
-  const transform =
-    align === 'left' ? 'translateY(-100%)' : 'translate(-50%, -100%)';
-  const maxWidth =
-    maxWidthProp ?? (compact ? undefined : 'min(360px, calc(100vw - 1rem))');
+  const maxWidthStyle = maxWidthProp ?? undefined;
+  const requesterMatch = typography === 'requesterMatch' && !compact;
+
+  const compactClass = compact
+    ? `pointer-events-none fixed box-border rounded-lg px-2.5 py-1.5 ${textAlign} text-xs font-medium leading-tight shadow-[var(--shadow-panel)] ${TOOLTIP_MAX_WIDTH_CLASS} whitespace-nowrap [scrollbar-width:thin] overflow-x-auto overflow-y-hidden`
+    : `pointer-events-none fixed box-border w-max rounded-lg px-3 py-2 ${textAlign} leading-snug shadow-[var(--shadow-panel)] break-words whitespace-pre-line ${TOOLTIP_MAX_WIDTH_CLASS} ${
+        requesterMatch ? 'min-w-[10rem] text-xs' : 'font-medium'
+      }`;
 
   const tooltip =
     open && typeof document !== 'undefined'
       ? createPortal(
           <span
+            ref={panelRef}
             id={tooltipId}
             role="tooltip"
-            className={
-              compact
-                ? `pointer-events-none fixed whitespace-nowrap rounded-lg px-2.5 py-1.5 ${textAlign} text-xs font-medium leading-tight shadow-[var(--shadow-panel)]`
-                : `pointer-events-none fixed whitespace-pre-line rounded-lg px-3 py-2 ${textAlign} font-medium leading-snug shadow-[var(--shadow-panel)]`
-            }
+            className={compactClass}
             style={{
               top: pos.top,
               left: pos.left,
-              transform,
-              zIndex: TOOLTIP_Z,
-              maxWidth,
-              wordBreak: compact ? undefined : 'break-word',
-              fontSize: compact ? undefined : `${TICKET_TAG_TOOLTIP_FONT_PX}px`,
+              transform: pos.transform,
+              zIndex: TOOLTIP_PORTAL_Z_INDEX,
+              maxWidth: maxWidthStyle,
+              fontSize: compact || requesterMatch ? undefined : `${TICKET_TAG_TOOLTIP_FONT_PX}px`,
               background: 'var(--color-bg-surface-raised)',
               color: 'var(--color-text-primary)',
               border: `1px solid ${POLISH_THEME.listBorder}`,
@@ -134,37 +292,167 @@ export function InstantTooltip({
   );
 }
 
+/** Matches `ThemeBadge`: same height/typography as Status and Priority capsules */
+const TAG_CAPSULE_BADGE_CLASS =
+  'inline-flex max-w-full min-w-0 items-center truncate px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]';
+
+type RemoveTagConfirmProps = {
+  name: string;
+  open: boolean;
+  isRemoving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function RemoveTagConfirmDialog({ name, open, isRemoving, onCancel, onConfirm }: RemoveTagConfirmProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onCancel]);
+
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        className="fixed inset-0 cursor-default border-0 p-0"
+        style={{
+          zIndex: CONFIRM_DIALOG_Z_INDEX_BACKDROP,
+          background: 'rgba(0,0,0,0.35)',
+        }}
+        aria-label="Dismiss"
+        onClick={onCancel}
+      />
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="remove-tag-confirm-title"
+        aria-describedby="remove-tag-confirm-desc"
+        className="fixed left-1/2 top-1/2 w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl p-4 shadow-[var(--shadow-panel)]"
+        style={{
+          zIndex: CONFIRM_DIALOG_Z_INDEX_PANEL,
+          background: 'var(--color-bg-surface-raised)',
+          border: `1px solid ${POLISH_THEME.listBorder}`,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p id="remove-tag-confirm-title" className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
+          Are you sure?
+        </p>
+        <p
+          id="remove-tag-confirm-desc"
+          className="mt-2 text-xs leading-relaxed"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          Remove tag &ldquo;{name}&rdquo; from this ticket. This cannot be undone.
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" size="sm" type="button" onClick={onCancel} disabled={isRemoving}>
+            Cancel
+          </Button>
+          <Button variant="danger" size="sm" type="button" onClick={onConfirm} loading={isRemoving}>
+            Remove
+          </Button>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 type CapsuleProps = {
   name: string;
+  /** Global tag id (required when `removable` + `onRemoveTag`). */
+  tagId?: string;
+  color?: string | null;
   /**
    * When set (e.g. panel view), hover tooltip shows this instead of the tag name
    * (string or rich content).
    */
   hoverText?: ReactNode;
+  /** Use with rich `hoverText` to match Requester column tooltip typography. */
+  tooltipTypography?: 'tagDefault' | 'requesterMatch';
+  removable?: boolean;
+  onRemoveTag?: (tagId: string) => Promise<void>;
+  isRemoving?: boolean;
 };
 
-/**
- * Orange operational tag pill (same inset-ring pattern as StatusBadge).
- * Hover: immediate portaled tooltip — tag name by default, or `hoverText` when provided.
- */
-/** Matches `ThemeBadge`: same height/typography as Status and Priority capsules */
-const TAG_CAPSULE_BADGE_CLASS =
-  'inline-flex max-w-full min-w-0 items-center truncate rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-[0.02em]';
-
-export function TicketTagCapsule({ name, hoverText }: CapsuleProps) {
+export function TicketTagCapsule({
+  name,
+  tagId,
+  color,
+  hoverText,
+  tooltipTypography = 'tagDefault',
+  removable = false,
+  onRemoveTag,
+  isRemoving = false,
+}: CapsuleProps) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const tooltipContent = hoverText ?? name;
+  const pillStyle = getPillStyle(color);
+  const showRemove = Boolean(removable && tagId && onRemoveTag);
+
+  const handleConfirmRemove = useCallback(async () => {
+    if (!tagId || !onRemoveTag) return;
+    try {
+      await onRemoveTag(tagId);
+      setConfirmOpen(false);
+    } catch {
+      /* parent handles error feedback; keep dialog open */
+    }
+  }, [onRemoveTag, tagId]);
+
   return (
-    <InstantTooltip content={tooltipContent} className="inline-flex max-w-full items-center align-middle">
-      <span
-        className={TAG_CAPSULE_BADGE_CLASS}
-        style={{
-          background: pill.background,
-          color: pill.color,
-          boxShadow: pill.boxShadow,
-        }}
-      >
-        {name}
+    <>
+      <span className="inline-flex max-w-full min-w-0 items-center align-middle rounded-full overflow-hidden">
+        <span
+          className="inline-flex max-w-full min-w-0 items-center rounded-full"
+          style={{
+            background: pillStyle.background,
+            boxShadow: pillStyle.boxShadow,
+          }}
+        >
+          <InstantTooltip
+            content={tooltipContent}
+            typography={tooltipTypography}
+            className="inline-flex min-w-0 max-w-full flex-1 items-center"
+          >
+            <span className={TAG_CAPSULE_BADGE_CLASS} style={{ color: pillStyle.color }}>
+              {name}
+            </span>
+          </InstantTooltip>
+          {showRemove ? (
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 disabled:opacity-40"
+              style={{
+                color: pillStyle.color,
+                marginRight: '2px',
+              }}
+              aria-label={`Remove tag ${name}`}
+              disabled={isRemoving}
+              onClick={(e) => {
+                e.stopPropagation();
+                setConfirmOpen(true);
+              }}
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+            </button>
+          ) : null}
+        </span>
       </span>
-    </InstantTooltip>
+      <RemoveTagConfirmDialog
+        name={name}
+        open={confirmOpen}
+        isRemoving={isRemoving}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={() => void handleConfirmRemove()}
+      />
+    </>
   );
 }

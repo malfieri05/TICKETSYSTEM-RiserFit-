@@ -134,12 +134,14 @@ export const ticketsApi = {
     api.get<import('@/types').LeaseIqResult | null>(`/tickets/${id}/lease-iq-result`),
   reEvaluateLeaseIq: (id: string) =>
     api.post<import('@/types').LeaseIqResult>(`/tickets/${id}/lease-iq/evaluate`),
-  addTag: (id: string, data: { label: string }) =>
+  addTag: (id: string, data: { label: string; color?: string }) =>
     api.post<{
-      tag: { id: string; name: string };
+      tag: { id: string; name: string; color: string | null };
       createdAt: string;
       createdBy: { id: string; name: string };
     }>(`/tickets/${id}/tags`, data),
+  removeTag: (ticketId: string, tagId: string) =>
+    api.delete<{ ok: true }>(`/tickets/${ticketId}/tags/${tagId}`),
 };
 
 // Shared helper: invalidate all major ticket list surfaces after mutations
@@ -201,7 +203,20 @@ export const notificationsApi = {
 // ─── Attachments ───────────────────────────────────────────────────────────
 
 export const attachmentsApi = {
-  // Step 1: get a presigned upload URL
+  /**
+   * Single-step proxy upload — sends the file to our own API which uploads to S3
+   * server-side. No browser→R2 direct PUT, no CORS required.
+   */
+  upload: (ticketId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post<import('@/types').Attachment>(
+      `/tickets/${ticketId}/attachments/upload`,
+      form,
+    );
+  },
+
+  // Legacy: get a presigned upload URL (kept for reference; not used by UI)
   requestUploadUrl: (
     ticketId: string,
     data: { filename: string; mimeType: string; sizeBytes: number },
@@ -433,6 +448,10 @@ export const aiApi = {
       uploadedBy: { id: string; name: string };
       _count: { chunks: number };
     }[]>('/ai/documents'),
+
+  /** Fetch a public URL, extract its text, and ingest it into the knowledge base (admin) */
+  ingestUrl: (title: string, url: string) =>
+    api.post<{ documentId: string; chunksCreated: number }>('/ai/ingest/url', { title, url }),
 
   /** Ingest raw text (admin) */
   ingestText: (title: string, content: string) =>

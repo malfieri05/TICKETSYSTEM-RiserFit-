@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, type CSSProp
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
 
 export interface MultiComboBoxOption {
   value: string;
@@ -51,7 +52,7 @@ export function MultiComboBox({
       left: r.left,
       width: r.width,
       maxHeight: maxH,
-      zIndex: 100,
+      zIndex: TOOLTIP_PORTAL_Z_INDEX,
     });
   }, [isOpen]);
 

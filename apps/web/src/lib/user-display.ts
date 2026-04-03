@@ -1,5 +1,22 @@
 import type { Department, UserRole } from '@/types';
 
+/**
+ * Initials from display name: "First Last" → "FL", single word → first two letters
+ * (e.g. "Madison" → "MA"), empty → "?".
+ */
+export function getDisplayNameInitials(displayName: string | undefined): string {
+  const trimmed = (displayName ?? '').trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const first = parts[0].charAt(0);
+    const last = parts[parts.length - 1].charAt(0);
+    return `${first}${last}`.toUpperCase();
+  }
+  const one = trimmed.slice(0, 2);
+  return one.length === 1 ? one.toUpperCase() : one.toUpperCase();
+}
+
 /** Map department enum to display label. Never show raw enum strings. */
 export function departmentToLabel(d?: Department): string {
   if (d === 'HR') return 'HR';

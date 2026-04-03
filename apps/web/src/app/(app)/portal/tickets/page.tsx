@@ -10,13 +10,20 @@ import type { TicketFilters, TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { StatusBadge } from '@/components/ui/Badge';
-import { FeedCreatedAtCell, FeedDueDateCell } from '@/components/tickets/TicketRow';
+import {
+  FeedCreatedAtCell,
+  FeedDueDateCell,
+  RequesterAvatar,
+  ticketRequesterEmail,
+  ticketRequesterPrimaryLine,
+} from '@/components/tickets/TicketRow';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
+import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 
 const PAGE_SIZE = 20;
 
@@ -209,10 +216,6 @@ export default function PortalTicketsPage() {
                   {tickets.map((ticket) => {
                     const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '—';
                     const commentCount = ticket._count?.comments ?? 0;
-                    const requesterName =
-                      (ticket.requester as { displayName?: string; name?: string }).displayName ??
-                      (ticket.requester as { displayName?: string; name?: string }).name ??
-                      '—';
                     return (
                       <tr
                         key={ticket.id}
@@ -227,7 +230,10 @@ export default function PortalTicketsPage() {
                         <td className="px-4 py-3">
                           <span className="font-medium text-[var(--color-text-primary)] line-clamp-1">{ticket.title}</span>
                           <div className="flex items-center gap-3 mt-0.5 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-                            <span>{requesterName}</span>
+                            <RequesterAvatar
+                              displayName={ticketRequesterPrimaryLine(ticket.requester)}
+                              tooltipEmail={ticketRequesterEmail(ticket.requester)}
+                            />
                             {commentCount > 0 && (
                               <span className="flex items-center gap-1">
                                 <MessageCircle className="h-3 w-3" />
@@ -257,29 +263,13 @@ export default function PortalTicketsPage() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                Showing {((filters.page ?? 1) - 1) * PAGE_SIZE + 1}–{Math.min((filters.page ?? 1) * PAGE_SIZE, total)} of {total}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={(filters.page ?? 1) <= 1}
-                  onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={(filters.page ?? 1) >= totalPages}
-                  onClick={() => setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <FeedPaginationBar
+              page={filters.page ?? 1}
+              pageSize={PAGE_SIZE}
+              total={total}
+              onPrev={() => setFilters((f) => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
+              onNext={() => setFilters((f) => ({ ...f, page: Math.min(totalPages, (f.page ?? 1) + 1) }))}
+            />
           )}
         </div>
       </div>

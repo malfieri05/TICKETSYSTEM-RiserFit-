@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { User, X, Sun, Moon, LogOut } from 'lucide-react';
+import { X, Sun, Moon, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { profileAccountTypeLabel } from '@/lib/user-display';
+import { getDisplayNameInitials, profileAccountTypeLabel } from '@/lib/user-display';
 import { cn } from '@/lib/utils';
+import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
 
 const THEME_STORAGE_KEY = 'theme';
 
@@ -80,7 +81,7 @@ export function ProfileMenu() {
 
   if (!user) return null;
 
-  const initial = user.displayName?.[0]?.toUpperCase() ?? '?';
+  const initials = getDisplayNameInitials(user.displayName);
   const hiName = greetingName(user.displayName);
   const accountTypeLine = profileAccountTypeLabel(user.role, user.departments);
 
@@ -108,10 +109,11 @@ export function ProfileMenu() {
         id="profile-menu-dropdown"
         role="dialog"
         aria-label="Account menu"
-        className="fixed z-[60] w-[min(calc(100vw-24px),360px)] overflow-hidden rounded-[28px] border p-6 pt-5"
+        className="fixed w-[min(calc(100vw-24px),360px)] overflow-hidden rounded-[28px] border p-6 pt-5 box-border break-words"
         style={{
           top: coords.top,
           right: coords.right,
+          zIndex: TOOLTIP_PORTAL_Z_INDEX,
           background: 'var(--color-bg-surface)',
           borderColor: 'var(--color-border-default)',
           boxShadow: 'var(--shadow-raised)',
@@ -145,15 +147,20 @@ export function ProfileMenu() {
             <img
               src={user.avatarUrl}
               alt=""
-              className="h-20 w-20 rounded-full object-cover ring-2 ring-[var(--color-border-default)]"
+              className="h-20 w-20 rounded-full object-cover"
+              style={{ boxShadow: '0 0 0 2px var(--profile-avatar-ring)' }}
             />
           ) : (
             <div
-              className="flex h-20 w-20 items-center justify-center rounded-full ring-2 ring-[var(--color-border-default)]"
-              style={{ background: 'var(--color-bg-surface-raised)' }}
+              className="flex h-20 w-20 items-center justify-center rounded-full text-2xl font-semibold"
+              style={{
+                background: 'var(--color-accent)',
+                color: '#ffffff',
+                boxShadow: '0 0 0 2px var(--profile-avatar-ring)',
+              }}
               aria-hidden
             >
-              <User className="h-10 w-10" style={{ color: 'var(--color-text-muted)' }} strokeWidth={1.5} />
+              {initials}
             </div>
           )}
         </div>
@@ -244,8 +251,7 @@ export function ProfileMenu() {
           if (!open) syncThemeFromDocument();
           setOpen((o) => !o);
         }}
-        className="focus-ring relative shrink-0 rounded-full transition-opacity hover:opacity-90"
-        style={{ boxShadow: '0 0 0 2px var(--color-border-default)' }}
+        className="focus-ring box-border relative shrink-0 rounded-full border-2 border-white transition-opacity hover:opacity-90"
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label="Open account menu"
@@ -258,7 +264,7 @@ export function ProfileMenu() {
             className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold"
             style={{ background: 'var(--color-accent)', color: '#ffffff' }}
           >
-            {initial}
+            {initials}
           </div>
         )}
       </button>

@@ -95,6 +95,7 @@ enum AuditAction {
   SUBTASK_UPDATED
   SUBTASK_COMPLETED
   TICKET_TAG_ADDED
+  TICKET_TAG_REMOVED
 }
 
 /// Admin invite-only provisioning lifecycle

@@ -15,7 +15,6 @@ import {
   AlertCircle,
   Plus,
   Minus,
-  Info,
   X,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
@@ -26,6 +25,7 @@ import { adminApi, leaseIqApi } from '@/lib/api';
 import { POLISH_THEME } from '@/lib/polish';
 import { InstantTooltip, TICKET_TAG_TOOLTIP_FONT_PX } from '@/components/tickets/TicketTagCapsule';
 import { formatDistanceToNow } from 'date-fns';
+import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
 
 function SimulateLockedTooltipContent() {
   const fontPx = TICKET_TAG_TOOLTIP_FONT_PX * 0.9;
@@ -66,79 +66,6 @@ interface StudioOption {
   marketName: string;
 }
 
-function LeaseIqAboutModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="lease-iq-about-title"
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl p-6 shadow-xl"
-        style={{
-          background: 'var(--color-bg-surface-raised)',
-          border: '1px solid var(--color-border-default)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 id="lease-iq-about-title" className="text-base font-semibold pr-2" style={{ color: 'var(--color-text-primary)' }}>
-            What is &apos;Lease IQ&apos;?
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-[var(--color-bg-surface)]"
-            style={{ color: 'var(--color-text-muted)' }}
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="space-y-3 text-sm leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
-          <ul className="list-disc space-y-2 pl-4">
-            <li>
-              Lease IQ functionality allows the admin to upload and store the current lease agreements per studio location,
-              in the system.
-            </li>
-            <li>
-              The lease agreement is then read and analyzed by the system (via &apos;Parse&apos;) in order to develop an
-              operating &apos;ruleset&apos; per that location.
-            </li>
-          </ul>
-          <p>
-            Each new MAINTENANCE TICKET that is created is then filtered through this lease ruleset to determine whether
-            the individual ticket falls under Landlord vs. Tenant responsibility.
-          </p>
-          <p>
-            Upon determination, a simple label is added to the ticket itself that denotes 1 of 3 labels:
-          </p>
-          <ul className="ml-4 list-none space-y-1 border-l-2 pl-4" style={{ borderColor: 'var(--color-border-default)' }}>
-            <li>1) Likely Landlord</li>
-            <li>2) Likely Tenant</li>
-            <li>3) Needs Human Review</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function LeaseIQPage() {
   const qc = useQueryClient();
   const [studioId, setStudioId] = useState<string | null>(null);
@@ -157,12 +84,12 @@ export default function LeaseIQPage() {
     queryFn: () => leaseIqApi.studiosWithRulesets(),
   });
 
-  const studioIdsWithLeaseRuleset = useMemo(
-    () => new Set((rulesetCoverage?.data?.studioIds ?? []) as string[]),
-    [rulesetCoverage?.data?.studioIds],
+  const publishedStudioIdsSet = useMemo(
+    () => new Set((rulesetCoverage?.data?.publishedStudioIds ?? []) as string[]),
+    [rulesetCoverage?.data?.publishedStudioIds],
   );
 
-  const publishedLeaseIqLocationCount = (rulesetCoverage?.data?.publishedStudioIds ?? []).length;
+  const publishedLeaseIqLocationCount = publishedStudioIdsSet.size;
 
   const studios: StudioOption[] = useMemo(() => {
     const list = (marketsData?.data ?? []).flatMap((m: { id: string; name: string; studios: { id: string; name: string }[] }) =>
@@ -217,25 +144,46 @@ export default function LeaseIQPage() {
             >
               Lease IQ
             </h1>
-            <button
-              type="button"
+            <HeaderInfoButton
               onClick={() => setLeaseIqInfoOpen(true)}
-              className="focus-ring inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full p-0 leading-none transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-app-header-info-hover-bg)] hover:text-[var(--color-app-header-info-hover-fg)]"
-              style={{ color: 'var(--color-accent)' }}
-              aria-label="What is Lease IQ? Opens an explanation."
-            >
-              <Info className="h-5 w-5 shrink-0" strokeWidth={2} aria-hidden />
-            </button>
+              ariaLabel="What is Lease IQ? Opens an explanation."
+            />
           </div>
         }
       />
-      <LeaseIqAboutModal open={leaseIqInfoOpen} onClose={closeLeaseIqInfo} />
+      <InfoExplainerModal
+        open={leaseIqInfoOpen}
+        onClose={closeLeaseIqInfo}
+        titleId="lease-iq-about-title"
+        title={<>What is &apos;Lease IQ&apos;?</>}
+      >
+        <ul className="list-disc space-y-2 pl-4">
+          <li>
+            Lease IQ functionality allows the admin to upload and store the current lease agreements per studio location,
+            in the system.
+          </li>
+          <li>
+            The lease agreement is then read and analyzed by the system (via &apos;Parse&apos;) in order to develop an
+            operating &apos;ruleset&apos; per that location.
+          </li>
+        </ul>
+        <p>
+          Each new MAINTENANCE TICKET that is created is then filtered through this lease ruleset to determine whether
+          the individual ticket falls under Landlord vs. Tenant responsibility.
+        </p>
+        <p>Upon determination, a simple label is added to the ticket itself that denotes 1 of 3 labels:</p>
+        <ul className="ml-4 list-none space-y-1 border-l-2 pl-4" style={{ borderColor: 'var(--color-border-default)' }}>
+          <li>1) Likely Landlord</li>
+          <li>2) Likely Tenant</li>
+          <li>3) Needs Human Review</li>
+        </ul>
+      </InfoExplainerModal>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
         {/* Left rail — half the former 40rem cap so list boxes read narrower */}
         <aside className="flex h-full min-h-0 w-full max-w-[20rem] flex-shrink-0 flex-col gap-4 overflow-hidden p-6">
           <div className="w-full min-w-0 space-y-1.5">
             <p className="text-xs leading-snug" style={{ color: 'var(--color-text-muted)' }}>
-              Locations with Lease IQ rules set:{' '}
+              Locations with a published Lease IQ ruleset:{' '}
               <span className="tabular-nums font-medium" style={{ color: 'var(--color-text-primary)' }}>
                 {rulesetCoverageLoading ? (
                   <>
@@ -296,9 +244,19 @@ export default function LeaseIQPage() {
                         {s.marketName}
                       </span>
                     </div>
-                    {studioIdsWithLeaseRuleset.has(s.id) ? (
+                    {publishedStudioIdsSet.has(s.id) ? (
                       <InstantTooltip
-                        content="Has Lease IQ ruleset (draft or published)"
+                        content={
+                          <span className="inline-flex items-center gap-1.5 text-left">
+                            <Check
+                              className="h-3.5 w-3.5 shrink-0"
+                              strokeWidth={2.5}
+                              style={{ color: POLISH_THEME.success }}
+                              aria-hidden
+                            />
+                            <span>Has published LeaseIQ ruleset</span>
+                          </span>
+                        }
                         compact
                         className="inline-flex shrink-0 text-[var(--color-text-muted)]"
                       >

@@ -14,6 +14,7 @@ import {
 } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { Button } from '@/components/ui/Button';
@@ -22,7 +23,11 @@ import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-import { TicketTableRow } from '@/components/tickets/TicketRow';
+import {
+  TicketTableRow,
+  ticketRequesterEmail,
+  ticketRequesterPrimaryLine,
+} from '@/components/tickets/TicketRow';
 import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
@@ -111,6 +116,21 @@ export default function PortalPage() {
       await addTagMut.mutateAsync({ ticketId, label });
     },
     [addTagMut],
+  );
+
+  const removeTagMut = useMutation({
+    mutationFn: ({ ticketId, tagId }: { ticketId: string; tagId: string }) =>
+      ticketsApi.removeTag(ticketId, tagId),
+    onSuccess: (_, variables) => {
+      qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      invalidateTicketLists(qc);
+    },
+  });
+  const handleRemoveTag = useCallback(
+    async (ticketId: string, tagId: string) => {
+      await removeTagMut.mutateAsync({ ticketId, tagId });
+    },
+    [removeTagMut],
   );
 
   // Scope summary (dashboard metrics + allowed studios)
@@ -206,33 +226,14 @@ export default function PortalPage() {
 
   const myPagination =
     myTotalPages > 1 ? (
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderTop: '1px solid var(--color-border-default)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Showing {(myPage - 1) * PAGE_SIZE + 1}–
-          {Math.min(myPage * PAGE_SIZE, myTotal)} of {myTotal}
-        </p>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={myPage <= 1 || myFetching}
-            onClick={() => setMyPage((p) => Math.max(1, p - 1))}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={myPage >= myTotalPages || myFetching}
-            onClick={() => setMyPage((p) => Math.min(myTotalPages, p + 1))}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      <FeedPaginationBar
+        page={myPage}
+        pageSize={PAGE_SIZE}
+        total={myTotal}
+        isBusy={myFetching}
+        onPrev={() => setMyPage((p) => Math.max(1, p - 1))}
+        onNext={() => setMyPage((p) => Math.min(myTotalPages, p + 1))}
+      />
     ) : null;
 
   const myFiltersBar = (
@@ -246,6 +247,7 @@ export default function PortalPage() {
           placeholder="Search tickets..."
           value={mySearch}
           onChange={(e) => setMySearch(e.target.value)}
+          elevated
           className="w-56 pl-9"
         />
       </div>
@@ -254,6 +256,7 @@ export default function PortalPage() {
         options={mySupportVsMaintenanceOptions}
         value={myTicketClass}
         onChange={setMyTicketClass}
+        elevated
         className="w-48"
       />
       <ComboBox
@@ -265,6 +268,7 @@ export default function PortalPage() {
           setMySupportTopicId(opt?.supportTopicId ?? '');
           setMyMaintenanceCategoryId(opt?.maintenanceCategoryId ?? '');
         }}
+        elevated
         className="w-52"
       />
       <ComboBox
@@ -272,6 +276,7 @@ export default function PortalPage() {
         options={myLocationOptions}
         value={myStudioId}
         onChange={setMyStudioId}
+        elevated
         className="w-48"
       />
       <div className="flex items-center gap-2">
@@ -279,7 +284,7 @@ export default function PortalPage() {
           type="date"
           value={myCreatedAfter}
           onChange={(e) => setMyCreatedAfter(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
+          className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
           style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
           title="From date"
         />
@@ -288,7 +293,7 @@ export default function PortalPage() {
           type="date"
           value={myCreatedBefore}
           onChange={(e) => setMyCreatedBefore(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
+          className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
           style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
           title="To date"
         />
@@ -334,7 +339,6 @@ export default function PortalPage() {
             const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
             const studioName = ticket.studio?.name ?? '';
             const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
-            const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
             const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
             const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
             return (
@@ -349,13 +353,21 @@ export default function PortalPage() {
                 tags={ticket.tags ?? []}
                 canAddTag={canAddTag}
                 onAddTag={canAddTag ? handleAddTag : undefined}
+                onRemoveTag={canAddTag ? handleRemoveTag : undefined}
+                removingTagId={
+                  removeTagMut.isPending &&
+                  removeTagMut.variables?.ticketId === ticket.id
+                    ? removeTagMut.variables.tagId
+                    : null
+                }
                 isAddingTag={
                   addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
                 }
                 commentCount={ticket._count?.comments ?? 0}
                 completedSubtasks={completedSubtasks}
                 totalSubtasks={totalSubtasks}
-                requesterDisplayName={requesterDisplayName}
+                requesterDisplayName={ticketRequesterPrimaryLine(ticket.requester)}
+                requesterEmail={ticketRequesterEmail(ticket.requester)}
                 isSelected={selectedId === ticket.id}
                 showIdColumn={showTicketIdColumn}
                 onSelect={handleSelect}
@@ -408,33 +420,14 @@ export default function PortalPage() {
 
   const studioPagination =
     studioTotalPages > 1 ? (
-      <div
-        className="flex items-center justify-between px-4 py-3"
-        style={{ borderTop: '1px solid var(--color-border-default)' }}
-      >
-        <p className="text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          Showing {(studioPage - 1) * PAGE_SIZE + 1}–
-          {Math.min(studioPage * PAGE_SIZE, studioTotal)} of {studioTotal}
-        </p>
-        <div className="flex gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={studioPage <= 1 || studioFetching}
-            onClick={() => setStudioPage((p) => Math.max(1, p - 1))}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={studioPage >= studioTotalPages || studioFetching}
-            onClick={() => setStudioPage((p) => Math.min(studioTotalPages, p + 1))}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
+      <FeedPaginationBar
+        page={studioPage}
+        pageSize={PAGE_SIZE}
+        total={studioTotal}
+        isBusy={studioFetching}
+        onPrev={() => setStudioPage((p) => Math.max(1, p - 1))}
+        onNext={() => setStudioPage((p) => Math.min(studioTotalPages, p + 1))}
+      />
     ) : null;
 
   const studioFiltersBar = (
@@ -445,6 +438,7 @@ export default function PortalPage() {
           setStudioFilter(e.target.value);
           setStudioPage(1);
         }}
+        elevated
         className="w-56"
       >
         <option value="">All my studios</option>
@@ -463,6 +457,7 @@ export default function PortalPage() {
           placeholder="Search tickets..."
           value={studioSearch}
           onChange={(e) => setStudioSearch(e.target.value)}
+          elevated
           className="w-56 pl-9"
         />
       </div>
@@ -499,7 +494,6 @@ export default function PortalPage() {
             const topicLabel = ticket.supportTopic?.name ?? ticket.maintenanceCategory?.name ?? '';
             const studioName = ticket.studio?.name ?? '';
             const subLabel = [topicLabel, studioName].filter(Boolean).join(' · ') || undefined;
-            const requesterDisplayName = (ticket.requester as { displayName?: string; name?: string }).displayName ?? (ticket.requester as { displayName?: string; name?: string }).name ?? '—';
             const totalSubtasks = (ticket as { totalSubtasks?: number }).totalSubtasks ?? ticket._count?.subtasks ?? 0;
             const completedSubtasks = (ticket as { completedSubtasks?: number }).completedSubtasks ?? 0;
             return (
@@ -514,13 +508,21 @@ export default function PortalPage() {
                 tags={ticket.tags ?? []}
                 canAddTag={canAddTag}
                 onAddTag={canAddTag ? handleAddTag : undefined}
+                onRemoveTag={canAddTag ? handleRemoveTag : undefined}
+                removingTagId={
+                  removeTagMut.isPending &&
+                  removeTagMut.variables?.ticketId === ticket.id
+                    ? removeTagMut.variables.tagId
+                    : null
+                }
                 isAddingTag={
                   addTagMut.isPending && addTagMut.variables?.ticketId === ticket.id
                 }
                 commentCount={ticket._count?.comments ?? 0}
                 completedSubtasks={completedSubtasks}
                 totalSubtasks={totalSubtasks}
-                requesterDisplayName={requesterDisplayName}
+                requesterDisplayName={ticketRequesterPrimaryLine(ticket.requester)}
+                requesterEmail={ticketRequesterEmail(ticket.requester)}
                 isSelected={selectedId === ticket.id}
                 showIdColumn={showTicketIdColumn}
                 onSelect={handleSelect}

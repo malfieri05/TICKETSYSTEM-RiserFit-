@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo, FormEvent } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, type CSSProperties, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle, Globe } from 'lucide-react';
+import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
 import { agentApi, adminApi, type AgentActionPlan } from '@/lib/api';
 import { AssistantLinkedText, flattenStudiosFromMarkets } from '@/components/ai/assistant-linked-text';
 import { cn } from '@/lib/utils';
+import { infoExplainerInnerFrameStyle, infoExplainerTitleRuleStyle } from '@/components/ui/InfoExplainer';
+import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
 
 function stripConfirmCancelPhrase(text: string): string {
   if (!text || typeof text !== 'string') return text;
@@ -54,6 +57,13 @@ const ROVI_WELCOME: Message = {
     "Hi! I'm Rovi. I have access to all tickets, knowledge base, and reporting. Ask me anything or ask me to do something — like create a ticket, update status, or assign work.",
 };
 
+/** Blue→purple gradient border + surface fill; width comes from Tailwind (`border-2` on composer, `border` on assistant bubble) */
+const roviComposerSurfaceBorder: CSSProperties = {
+  background:
+    'linear-gradient(var(--color-bg-surface), var(--color-bg-surface)) padding-box, linear-gradient(118deg, var(--color-accent) 0%, #6366f1 48%, #8b5cf6 100%) border-box',
+  backgroundRepeat: 'no-repeat',
+};
+
 export interface AiChatPanelProps {
   onClose?: () => void;
   fullScreen?: boolean;
@@ -78,8 +88,58 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [allowWebSearch, setAllowWebSearch] = useState(false);
+  const [webAccessHint, setWebAccessHint] = useState(false);
+  const [webHintPlacement, setWebHintPlacement] = useState<{ bottom: number; right: number } | null>(null);
+  const webHintAnchorRef = useRef<HTMLDivElement>(null);
+  const webHintPopoverRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const updateWebHintPlacement = useCallback(() => {
+    const anchor = webHintAnchorRef.current;
+    if (!anchor) return;
+    const r = anchor.getBoundingClientRect();
+    const gap = 8;
+    setWebHintPlacement({
+      bottom: window.innerHeight - r.top + gap,
+      right: Math.max(8, window.innerWidth - r.right),
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!webAccessHint) {
+      setWebHintPlacement(null);
+      return;
+    }
+    updateWebHintPlacement();
+    window.addEventListener('resize', updateWebHintPlacement);
+    window.addEventListener('scroll', updateWebHintPlacement, true);
+    return () => {
+      window.removeEventListener('resize', updateWebHintPlacement);
+      window.removeEventListener('scroll', updateWebHintPlacement, true);
+    };
+  }, [webAccessHint, updateWebHintPlacement]);
+
+  useEffect(() => {
+    if (!webAccessHint) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (webHintAnchorRef.current?.contains(t)) return;
+      if (webHintPopoverRef.current?.contains(t)) return;
+      setWebAccessHint(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [webAccessHint]);
+
+  useEffect(() => {
+    if (!webAccessHint) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWebAccessHint(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [webAccessHint]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,17 +270,72 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
     setMessages([ROVI_WELCOME]);
   };
 
+  const webAccessHintPortal =
+    typeof document !== 'undefined' &&
+    webAccessHint &&
+    webHintPlacement != null &&
+    createPortal(
+      <div
+        ref={webHintPopoverRef}
+        id="web-access-hint"
+        role="dialog"
+        aria-label="Web access"
+        className="fixed flex w-[min(22rem,calc(100vw-2.5rem))] flex-col pointer-events-auto box-border break-words"
+        style={{
+          bottom: webHintPlacement.bottom,
+          right: webHintPlacement.right,
+          zIndex: TOOLTIP_PORTAL_Z_INDEX,
+        }}
+      >
+        <div
+          className="rounded-xl p-2 shadow-xl"
+          style={{
+            background: 'var(--color-bg-surface-raised)',
+            border: '1px solid var(--color-border-default)',
+          }}
+        >
+          <div className="relative px-3 pb-9 pt-3" style={infoExplainerInnerFrameStyle}>
+            <div className="pb-2" style={infoExplainerTitleRuleStyle}>
+              <p className="text-sm font-semibold" style={{ color: 'var(--color-accent)' }}>
+                Web Access
+              </p>
+            </div>
+            <div className="space-y-2 pt-2 text-[11px] leading-relaxed" style={{ color: 'var(--color-text-primary)' }}>
+              <p>
+                Turn on &apos;web access&apos; when you want Rovi to have the ability to pull from the internet in its
+                responses.
+              </p>
+              <p className="pt-1 text-[10px] font-medium leading-snug" style={{ color: 'var(--color-text-muted)' }}>
+                NOTE: Enabling &apos;Web Access&apos; increases API usage.
+              </p>
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/Rovi.png"
+              alt=""
+              width={24}
+              height={24}
+              className="pointer-events-none absolute bottom-2 right-2 h-6 w-6 object-contain opacity-90"
+              aria-hidden
+            />
+          </div>
+        </div>
+      </div>,
+      document.body,
+    );
+
   return (
+    <>
     <div
       className={cn(
-        'flex flex-col overflow-hidden',
+        'rovi-chatbox-bg flex flex-col overflow-hidden',
         fullScreen ? 'flex-1 min-h-0' : 'h-full',
         className,
       )}
-      style={{ background: 'var(--color-bg-surface-raised)', border: fullScreen ? 'none' : '1px solid var(--color-border-default)' }}
+      style={{ border: fullScreen ? 'none' : '1px solid var(--color-border-default)' }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: 'var(--color-bg-surface)', borderBottom: '1px solid var(--color-border-default)' }}>
+      <div className="rovi-chatbox-header flex shrink-0 items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]">
             <Bot className="h-4 w-4 text-white" />
@@ -252,7 +367,7 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ background: 'var(--color-bg-surface)' }}>
+      <div className="rovi-chatbox-messages flex-1 min-h-0 space-y-4 overflow-y-auto bg-transparent p-4">
         {messages.map((msg) => (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}>
             <div
@@ -268,13 +383,15 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
               <div
                 className={cn(
                   'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
-                  msg.role === 'user' ? 'bg-[var(--color-accent)] text-white rounded-tr-sm' : 'rounded-tl-sm',
+                  msg.role === 'user'
+                    ? 'bg-[var(--color-accent)] text-white rounded-tr-sm'
+                    : cn('rounded-tl-sm', !msg.isError && 'border border-transparent'),
                 )}
                 style={
                   msg.role !== 'user'
                     ? msg.isError
                       ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#dc2626' }
-                      : { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }
+                      : { ...roviComposerSurfaceBorder, color: 'var(--color-text-primary)' }
                     : undefined
                 }
               >
@@ -360,33 +477,61 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
       </div>
 
       {/* Input area */}
-      <div className="p-3.5 shrink-0 space-y-2.5" style={{ background: 'var(--color-bg-surface-raised)', borderTop: '1px solid var(--color-border-default)' }}>
+      <div className="rovi-chatbox-footer shrink-0 space-y-2.5 p-3.5">
         <div className="flex items-center justify-between px-1">
-          <button
-            type="button"
-            onClick={() => setAllowWebSearch((v) => !v)}
-            className="flex items-center gap-2 text-[10px] select-none"
-            style={{ color: 'var(--color-text-muted)' }}
-            aria-pressed={allowWebSearch}
-          >
-            <div
-              className={cn(
-                'relative h-4 w-7 rounded-full transition-colors duration-150',
-                allowWebSearch ? 'bg-[var(--color-accent)]' : 'bg-[var(--color-bg-surface-raised)]',
-              )}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAllowWebSearch((v) => !v)}
+              className="focus-ring shrink-0 rounded-full p-0.5 transition-opacity hover:opacity-90"
+              aria-pressed={allowWebSearch}
+              aria-label="Toggle web access"
             >
-              <span
+              <div
                 className={cn(
-                  'absolute top-[2px] left-[2px] h-3 w-3 rounded-full bg-white transition-transform duration-150',
-                  allowWebSearch ? 'translate-x-[11px]' : 'translate-x-0',
+                  'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150',
+                  allowWebSearch
+                    ? 'bg-[var(--color-accent)]'
+                    : 'border border-[var(--color-border-default)] bg-[var(--color-bg-surface-inset)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
                 )}
-              />
+              >
+                <span
+                  className={cn(
+                    'absolute top-[2px] left-[2px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-150',
+                    allowWebSearch ? 'translate-x-[11px]' : 'translate-x-0',
+                  )}
+                  style={{
+                    boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-text-primary) 14%, transparent)',
+                  }}
+                />
+              </div>
+            </button>
+            <div className="flex items-center gap-1">
+              <span
+                className="inline-flex h-4 select-none items-center text-[10px] font-medium leading-none"
+                style={{ color: 'var(--color-text-secondary)' }}
+              >
+                Web Access
+              </span>
+              <div ref={webHintAnchorRef} className="flex shrink-0 items-center">
+                <button
+                  type="button"
+                  onClick={() => setWebAccessHint((v) => !v)}
+                  className={cn(
+                    'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[9px] font-semibold leading-none transition-colors',
+                    webAccessHint
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                      : 'border-[var(--color-text-primary)] bg-[var(--color-bg-surface)] text-[var(--color-text-primary)] hover:bg-[var(--color-btn-ghost-hover-bg)]',
+                  )}
+                  aria-label="What is web access?"
+                  aria-expanded={webAccessHint}
+                  aria-controls="web-access-hint"
+                >
+                  i
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Globe className="h-3 w-3" />
-              <span>Web Access</span>
-            </div>
-          </button>
+          </div>
           {conversationId && (
             <span className="text-[10px]" style={{ color: 'var(--color-text-muted)' }}>
               Thread active
@@ -402,8 +547,12 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
             onKeyDown={handleKeyDown}
             placeholder="Ask Rovi anything…"
             rows={1}
-            className="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] overflow-hidden placeholder-[var(--color-text-muted)]"
-            style={{ minHeight: '42px', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
+            className="flex-1 resize-none rounded-xl border-2 border-transparent px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] overflow-hidden placeholder-[var(--color-text-muted)]"
+            style={{
+              minHeight: '42px',
+              color: 'var(--color-text-primary)',
+              ...roviComposerSurfaceBorder,
+            }}
             disabled={isLoading}
           />
           <button
@@ -416,5 +565,7 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
         </form>
       </div>
     </div>
+    {webAccessHintPortal}
+    </>
   );
 }

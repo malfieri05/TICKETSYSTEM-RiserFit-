@@ -52,18 +52,7 @@ export function TicketAttachmentsSection({
     try {
       for (const file of files) {
         try {
-          const { data } = await attachmentsApi.requestUploadUrl(ticketId, {
-            filename: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            sizeBytes: file.size,
-          });
-          await attachmentsApi.uploadToS3(data.uploadUrl, file);
-          await attachmentsApi.confirmUpload(ticketId, {
-            s3Key: data.s3Key,
-            filename: file.name,
-            mimeType: file.type || 'application/octet-stream',
-            sizeBytes: file.size,
-          });
+          await attachmentsApi.upload(ticketId, file);
           qc.invalidateQueries({ queryKey: ['ticket', ticketId, 'attachments'] });
         } catch (err) {
           setUploadError(

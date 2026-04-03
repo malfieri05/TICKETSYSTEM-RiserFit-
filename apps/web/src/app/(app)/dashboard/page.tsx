@@ -2,7 +2,16 @@
 
 import Link from 'next/link';
 import type { ElementType, ReactNode } from 'react';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Ticket,
@@ -23,6 +32,7 @@ import { ComboBox } from '@/components/ui/ComboBox';
 import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
 
 type Preset = 'today' | 'last7' | 'last30';
 
@@ -95,7 +105,6 @@ function StatCard({
       style={{
         background: 'var(--color-bg-surface)',
         border: '1px solid var(--color-border-default)',
-        borderTop: '2px solid var(--color-feed-accent-border)',
       }}
     >
       {headerTooltip ? (
@@ -194,8 +203,11 @@ const TOOLTIP_GAP = 14; // px gap between vertical rule and tooltip edge
 
 function VolumeLineChart({ data }: { data: { date: string; count: number; closed: number }[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
+  const chartWrapRef = useRef<HTMLDivElement>(null);
+  const chartTipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
   const [svgWidth, setSvgWidth] = useState(800);
+  const [tipFixed, setTipFixed] = useState({ left: 0, top: 0 });
 
   useEffect(() => {
     const el = svgRef.current;
@@ -302,8 +314,33 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   // Clamp tooltip vertically so it doesn't overflow above PAD_T
   const tooltipTop = hover ? Math.max(PAD_T, Math.min(hover.y - 16, H - PAD_B - 80)) : 0;
 
+  useLayoutEffect(() => {
+    if (!hover || !hoverPt || typeof window === 'undefined') return;
+    const wrap = chartWrapRef.current;
+    const tip = chartTipRef.current;
+    const m = TOOLTIP_VIEWPORT_MARGIN;
+    const run = () => {
+      if (!wrap) return;
+      const wr = wrap.getBoundingClientRect();
+      let left = wr.left + tooltipLeft;
+      let top = wr.top + tooltipTop;
+      const w = tip?.getBoundingClientRect().width ?? TOOLTIP_W;
+      const h = tip?.getBoundingClientRect().height ?? 80;
+      left = Math.max(m, Math.min(window.innerWidth - m - w, left));
+      top = Math.max(m, Math.min(window.innerHeight - m - h, top));
+      setTipFixed({ left, top });
+    };
+    run();
+    const raf = requestAnimationFrame(run);
+    window.addEventListener('resize', run);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', run);
+    };
+  }, [hover, hoverPt, tooltipLeft, tooltipTop]);
+
   return (
-    <div className="relative select-none" style={{ height: H }}>
+    <div ref={chartWrapRef} className="relative select-none" style={{ height: H }}>
       <svg
         ref={svgRef}
         width="100%"
@@ -379,38 +416,42 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
         )}
       </svg>
 
-      {/* Tooltip — always to one side of the rule, never overlapping */}
-      {hover && hoverPt && (
-        <div
-          className="absolute pointer-events-none rounded-xl px-3.5 py-3 leading-snug shadow-md z-20"
-          style={{
-            top: tooltipTop,
-            left: tooltipLeft,
-            width: TOOLTIP_W,
-            background: 'var(--color-bg-surface)',
-            border: '1px solid var(--color-border-default)',
-            color: 'var(--color-text-primary)',
-          }}
-        >
-          <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2">
-            {formatDateLabel(hoverPt.date)}
-          </p>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--color-text-muted)]">Created</span>
-              <span className="text-sm font-bold" style={{ color: 'var(--color-accent)' }}>
-                {hoverPt.count}
-              </span>
+      {hover &&
+        hoverPt &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={chartTipRef}
+            className="pointer-events-none fixed box-border min-w-[9rem] w-max max-w-[min(22rem,calc(100vw-1rem))] rounded-xl px-3.5 py-3 leading-snug shadow-[var(--shadow-panel)] break-words"
+            style={{
+              left: tipFixed.left,
+              top: tipFixed.top,
+              zIndex: TOOLTIP_PORTAL_Z_INDEX,
+              background: 'var(--color-bg-surface-raised)',
+              border: '1px solid var(--color-border-default)',
+              color: 'var(--color-text-primary)',
+            }}
+          >
+            <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2">
+              {formatDateLabel(hoverPt.date)}
+            </p>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs shrink-0 text-[var(--color-text-muted)]">Created</span>
+                <span className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-accent)' }}>
+                  {hoverPt.count}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs shrink-0 text-[var(--color-text-muted)]">Closed</span>
+                <span className="text-sm font-bold tabular-nums text-[var(--color-text-primary)]">
+                  {hoverPt.closed}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-[var(--color-text-muted)]">Closed</span>
-              <span className="text-sm font-bold text-[var(--color-text-primary)]">
-                {hoverPt.closed}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

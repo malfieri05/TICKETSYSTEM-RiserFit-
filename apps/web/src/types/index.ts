@@ -80,9 +80,12 @@ export interface SlaStatus {
 // ─── Tickets ───────────────────────────────────────────────────────────────
 
 /** Operational tag on a ticket (v1): `id` is the global Tag id. */
+export type TagColor = 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple';
+
 export interface TicketTagItem {
   id: string;
   name: string;
+  color?: TagColor | string | null;
   createdAt: string;
   createdBy: { id: string; name: string };
 }

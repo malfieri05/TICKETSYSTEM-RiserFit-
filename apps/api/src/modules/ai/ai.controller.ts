@@ -22,7 +22,7 @@ import { AiService } from './ai.service';
 import { IngestionService } from './ingestion.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { RiserPolicySyncService } from './riser-policy-sync.service';
-import { ChatDto, IngestTextDto } from './dto/ai.dto';
+import { ChatDto, IngestTextDto, IngestUrlDto } from './dto/ai.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -127,6 +127,33 @@ export class AiController {
     return this.ingestionService.ingestText(dto.title, dto.content, user.id, {
       sourceType: 'manual',
     });
+  }
+
+  /**
+   * POST /api/ai/ingest/url
+   * Fetch a public website URL, extract its readable text, and ingest it into the knowledge base.
+   */
+  @Post('ingest/url')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  async ingestUrl(
+    @Body() dto: IngestUrlDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    this.logger.log(
+      `Admin ${user.id} ingesting URL: "${dto.url}" as "${dto.title}"`,
+    );
+    try {
+      return await this.ingestionService.ingestUrl(
+        dto.title.trim(),
+        dto.url.trim(),
+        user.id,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`URL ingestion failed: ${msg}`);
+      throw new BadRequestException(msg);
+    }
   }
 
   /**

@@ -163,6 +163,70 @@ export class IngestionService {
     return { documentId: doc.id, chunksCreated: chunks.length };
   }
 
+  /**
+   * Fetch a public URL, extract readable text via html-to-text, and ingest it
+   * into the knowledge base exactly like a pasted-text document.
+   */
+  async ingestUrl(
+    title: string,
+    url: string,
+    uploadedById: string,
+  ): Promise<{ documentId: string; chunksCreated: number }> {
+    this.logger.log(`Fetching URL for ingestion: ${url}`);
+
+    // Fetch with a browser-like UA so simple bot-blockers don't reject us
+    let html: string;
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (compatible; TicketingSystem-KnowledgeBot/1.0; +internal)',
+          Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+        },
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+      html = await res.text();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to fetch URL "${url}": ${msg}`);
+    }
+
+    // Convert HTML → plain text using the html-to-text library already installed
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { convert } = require('html-to-text') as {
+      convert: (html: string, opts?: Record<string, unknown>) => string;
+    };
+    const plainText = convert(html, {
+      wordwrap: false,
+      selectors: [
+        { selector: 'a',      options: { ignoreHref: true } },
+        { selector: 'img',    format: 'skip' },
+        { selector: 'script', format: 'skip' },
+        { selector: 'style',  format: 'skip' },
+        { selector: 'nav',    format: 'skip' },
+        { selector: 'footer', format: 'skip' },
+        { selector: 'header', format: 'skip' },
+      ],
+    });
+
+    if (!plainText.trim()) {
+      throw new Error('No readable text could be extracted from the URL.');
+    }
+
+    this.logger.log(
+      `URL fetched: ${url} → ${plainText.length} chars extracted`,
+    );
+
+    return this.ingestText(title, plainText, uploadedById, {
+      sourceType: 'url',
+      sourceUrl: url,
+      sizeBytes: Buffer.byteLength(plainText, 'utf8'),
+    });
+  }
+
   /** Re-ingest an existing KnowledgeDocument from raw text (idempotent). */
   async reingestExistingDocumentFromText(
     documentId: string,

@@ -123,6 +123,17 @@ export class TicketsController {
     return this.ticketsService.addTag(id, dto, user);
   }
 
+  // DELETE /api/tickets/:id/tags/:tagId
+  @Delete(':id/tags/:tagId')
+  @HttpCode(HttpStatus.OK)
+  removeTicketTag(
+    @Param('id') id: string,
+    @Param('tagId') tagId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.ticketsService.removeTag(id, tagId, user);
+  }
+
   // GET /api/tickets/:id
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {

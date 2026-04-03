@@ -9,6 +9,8 @@
   --color-bg-surface-inset: #0d1218;
   --color-border-default: #29303a;
   --color-border-subtle: #222933;
+  /* Account menu avatar on themed surface (dark card → light ring) */
+  --profile-avatar-ring: #ffffff;
   --color-text-primary: #e8edf4;
   --color-text-secondary: #c8d0dc;
   --color-text-muted: #96a1b2;
@@ -35,13 +37,18 @@
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.32), 0 8px 28px -16px rgba(0, 0, 0, 0.55);
+  /* Ticket / portal filter row — inputs & combos read as lifted off the bar */
+  --shadow-filter-elevated:
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 6px 20px rgba(0, 0, 0, 0.32),
+    0 2px 5px rgba(0, 0, 0, 0.22);
   --shadow-raised: 0 2px 10px rgba(0, 0, 0, 0.4), 0 14px 34px -20px rgba(0, 0, 0, 0.7);
   --color-scrollbar-thumb: #333333;
   --color-scrollbar-thumb-hover: #555555;
   /* Top app bar — matches page text scale (dark theme bar is near-black) */
   --color-text-app-header: var(--color-text-primary);
   --color-text-app-header-muted: var(--color-text-muted);
-  /* Content headers: ticket feed thead, admin table thead, in-page tab tracks, drawer title strip */
+  /* Content headers: admin table thead, in-page tab tracks, drawer chrome. Ticket feed thead uses --color-bg-drawer-canvas. */
   --color-bg-content-header: #111111;
   --color-bg-table-header: var(--color-bg-content-header);
   --color-bg-chrome: var(--color-bg-content-header);
@@ -50,10 +57,15 @@
   --color-feed-accent-border: rgba(52, 120, 196, 0.22);
   /* Sticky page header — slightly above page black, soft lift */
   --color-bg-app-header: #141414;
-  /* 1px accent under bar + soft lift */
+  /* Accent hairline + stronger downward shadow so the bar reads above the scroll body */
   --shadow-app-header:
-    0 1px 0 0 rgba(52, 120, 196, 0.22),
-    0 4px 16px rgba(0, 0, 0, 0.42);
+    0 1px 0 0 rgba(52, 120, 196, 0.28),
+    0 6px 24px rgba(0, 0, 0, 0.48),
+    0 2px 10px rgba(0, 0, 0, 0.35);
+  /* Cast onto main canvas from the right edge of the left rail */
+  --shadow-sidebar-rail:
+    4px 0 36px rgba(0, 0, 0, 0.55),
+    2px 0 14px rgba(0, 0, 0, 0.4);
   /* Header “info” (ⓘ) circle — hover on dark chrome */
   --color-app-header-info-hover-bg: rgba(255, 255, 255, 0.1);
   --color-app-header-info-hover-fg: var(--color-accent-hover);
@@ -98,6 +110,8 @@
   --color-bg-surface-inset: #eff3f8;
   --color-border-default: #d9e0ea;
   --color-border-subtle: #e8edf3;
+  /* Strong contrast on white/light cards (e.g. account menu initials) */
+  --profile-avatar-ring: #171717;
   --color-text-primary: #171717;
   --color-text-secondary: #475467;
   --color-text-muted: #667085;
@@ -124,11 +138,15 @@
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(16, 24, 40, 0.06), 0 10px 24px -14px rgba(16, 24, 40, 0.18);
+  --shadow-filter-elevated:
+    0 1px 2px rgba(16, 24, 40, 0.08),
+    0 5px 16px rgba(16, 24, 40, 0.12),
+    0 2px 4px rgba(16, 24, 40, 0.06);
   --shadow-raised: 0 2px 8px rgba(16, 24, 40, 0.1), 0 20px 38px -20px rgba(16, 24, 40, 0.22);
   --color-scrollbar-thumb: #c4c4c4;
   --color-scrollbar-thumb-hover: #a3a3a3;
-  /* Content / tables — richer blue-gray so thead, chrome, and section headers
-     clearly stand apart from both the dark app header and the white cards     */
+  /* Content / tables — richer blue-gray for admin thead, chrome, section headers.
+     Main ticket feed column header row uses --color-bg-drawer-canvas (matches drawer Subtasks body). */
   --color-bg-content-header: #b8c8dc;
   --color-bg-table-header: var(--color-bg-content-header);
   /* Drawer strips, table chrome — same family as content header */
@@ -148,8 +166,12 @@
   --color-app-header-info-hover-bg: rgba(255, 255, 255, 0.18);
   --color-app-header-info-hover-fg: #ffffff;
   --shadow-app-header:
-    0 1px 0 0 rgba(0, 0, 0, 0.32),
-    0 4px 18px rgba(0, 0, 0, 0.22);
+    0 1px 0 0 rgba(0, 0, 0, 0.38),
+    0 8px 28px rgba(0, 0, 0, 0.16),
+    0 3px 12px rgba(0, 0, 0, 0.1);
+  --shadow-sidebar-rail:
+    8px 0 36px -6px rgba(16, 24, 40, 0.16),
+    4px 0 20px rgba(16, 24, 40, 0.1);
   --shadow-drawer: -8px 0 32px rgba(0, 0, 0, 0.12), -2px 0 12px rgba(0, 0, 0, 0.06);
   /* Downward-biased only — separates tab strip from scroll body, not from header above */
   --shadow-drawer-tabbar: 0 12px 28px -10px rgba(16, 24, 40, 0.14), 0 4px 12px -8px rgba(16, 24, 40, 0.08);
@@ -324,25 +346,48 @@ body {
 
 /*
  * Tags column: content box = 28px (same as + control) so pills center with +;
- * padding-bottom is outside that box (content-box) so the horizontal scrollbar paints in the strip below, not over capsules.
+ * padding-bottom is outside that box (content-box) so a very thin horizontal scrollbar paints in the gutter below, not over capsules.
  */
 .ticket-tags-lateral-scroll {
   box-sizing: content-box;
-  height: 1.75rem; /* 28px — matches h-7 + button; no padding-bottom so box stays 28px and capsules center-align with Status column */
+  height: 1.75rem;       /* 28px content area — capsules sit here, centered */
+  padding-bottom: calc(4px * 0.3); /* gutter ~70% shorter than 4px; matches slim bar */
   display: flex;
-  align-items: center;
+  align-items: center;   /* centers capsules in the 28px content area only */
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border-default) transparent;
+}
+[data-theme="light"] .ticket-tags-lateral-scroll {
+  scrollbar-color: rgba(15, 23, 42, 0.12) transparent;
+}
+[data-theme="dark"] .ticket-tags-lateral-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+[data-theme="light"] .ticket-tags-lateral-scroll:hover {
+  scrollbar-color: rgba(15, 23, 42, 0.2) transparent;
+}
+[data-theme="dark"] .ticket-tags-lateral-scroll:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 .ticket-tags-lateral-scroll::-webkit-scrollbar {
-  height: 4px; /* sits within the 28px box at its bottom edge */
-}
-.ticket-tags-lateral-scroll::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  background: var(--color-border-default);
+  /* 70% less tall than previous 2px bar → 0.6px (engines clamp to ~1px where needed) */
+  height: calc(2px * 0.3);
 }
 .ticket-tags-lateral-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+[data-theme="light"] .ticket-tags-lateral-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgba(15, 23, 42, 0.1);
+}
+[data-theme="dark"] .ticket-tags-lateral-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.07);
+}
+[data-theme="light"] .ticket-tags-lateral-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
+}
+[data-theme="dark"] .ticket-tags-lateral-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* Ticket feed body scroller: smooth, contained, never drags page chrome. */
@@ -369,4 +414,91 @@ body {
 .dashboard-card:hover {
   box-shadow: var(--shadow-dashboard-card-hover);
   transform: translateY(-2px);
+}
+
+/*
+ * AI Assistant welcome: soft blue + violet radial glow from center.
+ * Use rgba() stops (not color-mix + transparent) so gradients aren’t dropped in Safari / older engines.
+ */
+.assistant-welcome-bg {
+  background-repeat: no-repeat;
+}
+[data-theme="light"] .assistant-welcome-bg {
+  background-color: var(--color-bg-page);
+  background-image:
+    radial-gradient(ellipse 100% 85% at 50% 40%, rgba(40, 104, 184, 0.22) 0%, transparent 58%),
+    radial-gradient(ellipse 75% 62% at 50% 48%, rgba(99, 102, 241, 0.14) 0%, transparent 55%);
+}
+[data-theme="dark"] .assistant-welcome-bg {
+  background-color: var(--color-bg-page);
+  background-image:
+    radial-gradient(ellipse 100% 80% at 50% 40%, rgba(52, 120, 196, 0.38) 0%, transparent 56%),
+    radial-gradient(ellipse 72% 58% at 50% 50%, rgba(129, 140, 248, 0.22) 0%, transparent 52%);
+}
+
+/*
+ * Rovi chat panel / floating widget: same blue + violet family as assistant welcome,
+ * but linear TL → BR and lower opacity than the radial welcome (more subtle).
+ */
+.rovi-chatbox-bg {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+[data-theme="light"] .rovi-chatbox-bg {
+  background-color: var(--color-bg-surface-raised);
+  background-image:
+    linear-gradient(135deg, rgba(40, 104, 184, 0.1) 0%, transparent 52%),
+    linear-gradient(135deg, transparent 42%, rgba(99, 102, 241, 0.065) 100%);
+}
+[data-theme="dark"] .rovi-chatbox-bg {
+  background-color: var(--color-bg-surface-raised);
+  background-image:
+    linear-gradient(135deg, rgba(52, 120, 196, 0.17) 0%, transparent 50%),
+    linear-gradient(135deg, transparent 38%, rgba(129, 140, 248, 0.09) 100%);
+}
+
+/* Rovi chat: header + footer read as raised chrome over the message strip */
+.rovi-chatbox-header,
+.rovi-chatbox-footer {
+  position: relative;
+  z-index: 2;
+  background: var(--color-bg-surface-raised);
+}
+.rovi-chatbox-header {
+  border-bottom: 1px solid var(--color-border-default);
+}
+[data-theme="light"] .rovi-chatbox-header {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 6px 18px -6px rgba(16, 24, 40, 0.12),
+    0 2px 8px -2px rgba(16, 24, 40, 0.06);
+}
+[data-theme="dark"] .rovi-chatbox-header {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 8px 22px -6px rgba(0, 0, 0, 0.4),
+    0 3px 10px -3px rgba(0, 0, 0, 0.28);
+}
+.rovi-chatbox-footer {
+  border-top: 1px solid var(--color-border-default);
+}
+[data-theme="light"] .rovi-chatbox-footer {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 -6px 18px -6px rgba(16, 24, 40, 0.1),
+    0 -2px 8px -2px rgba(16, 24, 40, 0.05);
+}
+[data-theme="dark"] .rovi-chatbox-footer {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 -8px 22px -6px rgba(0, 0, 0, 0.38),
+    0 -3px 10px -3px rgba(0, 0, 0, 0.26);
+}
+.rovi-chatbox-messages {
+  position: relative;
+  z-index: 0;
+}
+
+.filter-elevated-shadow {
+  box-shadow: var(--shadow-filter-elevated);
 }

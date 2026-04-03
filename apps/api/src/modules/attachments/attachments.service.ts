@@ -181,6 +181,45 @@ export class AttachmentsService {
     };
   }
 
+  /**
+   * Server-side proxied upload — replaces the presigned-URL dance entirely.
+   * Accepts a file buffer from the NestJS controller, uploads to S3, and
+   * persists the DB record in one call. No CORS involvement.
+   */
+  async uploadAttachment(
+    ticketId: string,
+    file: Express.Multer.File,
+    uploadedById: string,
+  ) {
+    if (file.size > MAX_SIZE_BYTES) {
+      throw new BadRequestException('File exceeds 25 MB limit');
+    }
+
+    const ticket = await this.prisma.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException(`Ticket ${ticketId} not found`);
+
+    const safeFilename = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const s3Key = `tickets/${ticketId}/${Date.now()}-${safeFilename}`;
+    const { bucket } = this.getS3OrThrow();
+
+    await this.uploadBuffer(s3Key, file.buffer, file.mimetype || 'application/octet-stream');
+
+    const attachment = await this.prisma.ticketAttachment.create({
+      data: {
+        ticketId,
+        uploadedById,
+        filename: file.originalname,
+        mimeType: file.mimetype || 'application/octet-stream',
+        sizeBytes: file.size,
+        s3Key,
+        s3Bucket: bucket,
+      },
+      include: { uploadedBy: { select: { id: true, name: true } } },
+    });
+
+    return attachment;
+  }
+
   /** Upload a buffer to S3 (server-side). Used e.g. for knowledge base PDFs. */
   async uploadBuffer(
     key: string,
