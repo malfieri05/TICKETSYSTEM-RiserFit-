@@ -83,7 +83,7 @@ export function PortalTableSkeletonRows({ count = 6 }: { count?: number }) {
 
 /**
  * Skeleton rows for the canonical 8-column feed table
- * (ID | Title | Created | Tags | Status | Due date | Progress | Requester).
+ * (ID | Title | Status | Created | Tags | Due date | Progress | Requester).
  * Column count matches CANONICAL_FEED_HEADERS so there is no horizontal shift
  * when the real data replaces the skeleton.
  */
@@ -116,6 +116,10 @@ export function TicketsTableSkeletonRows({
                 <div className="h-3 w-10 shrink-0 rounded" style={skeletonRow} />
               </div>
             </td>
+            {/* Status */}
+            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
+              <div className="h-5 rounded w-20 mx-auto" style={skeletonRow} />
+            </td>
             {/* Created */}
             <td className={`${POLISH_CLASS.cellPadding} text-center`}>
               <div className="h-3 rounded w-24 mx-auto" style={skeletonRow} />
@@ -126,10 +130,6 @@ export function TicketsTableSkeletonRows({
                 <div className="h-7 w-7 shrink-0 rounded-full" style={{ visibility: 'hidden' }} aria-hidden />
                 <div className="h-4 min-w-0 flex-1 rounded w-20" style={skeletonRow} />
               </div>
-            </td>
-            {/* Status */}
-            <td className={`${POLISH_CLASS.cellPadding} text-center`}>
-              <div className="h-5 rounded w-20 mx-auto" style={skeletonRow} />
             </td>
             {/* Due date */}
             <td className={`${POLISH_CLASS.cellPadding} text-center`}>

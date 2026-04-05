@@ -9,6 +9,7 @@ import { Header } from '@/components/layout/Header';
 import { DispatchWorkspacePanel } from '@/components/dispatch/DispatchWorkspacePanel';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Input';
+import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { StatusBadge } from '@/components/ui/Badge';
 import { DISPATCH_TRADE_TYPE_LABELS, DISPATCH_READINESS_LABELS } from '@ticketing/types';
@@ -236,20 +237,20 @@ export default function DispatchPage() {
           />
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">From</span>
-            <Input
-              type="date"
+            <DateFilterInput
+              variant="filter"
               value={filters.createdAfter ?? ''}
-              onChange={(e) => setFilter('createdAfter', e.target.value)}
+              onChange={(v) => setFilter('createdAfter', v)}
               className="w-[7.25rem] min-w-0 shrink-0"
               style={{ color: 'var(--color-text-muted)' }}
             />
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-xs text-[var(--color-text-muted)] whitespace-nowrap">To</span>
-            <Input
-              type="date"
+            <DateFilterInput
+              variant="filter"
               value={filters.createdBefore ?? ''}
-              onChange={(e) => setFilter('createdBefore', e.target.value)}
+              onChange={(v) => setFilter('createdBefore', v)}
               className="w-[7.25rem] min-w-0 shrink-0"
               style={{ color: 'var(--color-text-muted)' }}
             />

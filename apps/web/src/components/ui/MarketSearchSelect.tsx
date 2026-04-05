@@ -87,12 +87,12 @@ export function MarketSearchSelect({
         onKeyDown={handleKeyDown}
         onClick={() => setIsOpen((o) => !o)}
         className={cn(
-          'flex items-center rounded-lg border text-sm transition-colors min-w-[160px] cursor-pointer',
-          isOpen && 'ring-1 ring-[var(--color-accent)]',
+          'flex items-center rounded-lg border-2 border-solid text-sm transition-[border-color] duration-[var(--duration-fast)] ease-out min-w-[160px] cursor-pointer',
+          isOpen ? 'border-[var(--color-accent)]' : 'border-[var(--color-border-default)]',
+          'focus-visible:border-[var(--color-accent)]',
         )}
         style={{
           background: 'var(--color-bg-surface)',
-          borderColor: isOpen ? 'var(--color-accent)' : 'var(--color-border-default)',
         }}
       >
         <span className="flex-1 min-w-0 truncate pl-3 py-2 pr-8" style={{ color: 'var(--color-text-primary)' }}>
@@ -127,8 +127,8 @@ export function MarketSearchSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type to filter states…"
-              className="w-full px-2 py-1.5 text-sm rounded focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
-              style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)', color: 'var(--color-text-primary)' }}
+              className="w-full px-2 py-1.5 text-sm rounded border-2 border-solid border-[var(--color-border-default)] outline-none transition-[border-color] duration-[var(--duration-fast)] ease-out focus:border-[var(--color-accent)]"
+              style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
               autoFocus
               autoComplete="off"
               onClick={(e) => e.stopPropagation()}
@@ -138,7 +138,7 @@ export function MarketSearchSelect({
             <li
               role="option"
               aria-selected={value === ''}
-              className="px-3 py-2 cursor-pointer transition-colors text-sm hover:bg-[var(--color-bg-surface)]"
+              className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
               style={{ color: 'var(--color-text-primary)' }}
               onClick={() => handleSelect('')}
             >
@@ -154,7 +154,7 @@ export function MarketSearchSelect({
                   key={m.id}
                   role="option"
                   aria-selected={value === m.id}
-                  className="px-3 py-2 cursor-pointer transition-colors text-sm hover:bg-[var(--color-bg-surface)]"
+                  className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
                   style={{ color: 'var(--color-text-primary)' }}
                   onClick={() => handleSelect(m.id)}
                 >

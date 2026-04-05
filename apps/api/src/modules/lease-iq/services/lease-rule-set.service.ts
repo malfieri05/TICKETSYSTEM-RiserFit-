@@ -33,7 +33,7 @@ export class LeaseRuleSetService {
 
   async createDraftFromParse(
     studioId: string,
-    sourceId: string,
+    sourceId: string | null,
     rules: ParsedRuleDto[],
   ) {
     const ruleset = await this.createDraft(studioId, sourceId);

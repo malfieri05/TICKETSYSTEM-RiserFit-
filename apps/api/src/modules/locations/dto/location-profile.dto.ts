@@ -65,4 +65,6 @@ export interface LocationProfileResponseDto {
     showContact: boolean;
     showIdentifiers: boolean;
   };
+  /** True when this studio has a published Lease IQ ruleset (same notion as admin Lease IQ list icon). */
+  hasPublishedLeaseIqRuleset: boolean;
 }

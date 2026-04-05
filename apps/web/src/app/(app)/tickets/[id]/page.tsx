@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import {
   ArrowLeft, MessageSquare, CheckSquare, Clock,
   Plus, User, CheckCircle2, RefreshCw, Scale,
@@ -21,7 +21,7 @@ import { TicketAttachmentsSection } from '@/components/tickets/TicketAttachments
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
-import { RequesterAvatar } from '@/components/tickets/TicketRow';
+import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -276,17 +276,9 @@ export default function TicketDetailPage() {
                 </>
               )}
             </p>
-            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>
-                Due Date:{' '}
-                {(() => {
-                  const raw = ticket.dueDate;
-                  if (!raw?.trim()) return '—';
-                  const d = parseISO(raw);
-                  if (Number.isNaN(d.getTime())) return '—';
-                  return format(d, 'MMM d, yyyy');
-                })()}
-              </span>
+            <p className="text-xs mt-1">
+              <span style={{ color: POLISH_THEME.metaSecondary }}>Due Date: </span>
+              <FeedDueDateCell dueDateIso={ticket.dueDate ?? ''} />
             </p>
 
             {/* Progress inline bar */}
@@ -467,6 +459,16 @@ export default function TicketDetailPage() {
                 )}
                 {(subtasksList ?? ticket.subtasks).map((subtask) => (
                   <div key={subtask.id} id={`subtask-${subtask.id}`} className="dashboard-card rounded-xl p-3 flex flex-wrap items-center gap-3" style={panel}>
+                    <span className="shrink-0">
+                      <SubtaskStatusBadge status={subtask.status} />
+                    </span>
+                    <span
+                      className="shrink-0 select-none text-sm font-light leading-none tabular-nums"
+                      style={{ color: 'var(--color-border-default)' }}
+                      aria-hidden
+                    >
+                      |
+                    </span>
                     <div className="flex-1 min-w-0">
                       <p className={cn('text-sm font-medium', subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? 'line-through' : 'text-[var(--color-text-primary)]')}
                         style={subtask.status === 'DONE' || subtask.status === 'SKIPPED' ? { color: 'var(--color-text-muted)', textDecoration: 'line-through' } : undefined}>
@@ -484,7 +486,6 @@ export default function TicketDetailPage() {
                         )}
                       </div>
                     </div>
-                    <SubtaskStatusBadge status={subtask.status} />
                     {canManage && !['LOCKED'].includes(subtask.status) && (
                       <Select
                         value={subtask.status}

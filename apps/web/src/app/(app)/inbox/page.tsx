@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Inbox as InboxIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
-import { ticketsApi, invalidateTicketLists } from '@/lib/api';
+import { ticketsApi, updateTicketRowInListCaches } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import { useTicketListQuery } from '@/hooks/useTicketListQuery';
 import type { TicketFilters } from '@/types';
@@ -55,9 +55,22 @@ export default function InboxPage() {
   const addTagMut = useMutation({
     mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
       ticketsApi.addTag(ticketId, { label }),
-    onSuccess: (_, variables) => {
+    onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      invalidateTicketLists(qc);
+      const body = res.data;
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: [
+          ...(t.tags ?? []),
+          {
+            id: body.tag.id,
+            name: body.tag.name,
+            color: body.tag.color ?? null,
+            createdAt: body.createdAt,
+            createdBy: body.createdBy,
+          },
+        ],
+      }));
     },
   });
   const handleAddTag = useCallback(
@@ -72,7 +85,10 @@ export default function InboxPage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      invalidateTicketLists(qc);
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
+      }));
     },
   });
   const handleRemoveTag = useCallback(
@@ -107,6 +123,7 @@ export default function InboxPage() {
   } = useTicketListQuery('actionable', listParams);
 
   const hasTickets = tickets.length > 0;
+  const feedTicketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
 
   const pagination =
     totalPages > 1 ? (
@@ -360,7 +377,12 @@ export default function InboxPage() {
         pagination={pagination}
         initialSkeleton={initialSkeleton}
       />
-      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
+      <TicketDrawer
+        ticketId={selectedId}
+        onClose={handleClose}
+        feedTicketIds={feedTicketIds}
+        onNavigateTicket={setSelectedId}
+      />
     </div>
   );
 }

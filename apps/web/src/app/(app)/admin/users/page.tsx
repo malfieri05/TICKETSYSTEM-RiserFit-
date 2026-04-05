@@ -244,7 +244,7 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
+    <div className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={isLoading ? 'Users' : `Users (${users.length})`} />
       {addUserModalOpen && (
         <div
@@ -368,7 +368,8 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
-      <div className="p-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="p-6">
         <div className="mb-4 flex items-center gap-4 flex-wrap justify-between">
           <div className="flex items-center gap-4 flex-wrap">
             <Input
@@ -682,52 +683,54 @@ export default function AdminUsersPage() {
           )}
         </div>
 
-        {/* Stage 23: Manage locations modal for studio users */}
-        {locationsModalUserId && (
-          <ManageLocationsModal
-            user={users.find((u) => u.id === locationsModalUserId) as User | undefined}
-            onClose={() => setLocationsModalUserId(null)}
-            onSuccess={() => qc.invalidateQueries({ queryKey: ['users'] })}
-          />
-        )}
+        </div>
+      </div>
 
-        {/* Deactivate confirmation modal */}
-        {deactivateConfirmUserId && (
+      {/* Stage 23: Manage locations modal for studio users */}
+      {locationsModalUserId && (
+        <ManageLocationsModal
+          user={users.find((u) => u.id === locationsModalUserId) as User | undefined}
+          onClose={() => setLocationsModalUserId(null)}
+          onSuccess={() => qc.invalidateQueries({ queryKey: ['users'] })}
+        />
+      )}
+
+      {/* Deactivate confirmation modal */}
+      {deactivateConfirmUserId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={(e) => e.target === e.currentTarget && setDeactivateConfirmUserId(null)}
+        >
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.7)' }}
-            onClick={(e) => e.target === e.currentTarget && setDeactivateConfirmUserId(null)}
+            className="rounded-xl max-w-md w-full p-6"
+            style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="rounded-xl max-w-md w-full p-6"
-              style={{ background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>Deactivate user?</h3>
-              <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>
-                This user will no longer be able to sign in or access the system. Their ticket history will remain in the system.
-              </p>
-              <div className="flex justify-end gap-2">
-                <Button variant="secondary" size="sm" onClick={() => setDeactivateConfirmUserId(null)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => {
-                    const id = deactivateConfirmUserId;
-                    setDeactivateConfirmUserId(null);
-                    deactivateMut.mutate(id);
-                  }}
-                  loading={deactivateMut.isPending}
-                >
-                  Deactivate
-                </Button>
-              </div>
+            <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text-primary)' }}>Deactivate user?</h3>
+            <p className="text-sm mb-6" style={{ color: 'var(--color-text-secondary)' }}>
+              This user will no longer be able to sign in or access the system. Their ticket history will remain in the system.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setDeactivateConfirmUserId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  const id = deactivateConfirmUserId;
+                  setDeactivateConfirmUserId(null);
+                  deactivateMut.mutate(id);
+                }}
+                loading={deactivateMut.isPending}
+              >
+                Deactivate
+              </Button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import type { QueryClient } from '@tanstack/react-query';
+import type { PaginatedResponse, TicketListItem } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
@@ -159,6 +161,38 @@ export const invalidateTicketLists = (queryClient: QueryClient) => {
   // Legacy portal list
   queryClient.invalidateQueries({ queryKey: ['tickets', 'portal-legacy'] });
 };
+
+/** Ticket list queryFn returns Axios responses; rows live at `cached.data.data`. */
+type TicketListQueryCache = AxiosResponse<PaginatedResponse<TicketListItem>>;
+
+/** Patch one row in every cached ticket feed (main list, portal, inbox, location profile, legacy). */
+export function updateTicketRowInListCaches(
+  queryClient: QueryClient,
+  ticketId: string,
+  updater: (row: TicketListItem) => TicketListItem,
+): void {
+  const apply = (old: TicketListQueryCache | undefined): TicketListQueryCache | undefined => {
+    const page = old?.data;
+    if (!page?.data) return old;
+    let hit = false;
+    const nextRows = page.data.map((row) => {
+      if (row.id !== ticketId) return row;
+      hit = true;
+      return updater(row);
+    });
+    if (!hit) return old;
+    return {
+      ...old,
+      data: {
+        ...page,
+        data: nextRows,
+      },
+    } as TicketListQueryCache;
+  };
+
+  queryClient.setQueriesData<TicketListQueryCache>({ queryKey: ['tickets'], exact: false }, apply);
+  queryClient.setQueriesData<TicketListQueryCache>({ queryKey: ['location-tickets'], exact: false }, apply);
+}
 
 // ─── Comments ──────────────────────────────────────────────────────────────
 
@@ -362,6 +396,12 @@ export const reportingApi = {
   /** Pass days=0 to request all-time data (no date filter). */
   volumeByDay: (days = 30) =>
     api.get<{ date: string; count: number; closed: number }[]>(`/reporting/volume?days=${days}`),
+
+  /** Inclusive calendar range — matches dashboard KPI timeframe. */
+  volumeByDateRange: (from: string, to: string) =>
+    api.get<{ date: string; count: number; closed: number }[]>('/reporting/volume', {
+      params: { from, to },
+    }),
 
   byStatus: () =>
     api.get<{ status: string; count: number }[]>('/reporting/by-status'),
@@ -830,11 +870,19 @@ export const emailAutomationApi = {
 
 const LEASE_IQ_PREFIX = '/admin/lease-iq';
 
+export type LeaseIqSourceRow = {
+  id: string;
+  sourceType: string;
+  originalFileName: string | null;
+  uploadedAt: string;
+  uploadedByUserId: string | null;
+  uploadedBytes: number | null;
+  textCharCount: number | null;
+};
+
 export const leaseIqApi = {
   listSources: (studioId: string) =>
-    api.get<{ id: string; sourceType: string; originalFileName: string | null; uploadedAt: string; uploadedByUserId: string | null }[]>(
-      `${LEASE_IQ_PREFIX}/studios/${studioId}/sources`,
-    ),
+    api.get<LeaseIqSourceRow[]>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources`),
   uploadSource: (studioId: string, file: File) => {
     const form = new FormData();
     form.append('file', file);
@@ -842,8 +890,10 @@ export const leaseIqApi = {
   },
   pasteSource: (studioId: string, pastedText: string) =>
     api.post<{ id: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/paste`, { pastedText }),
-  parse: (studioId: string) =>
-    api.post<{ rulesetId: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/parse`),
+  deleteSource: (studioId: string, sourceId: string) =>
+    api.delete(`${LEASE_IQ_PREFIX}/studios/${studioId}/sources/${sourceId}`),
+  parse: (studioId: string, sourceIds: string[]) =>
+    api.post<{ rulesetId: string }>(`${LEASE_IQ_PREFIX}/studios/${studioId}/parse`, { sourceIds }),
   studiosWithRulesets: () =>
     api.get<{ studioIds: string[]; publishedStudioIds: string[] }>(
       `${LEASE_IQ_PREFIX}/studios-with-rulesets`,

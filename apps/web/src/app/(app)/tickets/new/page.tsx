@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Check, X } from 'lucide-react';
 import { ticketsApi, adminApi, ticketFormsApi, attachmentsApi, invalidateTicketLists } from '@/lib/api';
 import type {
   TicketFormSchemaDto,
@@ -13,9 +14,12 @@ import type {
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
 import { UploadDropzone } from '@/components/uploads/UploadDropzone';
+import { formatTicketId } from '@/components/tickets/TicketRow';
+import { POLISH_THEME } from '@/lib/polish';
 
 const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
 
@@ -37,6 +41,8 @@ export default function NewTicketPage() {
   const [error, setError] = useState('');
   const [stagedFiles, setStagedFiles] = useState<{ id: string; file: File }[]>([]);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [isSubmittingFlow, setIsSubmittingFlow] = useState(false);
+  const [successTicketId, setSuccessTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -140,6 +146,22 @@ export default function NewTicketPage() {
   );
 
   const allowAttachmentsOnCreate = isSupport || isMaintenance;
+
+  /** Clears the wizard so the success overlay sits over an empty “new ticket” form (submitter fields repopulated from profile). */
+  function resetFormAfterSuccessfulSubmit() {
+    setTicketClassId('');
+    setDepartmentId('');
+    setSupportTopicId('');
+    setMaintenanceCategoryId('');
+    setFormResponses({});
+    setTitle('');
+    setDescription('');
+    setStagedFiles([]);
+    setError('');
+    setSubmitterName(user?.displayName ?? '');
+    setSubmitterEmail(user?.email ?? '');
+    setStudioId(user?.studioId ?? '');
+  }
 
   const handleStagedFilesSelected = (files: File[]) => {
     setStagedFiles((prev) => [
@@ -255,6 +277,7 @@ export default function NewTicketPage() {
       payload.formResponses = { ...formResponses };
     }
 
+    setIsSubmittingFlow(true);
     try {
       const res = await mutation.mutateAsync(payload);
       const ticketId = res.data.id;
@@ -286,11 +309,17 @@ export default function NewTicketPage() {
         }
       }
 
-      setStagedFiles([]);
-      router.push(`/tickets/${ticketId}`);
+      resetFormAfterSuccessfulSubmit();
+      setSuccessTicketId(ticketId);
     } catch {
       // error already handled in mutation onError
+    } finally {
+      setIsSubmittingFlow(false);
     }
+  };
+
+  const dismissSuccessModal = () => {
+    setSuccessTicketId(null);
   };
 
   if (taxonomyLoading || !taxonomy) {
@@ -307,7 +336,89 @@ export default function NewTicketPage() {
   return (
     <div className="flex flex-col h-full">
       <Header title="New Ticket" />
-      <div className="flex-1 p-6 max-w-2xl">
+      <div className="relative flex-1 p-6 max-w-2xl">
+        {successTicketId && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-6"
+            style={{ background: 'rgba(15, 23, 42, 0.45)' }}
+            role="presentation"
+            onClick={dismissSuccessModal}
+          >
+            <div
+              className="relative w-full max-w-md rounded-2xl px-8 pb-10 pt-12 text-center shadow-2xl"
+              style={{
+                background: 'var(--color-bg-surface)',
+                border: '1px solid var(--color-border-default)',
+                boxShadow: 'var(--shadow-elevated)',
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="ticket-success-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                className="focus-ring absolute right-3 top-3 rounded-md p-1.5 text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-btn-ghost-hover-bg)] hover:text-[var(--color-text-primary)]"
+                onClick={dismissSuccessModal}
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" aria-hidden />
+              </button>
+              <div
+                className="ticket-success-circle-anim mx-auto mb-6 flex h-[4.25rem] w-[4.25rem] items-center justify-center rounded-full"
+                style={{ background: 'var(--color-success)' }}
+                aria-hidden
+              >
+                <Check
+                  className="ticket-success-check-anim h-10 w-10 text-white"
+                  strokeWidth={2.75}
+                  aria-hidden
+                />
+              </div>
+              <h2
+                id="ticket-success-title"
+                className="text-xl font-semibold tracking-tight text-[var(--color-text-primary)]"
+              >
+                Ticket submitted!
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-secondary)]">
+                Your ticket has been submitted successfully. You can now view it on the home page.
+              </p>
+              <p className="mt-6 text-sm font-medium text-[var(--color-text-primary)]">
+                Your Ticket ID:{' '}
+                <span
+                  className="text-xs font-mono font-normal whitespace-nowrap"
+                  style={{ color: POLISH_THEME.metaDim }}
+                  title={successTicketId}
+                >
+                  {formatTicketId(successTicketId)}
+                </span>
+              </p>
+              <div className="mt-6 flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="min-w-0 justify-center sm:min-w-[10rem]"
+                  onClick={() => {
+                    dismissSuccessModal();
+                    router.push('/tickets');
+                  }}
+                >
+                  Back to tickets
+                </Button>
+                <Link
+                  href={`/tickets/${successTicketId}`}
+                  className="focus-ring text-center text-base font-medium text-[var(--color-accent)] underline underline-offset-2 hover:text-[var(--color-accent-hover)] sm:text-right"
+                  onClick={dismissSuccessModal}
+                >
+                  View ticket
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-6">
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -547,8 +658,8 @@ export default function NewTicketPage() {
               <div className="flex gap-3 pt-2">
                 <Button
                   type="submit"
-                  loading={mutation.isPending}
-                  disabled={!!missingRequired}
+                  loading={isSubmittingFlow}
+                  disabled={!!missingRequired || !!successTicketId}
                 >
                   Create Ticket
                 </Button>
@@ -631,14 +742,17 @@ function DynamicField({
 
   if (field.type === 'date') {
     return (
-      <Input
-        id={id}
-        label={displayLabel}
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={field.required}
-      />
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor={id} className="text-sm font-medium leading-none" style={{ color: 'var(--color-text-secondary)' }}>
+          {displayLabel}
+        </label>
+        <DateFilterInput
+          id={id}
+          value={value}
+          onChange={onChange}
+          required={field.required}
+        />
+      </div>
     );
   }
 

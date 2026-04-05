@@ -116,34 +116,44 @@ export function MultiComboBox({
           {label}
         </label>
       )}
-      <button
-        ref={buttonRef}
-        type="button"
-        id={id}
-        onClick={() => !disabled && setIsOpen((o) => !o)}
-        disabled={disabled}
-        title={displayText || placeholder}
+      <div
         className={cn(
-          'w-full min-w-0 max-w-full overflow-hidden flex items-center justify-between gap-2 px-3 text-left rounded-lg border text-sm h-9',
-          'focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]',
+          'flex min-h-[38px] items-center overflow-hidden rounded-lg border-2 border-solid border-[var(--color-border-default)] text-sm',
+          'transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-out',
+          'focus-within:border-[var(--color-accent)]',
           disabled && 'opacity-50 cursor-not-allowed',
         )}
         style={{
           background: 'var(--color-bg-surface)',
-          borderColor: 'var(--color-border-default)',
-          color: displayText ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
         }}
-        aria-haspopup="listbox"
-        aria-expanded={isOpen}
-        aria-label={label ?? placeholder}
-        aria-multiselectable="true"
       >
-        <span className="min-w-0 flex-1 truncate text-left">{displayText || placeholder}</span>
-        <ChevronDown
-          className={cn('h-4 w-4 shrink-0 transition-transform', isOpen && 'rotate-180')}
-          style={{ color: 'var(--color-text-muted)' }}
-        />
-      </button>
+        <button
+          ref={buttonRef}
+          type="button"
+          id={id}
+          onClick={() => !disabled && setIsOpen((o) => !o)}
+          disabled={disabled}
+          title={displayText || placeholder}
+          className={cn(
+            'flex h-9 min-h-[36px] w-full min-w-0 max-w-full items-center justify-between gap-2 overflow-hidden px-3 text-left rounded-lg',
+            'focus:outline-none',
+          )}
+          style={{
+            background: 'transparent',
+            color: displayText ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
+          }}
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          aria-label={label ?? placeholder}
+          aria-multiselectable="true"
+        >
+          <span className="min-w-0 flex-1 truncate text-left">{displayText || placeholder}</span>
+          <ChevronDown
+            className={cn('h-4 w-4 shrink-0 transition-transform', isOpen && 'rotate-180')}
+            style={{ color: 'var(--color-text-muted)' }}
+          />
+        </button>
+      </div>
 
       {isOpen &&
         typeof document !== 'undefined' &&
@@ -167,8 +177,8 @@ export function MultiComboBox({
                   <button
                     type="button"
                     className={cn(
-                      'w-full flex items-center gap-2 px-3 py-2 text-sm text-left',
-                      'hover:bg-[var(--color-bg-surface)] focus:outline-none focus:bg-[var(--color-bg-surface)]',
+                      'mx-1 w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors duration-[var(--duration-fast)]',
+                      'hover:bg-[var(--color-row-selected)] focus:outline-none focus:bg-[var(--color-row-selected)]',
                     )}
                     style={{ color: 'var(--color-text-primary)' }}
                     onClick={() => toggle(opt.value)}

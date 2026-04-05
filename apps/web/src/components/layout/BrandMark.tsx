@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils';
 type BrandMarkSize = 'sm' | 'md' | 'lg';
 
 const sizeStyles: Record<BrandMarkSize, string> = {
-  /** Sidebar rail */
-  sm: 'h-8 w-8 text-[0.9375rem] rounded-md',
+  /** Sidebar rail (+40% vs previous 32px tile) */
+  sm: 'h-[2.8rem] w-[2.8rem] text-[1.3125rem] rounded-lg',
   /** Login hero */
   md: 'h-12 w-12 text-xl rounded-md',
   /** Assistant welcome hero */

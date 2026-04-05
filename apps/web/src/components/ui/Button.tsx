@@ -12,12 +12,12 @@ const variantConfig: Record<string, { bg: string; hoverBg: string; color: string
   secondary: { bg: 'var(--color-btn-secondary-bg)', hoverBg: 'var(--color-btn-secondary-hover)', color: 'var(--color-btn-secondary-text)', border: '1px solid var(--color-btn-secondary-border)' },
   ghost:     { bg: 'transparent', hoverBg: 'var(--color-btn-ghost-hover-bg)', color: 'var(--color-btn-ghost-text)', hoverColor: 'var(--color-btn-ghost-hover-text)' },
   danger:    { bg: 'var(--color-danger)', hoverBg: 'var(--color-danger-hover)', color: '#ffffff' },
-  /** Blue accent border + text (e.g. Clear filters in filter toolbars). */
+  /** Outlined reset action — red border + text (Clear filters in toolbars). */
   outlineAccent: {
     bg: 'transparent',
     hoverBg: 'var(--color-btn-ghost-hover-bg)',
-    color: 'var(--color-accent)',
-    hoverColor: 'var(--color-accent-hover)',
+    color: 'var(--color-danger)',
+    hoverColor: 'var(--color-danger-hover)',
   },
 };
 
@@ -37,10 +37,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled || loading}
         className={cn(
           'inline-flex items-center justify-center gap-2 rounded-[var(--radius-md)] font-medium transition-[background-color,color,border-color,box-shadow,transform] duration-[var(--duration-fast)] ease-out',
-          'focus-ring focus:outline-none active:translate-y-[0.5px] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:translate-y-0',
+          'focus-ring active:translate-y-[0.5px] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:translate-y-0',
           'bg-[var(--btn-bg)] text-[var(--btn-color)] hover:bg-[var(--btn-hover-bg)] hover:text-[var(--btn-hover-color)]',
           variant === 'outlineAccent' &&
-            'border border-solid border-[var(--color-accent)] hover:border-[var(--color-accent-hover)]',
+            'border border-solid border-[var(--color-danger)] hover:border-[var(--color-danger-hover)]',
           {
             'px-2.5 h-8 text-sm': size === 'sm',
             'px-4 h-9 text-sm': size === 'md',

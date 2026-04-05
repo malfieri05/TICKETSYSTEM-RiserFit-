@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
 import type { DispatchFiltersDto } from './dto/dispatch-filters.dto';
@@ -119,6 +119,71 @@ export class ReportingService {
           GROUP BY day ORDER BY day`;
 
     // Merge into a single date-keyed map
+    const map = new Map<string, { count: number; closed: number }>();
+
+    for (const r of createdRows) {
+      const key = r.day.toISOString().slice(0, 10);
+      const entry = map.get(key) ?? { count: 0, closed: 0 };
+      entry.count = Number(r.count);
+      map.set(key, entry);
+    }
+
+    for (const r of closedRows) {
+      const key = r.day.toISOString().slice(0, 10);
+      const entry = map.get(key) ?? { count: 0, closed: 0 };
+      entry.closed = Number(r.count);
+      map.set(key, entry);
+    }
+
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, { count, closed }]) => ({ date, count, closed }));
+  }
+
+  private parseVolumeDayBoundary(isoDate: string, endOfDay: boolean): Date {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+    if (!m) {
+      throw new BadRequestException(
+        `Invalid date "${isoDate}" — expected YYYY-MM-DD`,
+      );
+    }
+    const y = Number(m[1]);
+    const mo = Number(m[2]) - 1;
+    const d = Number(m[3]);
+    const dt = new Date(y, mo, d, 0, 0, 0, 0);
+    if (endOfDay) {
+      dt.setHours(23, 59, 59, 999);
+    }
+    return dt;
+  }
+
+  /** Ticket volume per day for tickets created / closed in an inclusive calendar range (aligns with dashboard KPI timeframe). */
+  async getVolumeByDayInRange(fromStr: string, toStr: string) {
+    const fromStart = this.parseVolumeDayBoundary(fromStr, false);
+    const toEnd = this.parseVolumeDayBoundary(toStr, true);
+    if (fromStart.getTime() > toEnd.getTime()) {
+      throw new BadRequestException('"from" must be on or before "to"');
+    }
+
+    const createdRows: { day: Date; count: bigint }[] = await this.prisma
+      .$queryRaw`
+      SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+      FROM tickets
+      WHERE "createdAt" >= ${fromStart}
+        AND "createdAt" <= ${toEnd}
+      GROUP BY day ORDER BY day`;
+
+    const closedRows: { day: Date; count: bigint }[] = await this.prisma
+      .$queryRaw`
+      SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+             COUNT(*) AS count
+      FROM tickets
+      WHERE status IN ('RESOLVED', 'CLOSED')
+        AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+        AND COALESCE("resolvedAt", "closedAt") >= ${fromStart}
+        AND COALESCE("resolvedAt", "closedAt") <= ${toEnd}
+      GROUP BY day ORDER BY day`;
+
     const map = new Map<string, { count: number; closed: number }>();
 
     for (const r of createdRows) {

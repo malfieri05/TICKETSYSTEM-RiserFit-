@@ -15,6 +15,12 @@
 
 **Project folder:** `TicketingSystem-CLAUDE` on Michael's Mac
 
+### Claude Code vs Cursor
+
+- **Cursor:** Open this repo folder in Cursor; the editor agent uses the workspace as context. This file (`CLAUDE.md`) is loaded per project rules so sessions stay aligned with architecture and phase status.
+- **Claude Code (CLI):** Anthropic’s terminal coding agent (command is typically `claude`, e.g. `~/.local/bin/claude`). **Connect to this project** by starting it from the **repo root** — not from `.claude/worktrees/...` unless you mean to work in that git worktree copy. **Sign in once:** `claude auth login`, then verify with `claude auth status`. **Daily use:** `claude` from the repo root so `CLAUDE.md` and paths resolve correctly. Use a normal interactive terminal (full TUI features need a real TTY; automated pipes may fail for `claude doctor` etc.).
+- **Do not commit secrets:** keep keys in `apps/api/.env`, `apps/web/.env.local`, and hosting env — never paste them into `CLAUDE.md`.
+
 ---
 
 ## 1. Client Context
@@ -140,7 +146,7 @@ All tables are live. Prisma schema is at `apps/api/prisma/schema.prisma`.
 - `studio_profiles` (location profile pages)
 - `dispatch_groups`, `dispatch_group_items`, `dispatch_group_templates` (dispatch intelligence)
 - `inbound_emails`, `vendor_order_records`, `order_line_items`, `delivery_events`, `studio_address_normalized`, `assembly_trigger_items`, `email_automation_*` tables (vendor email automation pipeline — distinct from Postmark **notification** email)
-- `lease_sources`, `lease_rule_sets`, `lease_rules`, `lease_rule_terms`, `ticket_lease_iq_results` (Lease IQ)
+- `lease_sources` (optional `uploadedBytes`, `textCharCount` for source list metadata), `lease_rule_sets`, `lease_rules`, `lease_rule_terms`, `ticket_lease_iq_results` (Lease IQ)
 - `agent_conversations`, `agent_messages`, `agent_action_logs` (AI agent tool-calling audit trail)
 
 **Key indexes (already in schema):**
@@ -234,6 +240,7 @@ NEW → TRIAGED → IN_PROGRESS → WAITING_ON_REQUESTER → RESOLVED → CLOSED
 - Reporting (admin): KPI cards, 30-day volume chart (CSS bars), by-status/priority/category/market breakdowns, avg resolution, completion-by-owner, workflow timing, dispatch-focused slices, CSV export where implemented
 - Teams channel: Adaptive Card v1.2 via incoming webhook, dev-mode fallback
 - **Theme / polish:** `apps/web/src/app/globals.css` — `data-theme` light/dark CSS variables (`--color-*`, `--radius-sm/md/lg`, `--shadow-*`). Shared TS helpers: `apps/web/src/lib/polish.ts` (`POLISH_THEME`, `POLISH_CLASS`, `FEED_COL_WIDTHS` for aligned ticket feed columns). **UI/UX polish spec:** `docs/ui-ux-polish-system-v1.md` (token usage, table standardization, workflow protection). **Brand:** `BrandMark` rounded-square tile (`apps/web/src/components/layout/BrandMark.tsx`) in sidebar + login. **Header:** fixed bar height via `Header` (`h-14`). **MultiComboBox:** portaled dropdown to avoid modal clipping (e.g. invite user departments).
+- **Ticket list / feed UX:** ticket feed supports **search** and **date filter** via `TicketFeedSearchField` and `DateFilterInput` (wired into `TicketFeedLayout` / related ticket pages); keep column widths consistent with `FEED_COL_WIDTHS` in `lib/polish.ts` when changing layouts.
 
 **Stage 6 / 6.5 ✅**
 - Inbox: actionable notification queue with READY subtask context; relative timestamps; optimistic read
@@ -327,7 +334,7 @@ OPENAI_API_KEY=sk-...
 - **Stage 23 (User Visibility & Inbox):** Admin can set a studio user’s default location and add/remove additional locations (Admin → Users → Locations). Studio users see a location filter on the portal when they have multiple allowed studios; GET /tickets returns 403 if a STUDIO_USER filters by a studio outside their allowed set. Department users see inbox topic folders (All + support topics) with active counts (grouped count by supportTopicId). Studio users cannot create/update subtasks or transition ticket status; they can view progress, comment (non-internal), and receive notifications. Actionable nav remains visible for DEPARTMENT_USER and ADMIN.
 - **Dashboard (`GET /dashboard/summary`):** `DashboardService` applies `TicketVisibilityService` filters. **ADMIN / DEPARTMENT_USER:** counts for NEW / IN_PROGRESS / RESOLVED+CLOSED, avg completion hours (last 30d), `supportByType` (support topic breakdown), `maintenanceByLocation` (maintenance tickets by studio). **STUDIO_USER:** open vs completed, same avg window, `byLocation` (optional `?studioId` when within allowed scope). UI: `/dashboard` and portal **Dashboard** tab reuse `dashboardApi.summary`.
 - **Email automation vs notifications:** Postmark (or log-only) powers **ticket notification** emails. **Email automation** is a separate pipeline: Gmail ingest (BullMQ `email-ingest` job), persistence of inbound vendor mail, assembly/delivery matching, optional ticket creation — see `apps/api/src/modules/email-automation/README.md`.
-- **Lease IQ:** Admin configures lease sources and rule sets per studio; tickets can be evaluated against published rules; admin UI at `/admin/lease-iq`.
+- **Lease IQ:** Admin configures lease sources and rule sets per studio; tickets can be evaluated against published rules; admin UI at `/admin/lease-iq`. **`lease_sources`** may include optional **`uploadedBytes`** and **`textCharCount`** (list/detail metadata; `textCharCount` backfilled from `rawText` where present). **Migration:** `20260403180000_lease_source_list_meta` — run `cd apps/api && npx prisma migrate deploy` when pulling.
 - **Invitations:** Closed provisioning — `InvitationsModule` + `invite-email.processor`; production mailer may be Resend (see `InviteMailService` logs) or as configured in env.
 
 ---
@@ -387,4 +394,4 @@ OPENAI_API_KEY=sk-...
 - Build must comfortably handle 400–500 daily active users with zero unplanned downtime
 
 ---
-*Last updated: April 2026 — Phases 0–4, Stages 5–6.5, Stage 23, dashboard summary API, portal + locations, email automation (vendor/Gmail path), Lease IQ, dispatch V1, invitations, admin system monitoring, theme/polish tokens (`globals.css`, `lib/polish.ts`), and `docs/ui-ux-polish-system-v1.md`.*
+*Last updated: April 2026 — Same as above, plus: Claude Code vs Cursor notes (§0); ticket feed search/date filter UI; Lease IQ lease-source list metadata (`uploadedBytes`, `textCharCount`) + migration `20260403180000_lease_source_list_meta`; ongoing polish on admin/dispatch/inbox/portal/ticket surfaces.*

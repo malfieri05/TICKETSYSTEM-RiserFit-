@@ -59,7 +59,7 @@ function SourceTypeBadge({ type }: { type: string }) {
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
-const INGEST_MODE_ORDER = ['pdf', 'text', 'file', 'url'] as const satisfies readonly IngestMode[];
+const INGEST_MODE_ORDER = ['pdf', 'url', 'text', 'file'] as const satisfies readonly IngestMode[];
 
 function ingestModeLabel(m: IngestMode): string {
   if (m === 'text') return 'Paste Text';
@@ -81,6 +81,8 @@ export default function KnowledgeBasePage() {
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [knowledgeBaseInfoOpen, setKnowledgeBaseInfoOpen] = useState(false);
   const closeKnowledgeBaseInfo = useCallback(() => setKnowledgeBaseInfoOpen(false), []);
+  const [pdfDragDepth, setPdfDragDepth] = useState(0);
+  const [fileDragDepth, setFileDragDepth] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
@@ -314,13 +316,53 @@ export default function KnowledgeBasePage() {
                 <p className="text-xs mb-2" style={{ color: 'var(--color-text-muted)' }}>Uploaded PDFs are ingested as handbook documents and appear in the Studio Handbook chat.</p>
                 <div
                   onClick={() => pdfInputRef.current?.click()}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (![...e.dataTransfer.types].includes('Files')) return;
+                    setPdfDragDepth((d) => d + 1);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPdfDragDepth((d) => Math.max(0, d - 1));
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if ([...e.dataTransfer.types].includes('Files')) {
+                      e.dataTransfer.dropEffect = 'copy';
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setPdfDragDepth(0);
+                    const dropped = e.dataTransfer.files[0];
+                    if (dropped && (dropped.type === 'application/pdf' || dropped.name.endsWith('.pdf'))) {
+                      setPdfFile(dropped);
+                    }
+                  }}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors',
-                    !pdfFile && 'hover:border-[var(--color-accent)]',
+                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer border-2 border-dashed transition-all duration-200 ease-out',
+                    !pdfFile && pdfDragDepth === 0 && 'border-[var(--color-border-default)] bg-[var(--color-bg-surface)] hover:border-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)]',
+                    !pdfFile && pdfDragDepth > 0 && 'scale-[1.02] border-[var(--color-accent)]',
+                    pdfFile && 'border-[var(--color-accent)]',
                   )}
-                  style={pdfFile
-                    ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
-                    : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
+                  style={
+                    pdfFile
+                      ? {
+                          background: 'color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-surface))',
+                          boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent)',
+                        }
+                      : pdfDragDepth > 0
+                        ? {
+                            background: 'color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-root))',
+                            boxShadow:
+                              '0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent)',
+                          }
+                        : undefined
+                  }
                 >
                   {pdfFile ? (
                     <>
@@ -337,8 +379,16 @@ export default function KnowledgeBasePage() {
                     </>
                   ) : (
                     <>
-                      <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
-                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Click to select a PDF file</p>
+                      <Upload
+                        className={cn('h-8 w-8 transition-transform duration-200', pdfDragDepth > 0 && 'scale-110')}
+                        style={{ color: pdfDragDepth > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                      />
+                      <p className="text-sm font-medium" style={{ color: pdfDragDepth > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
+                        {pdfDragDepth > 0 ? 'Drop PDF to upload' : 'Click or drag & drop a PDF file'}
+                      </p>
+                      {pdfDragDepth > 0 && (
+                        <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Release to add</p>
+                      )}
                     </>
                   )}
                   <input ref={pdfInputRef} type="file" accept=".pdf,application/pdf" className="hidden" onChange={(e) => setPdfFile(e.target.files?.[0] ?? null)} />
@@ -349,13 +399,53 @@ export default function KnowledgeBasePage() {
                 <label className="block text-sm font-medium text-[var(--color-text-primary)] mb-1">File (.txt or .md, max 10 MB)</label>
                 <div
                   onClick={() => fileInputRef.current?.click()}
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (![...e.dataTransfer.types].includes('Files')) return;
+                    setFileDragDepth((d) => d + 1);
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFileDragDepth((d) => Math.max(0, d - 1));
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if ([...e.dataTransfer.types].includes('Files')) {
+                      e.dataTransfer.dropEffect = 'copy';
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setFileDragDepth(0);
+                    const dropped = e.dataTransfer.files[0];
+                    if (dropped && (dropped.name.endsWith('.txt') || dropped.name.endsWith('.md') || dropped.type === 'text/plain' || dropped.type === 'text/markdown')) {
+                      setFile(dropped);
+                    }
+                  }}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer transition-colors',
-                    !file && 'hover:border-[var(--color-accent)]',
+                    'flex flex-col items-center justify-center gap-2 rounded-lg p-6 cursor-pointer border-2 border-dashed transition-all duration-200 ease-out',
+                    !file && fileDragDepth === 0 && 'border-[var(--color-border-default)] bg-[var(--color-bg-surface)] hover:border-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)]',
+                    !file && fileDragDepth > 0 && 'scale-[1.02] border-[var(--color-accent)]',
+                    file && 'border-[var(--color-accent)]',
                   )}
-                  style={file
-                    ? { background: 'rgba(52,120,196,0.08)', border: '2px dashed var(--color-accent)' }
-                    : { background: 'var(--color-bg-surface)', border: '2px dashed var(--color-border-default)' }}
+                  style={
+                    file
+                      ? {
+                          background: 'color-mix(in srgb, var(--color-accent) 12%, var(--color-bg-surface))',
+                          boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 35%, transparent)',
+                        }
+                      : fileDragDepth > 0
+                        ? {
+                            background: 'color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-root))',
+                            boxShadow:
+                              '0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent)',
+                          }
+                        : undefined
+                  }
                 >
                   {file ? (
                     <>
@@ -372,8 +462,16 @@ export default function KnowledgeBasePage() {
                     </>
                   ) : (
                     <>
-                      <Upload className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
-                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>Click to select a .txt or .md file</p>
+                      <Upload
+                        className={cn('h-8 w-8 transition-transform duration-200', fileDragDepth > 0 && 'scale-110')}
+                        style={{ color: fileDragDepth > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                      />
+                      <p className="text-sm font-medium" style={{ color: fileDragDepth > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)' }}>
+                        {fileDragDepth > 0 ? 'Drop file to upload' : 'Click or drag & drop a .txt or .md file'}
+                      </p>
+                      {fileDragDepth > 0 && (
+                        <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>Release to add</p>
+                      )}
                     </>
                   )}
                   <input ref={fileInputRef} type="file" accept=".txt,.md,text/plain,text/markdown" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -23,6 +24,7 @@ import { LeaseParseService } from './services/lease-parse.service';
 import { LeaseEvaluationService } from './services/lease-evaluation.service';
 import {
   PasteSourceDto,
+  ParseSourcesDto,
   UpdateRulesDto,
   PublishDto,
   PlaygroundDto,
@@ -94,14 +96,24 @@ export class LeaseIQController {
     return this.leaseSource.listByStudio(studioId);
   }
 
+  @Delete('studios/:studioId/sources/:sourceId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteSource(
+    @Param('studioId') studioId: string,
+    @Param('sourceId') sourceId: string,
+  ) {
+    await this.leaseSource.deleteSource(studioId, sourceId);
+  }
+
   // ─── Parse ────────────────────────────────────────────────────────────────
 
   @Post('studios/:studioId/parse')
   @HttpCode(HttpStatus.CREATED)
   async parse(
     @Param('studioId') studioId: string,
+    @Body() dto: ParseSourcesDto,
   ) {
-    return this.leaseParse.parseLatestForStudio(studioId);
+    return this.leaseParse.parseSourcesForStudio(studioId, dto.sourceIds);
   }
 
   // ─── Rulesets and rules ───────────────────────────────────────────────────

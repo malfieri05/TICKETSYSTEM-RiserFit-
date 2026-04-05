@@ -277,14 +277,19 @@ export class LeaseEvaluationService {
     for (const rule of rules) {
       const categoryMatch =
         rule.categoryScope == null || rule.categoryScope === maintenanceCategoryId;
+      if (!categoryMatch) continue;
+
       let matchCount = 0;
       const matchedTerms: string[] = [];
       for (const t of rule.terms) {
-        const termLower = t.term.toLowerCase();
+        const termNorm = this.normalizer.normalizeFragment(t.term).trim().toLowerCase();
+        if (!termNorm) continue;
+
         const found =
-          t.termType === LeaseRuleTermType.PHRASE
-            ? lower.includes(termLower)
-            : lower.includes(termLower);
+          t.termType === LeaseRuleTermType.KEYWORD
+            ? this.termMatchesKeyword(lower, termNorm)
+            : lower.includes(termNorm);
+
         if (found) {
           matchCount++;
           matchedTerms.push(t.term);
@@ -310,6 +315,20 @@ export class LeaseEvaluationService {
       return b.matchCount - a.matchCount;
     });
     return results;
+  }
+
+  /**
+   * Whole-token match to avoid substring false positives (e.g. "ac" in "vacation").
+   * Uses Unicode-aware boundaries for letters/digits; terms should already be normalized + lowercased.
+   */
+  private termMatchesKeyword(haystackLower: string, termLower: string): boolean {
+    if (!termLower) return false;
+    if (/[^\p{L}\p{N}_-]/u.test(termLower)) {
+      return haystackLower.includes(termLower);
+    }
+    const escaped = termLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'iu');
+    return re.test(haystackLower);
   }
 
   private computeConfidence(

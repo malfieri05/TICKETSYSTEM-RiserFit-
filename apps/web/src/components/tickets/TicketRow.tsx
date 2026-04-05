@@ -250,7 +250,7 @@ export function RequesterAvatar({
  * Canonical feed header definitions — used by all ticket list surfaces
  * (tickets page, inbox/actionable, and portal) to ensure consistent column order.
  *
- * Column order: ID | Title | Created | Tags | Status | Due date | Progress | Requester
+ * Column order: ID | Title | Status | Created | Tags | Due date | Progress | Requester
  * (comment count appears inline after title when there are comments.)
  */
 /** Columns whose header and cell content should be center-aligned. */
@@ -274,9 +274,9 @@ export function getThClass(key: string): string {
 export const CANONICAL_FEED_HEADERS = [
   { label: 'ID', key: 'id' },
   { label: 'Title', key: 'title' },
+  { label: 'Status', key: 'status' },
   { label: 'Created', key: 'created' },
   { label: 'Tags', key: 'tags' },
-  { label: 'Status', key: 'status' },
   { label: 'Due date', key: 'dueDate' },
   { label: 'Progress', key: 'progress' },
   { label: 'Requester', key: 'requester' },
@@ -391,7 +391,7 @@ function TicketTableRowComponent({
       data-ticket-id={id}
       onClick={() => onSelect(id)}
       role="button"
-      tabIndex={0}
+      tabIndex={-1}
       data-selected={isSelected ? 'true' : 'false'}
       onKeyDown={(e) => e.key === 'Enter' && onSelect(id)}
       className={`ticket-feed-table-row cursor-pointer ${POLISH_CLASS.rowTransition} focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--color-accent)]`}
@@ -418,39 +418,58 @@ function TicketTableRowComponent({
         </div>
       </td>
 
-      {/* 2. Title (+ optional sub-label); comment icon + count inline when there are comments */}
+      {/* 2. Title (+ sub-label); with comments: capped title track (40ch) + fixed comment track — icons share one vertical line */}
       <td className={POLISH_CLASS.cellPadding} style={feedRowTdDivider}>
         <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              className="min-w-0 flex-1 font-medium line-clamp-1"
-              style={{ color: 'var(--color-text-primary)' }}
+          {commentCount > 0 ? (
+            <div
+              className="grid w-full min-w-0 items-center gap-x-1"
+              style={{
+                gridTemplateColumns: 'minmax(0, min(40ch, calc(100% - 3.5rem))) 2.75rem',
+              }}
             >
-              {title}
-            </span>
-            {commentCount > 0 ? (
               <span
-                className="inline-flex shrink-0 items-center gap-1 text-xs"
+                className="min-w-0 truncate font-medium"
+                style={{ color: 'var(--color-text-primary)' }}
+              >
+                {title}
+              </span>
+              <span
+                className="inline-flex min-w-0 items-center justify-end gap-0.5 text-xs"
                 style={cellDim}
                 aria-label={`${commentCount} comment${commentCount === 1 ? '' : 's'}`}
               >
                 <MessageCircle className="h-3 w-3 shrink-0" aria-hidden />
                 <span className="tabular-nums">{commentCount}</span>
               </span>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <span
+              className="block min-w-0 w-full max-w-[min(100%,46ch)] truncate font-medium"
+              style={{ color: 'var(--color-text-primary)' }}
+            >
+              {title}
+            </span>
+          )}
           {subLabel ? (
             <span className="mt-0.5 block truncate text-xs" style={cellDim}>{subLabel}</span>
           ) : null}
         </div>
       </td>
 
-      {/* 3. Created — Today / Yesterday / MMM d (muted only, no accent colors) */}
+      {/* 3. Status */}
+      <td className={`${POLISH_CLASS.cellPadding} text-center`} style={feedRowTdDivider}>
+        <div className="flex justify-center">
+          <StatusBadge status={status} />
+        </div>
+      </td>
+
+      {/* 4. Created — Today / Yesterday / MMM d (muted only, no accent colors) */}
       <td className={`${POLISH_CLASS.cellPadding} text-center`} style={feedRowTdDivider}>
         <FeedCreatedAtCell createdAtIso={createdAt} />
       </td>
 
-      {/* 4. Tags — fixed max-width rail centered in column; + always same x; tags scroll to the right */}
+      {/* 5. Tags — fixed max-width rail centered in column; + always same x; tags scroll to the right */}
       <td
         className={`${POLISH_CLASS.cellPadding} align-middle text-center`}
         style={feedRowTdDivider}
@@ -464,6 +483,7 @@ function TicketTableRowComponent({
                 <button
                   ref={addTagBtnRef}
                   type="button"
+                  tabIndex={-1}
                   className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-[box-shadow,transform,background-color] duration-200 ease-out [box-shadow:var(--shadow-card)] hover:-translate-y-px hover:[box-shadow:var(--shadow-panel)] hover:bg-[var(--color-bg-surface-raised)] active:translate-y-0 active:[box-shadow:var(--shadow-card)]"
                   style={{
                     border: `1px dashed ${POLISH_THEME.listBorder}`,
@@ -518,6 +538,7 @@ function TicketTableRowComponent({
                         tagId={t.id}
                         name={t.name}
                         color={t.color}
+                        removeButtonTabIndex={-1}
                         tooltipTypography="requesterMatch"
                         removable={!!onRemoveTag}
                         onRemoveTag={
@@ -538,13 +559,6 @@ function TicketTableRowComponent({
               </div>
             </div>
           </div>
-        </div>
-      </td>
-
-      {/* 5. Status */}
-      <td className={`${POLISH_CLASS.cellPadding} text-center`} style={feedRowTdDivider}>
-        <div className="flex justify-center">
-          <StatusBadge status={status} />
         </div>
       </td>
 

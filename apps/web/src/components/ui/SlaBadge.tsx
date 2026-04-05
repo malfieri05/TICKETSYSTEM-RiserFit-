@@ -14,22 +14,28 @@ export interface SlaStatus {
   percentUsed: number;
 }
 
+const SLA_FG = '#0a0a0a';
+
 const SLA_CONFIG: Record<SlaStatusValue, { label: string; style: React.CSSProperties }> = {
   OK: {
     label: 'On Track',
-    style: { background: 'rgba(34,197,94,0.12)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.3)' },
+    style: { background: '#6ee7b7', color: SLA_FG, border: '1.25px solid #059669', boxSizing: 'border-box' },
   },
   AT_RISK: {
     label: 'At Risk',
-    style: { background: 'rgba(245,158,11,0.12)', color: '#d97706', border: '1px solid rgba(245,158,11,0.3)' },
+    style: { background: '#fcd34d', color: SLA_FG, border: '1.25px solid #d97706', boxSizing: 'border-box' },
   },
   BREACHED: {
     label: 'SLA Breached',
-    style: { background: 'rgba(239,68,68,0.12)', color: '#dc2626', border: '1px solid rgba(239,68,68,0.3)' },
+    style: { background: '#fca5a5', color: SLA_FG, border: '1.25px solid #dc2626', boxSizing: 'border-box' },
   },
   RESOLVED: {
     label: 'Resolved',
-    style: { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)', border: '1px solid var(--color-border-default)' },
+    style: {
+      background: 'var(--color-bg-surface-raised)',
+      color: 'var(--color-text-primary)',
+      border: '1.25px solid var(--color-border-default)',
+    },
   },
 };
 

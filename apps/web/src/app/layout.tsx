@@ -23,8 +23,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable} data-theme="dark" suppressHydrationWarning>
-      <body className="antialiased">
+    <html lang="en" className={`${inter.variable} h-full`} data-theme="dark" suppressHydrationWarning>
+      <body className="h-full antialiased">
         <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <QueryProvider>
           <AuthProvider>{children}</AuthProvider>

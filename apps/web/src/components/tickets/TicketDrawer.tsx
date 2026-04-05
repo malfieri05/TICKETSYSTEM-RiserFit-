@@ -3,13 +3,13 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import {
   X, MessageSquare, CheckSquare,
   Clock, Plus, User, CheckCircle2, Maximize2, Pencil, Scale, RefreshCw,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { ticketsApi, subtasksApi, invalidateTicketLists, dispatchApi } from '@/lib/api';
+import { ticketsApi, subtasksApi, invalidateTicketLists, updateTicketRowInListCaches, dispatchApi } from '@/lib/api';
 import type { SubtaskStatus } from '@/types';
 import { StatusBadge, SubtaskStatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,12 +21,22 @@ import { TicketTagCapsule, TicketTagHoverMetaContent } from '@/components/ticket
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
+import { InfoPopover } from '@/components/ui/InfoPopover';
 import { cn } from '@/lib/utils';
-import { RequesterAvatar } from '@/components/tickets/TicketRow';
+import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
+
+function leaseIqConfidenceLabel(confidence: string): string {
+  if (confidence === 'HIGH') return 'High';
+  if (confidence === 'MEDIUM') return 'Medium';
+  return 'Low';
+}
 
 interface Props {
   ticketId: string | null;
   onClose: () => void;
+  /** Current feed page order; prev/next step within this list only. */
+  feedTicketIds?: string[];
+  onNavigateTicket?: (id: string) => void;
 }
 
 /** Must match drawer slide duration (open + close use the same easing). */
@@ -43,7 +53,7 @@ function formatFieldLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function TicketDrawer({ ticketId, onClose }: Props) {
+export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicket }: Props) {
   const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -71,6 +81,17 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
   }, [ticketId]);
 
   const isClosingVisual = !panelOpen && displayTicketId != null;
+
+  const activeNavId = ticketId ?? displayTicketId;
+  const navIndex =
+    activeNavId && feedTicketIds?.length ? feedTicketIds.indexOf(activeNavId) : -1;
+  const showFeedNav =
+    typeof onNavigateTicket === 'function' &&
+    Array.isArray(feedTicketIds) &&
+    feedTicketIds.length >= 2 &&
+    navIndex >= 0;
+  const canPrevNav = showFeedNav && navIndex > 0;
+  const canNextNav = showFeedNav && navIndex < feedTicketIds!.length - 1;
 
   const [activeTab, setActiveTab] = useState<TabKey>('subtasks');
   const [newSubtask, setNewSubtask] = useState('');
@@ -193,9 +214,15 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
 
   const removeTagMut = useMutation({
     mutationFn: (tagId: string) => ticketsApi.removeTag(displayTicketId!, tagId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['ticket', displayTicketId] });
-      invalidateTicketLists(qc);
+    onSuccess: (_res, tagId) => {
+      const tid = displayTicketId;
+      qc.invalidateQueries({ queryKey: ['ticket', tid] });
+      if (tid) {
+        updateTicketRowInListCaches(qc, tid, (row) => ({
+          ...row,
+          tags: (row.tags ?? []).filter((x) => x.id !== tagId),
+        }));
+      }
     },
   });
 
@@ -288,14 +315,46 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
         ) : (
           <span className="min-w-0 flex-1" aria-hidden />
         )}
-        <button
-          onClick={onClose}
-          aria-label="Close ticket panel"
-          className="focus-ring header-nav-link shrink-0 p-1.5 rounded-[var(--radius-md)] transition-colors"
-          style={{ color: 'var(--color-text-app-header-muted)' }}
-        >
-          <X className="h-4.5 w-4.5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {showFeedNav ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  const prevId = feedTicketIds![navIndex - 1];
+                  if (prevId) onNavigateTicket!(prevId);
+                }}
+                disabled={!canPrevNav}
+                aria-label="Previous ticket in list"
+                className="focus-ring header-nav-link shrink-0 rounded-[var(--radius-md)] p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-35"
+                style={{ color: 'var(--color-text-app-header-muted)' }}
+              >
+                <ChevronLeft className="h-4.5 w-4.5" strokeWidth={2.25} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextId = feedTicketIds![navIndex + 1];
+                  if (nextId) onNavigateTicket!(nextId);
+                }}
+                disabled={!canNextNav}
+                aria-label="Next ticket in list"
+                className="focus-ring header-nav-link shrink-0 rounded-[var(--radius-md)] p-1.5 transition-colors disabled:pointer-events-none disabled:opacity-35"
+                style={{ color: 'var(--color-text-app-header-muted)' }}
+              >
+                <ChevronRight className="h-4.5 w-4.5" strokeWidth={2.25} />
+              </button>
+            </>
+          ) : null}
+          <button
+            onClick={onClose}
+            aria-label="Close ticket panel"
+            className="focus-ring header-nav-link shrink-0 p-1.5 rounded-[var(--radius-md)] transition-colors"
+            style={{ color: 'var(--color-text-app-header-muted)' }}
+          >
+            <X className="h-4.5 w-4.5" />
+          </button>
+        </div>
       </div>
 
       {/* ── Loading skeleton ───────────────────────────────────────────────────── */}
@@ -445,17 +504,9 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                 </div>
               )}
             </div>
-            <p className="text-xs mt-1" style={{ color: POLISH_THEME.metaSecondary }}>
-              <span>
-                Due Date:{' '}
-                {(() => {
-                  const raw = ticket.dueDate;
-                  if (!raw?.trim()) return '—';
-                  const d = parseISO(raw);
-                  if (Number.isNaN(d.getTime())) return '—';
-                  return format(d, 'MMM d, yyyy');
-                })()}
-              </span>
+            <p className="text-xs mt-1">
+              <span style={{ color: POLISH_THEME.metaSecondary }}>Due Date: </span>
+              <FeedDueDateCell dueDateIso={ticket.dueDate ?? ''} />
             </p>
 
             {/* Status (left) + subtask progress — below due date */}
@@ -517,30 +568,40 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                       borderBottom: leaseIqExpanded ? `1px solid ${POLISH_THEME.innerBorder}` : 'none',
                     }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setLeaseIqExpanded((e) => !e)}
-                      aria-expanded={leaseIqExpanded}
-                      className="focus-ring flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left"
-                    >
-                      <Scale className="h-3.5 w-3.5 shrink-0" style={{ color: POLISH_THEME.accent }} />
-                      <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-primary)' }}>
-                        Lease IQ
-                      </span>
-                      <span
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{
-                          background: badgeBg,
-                          color: accentColor,
-                          boxShadow: `inset 0 0 0 1px ${badgeBorder}`,
-                        }}
+                    <div className="flex min-w-0 flex-1 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setLeaseIqExpanded((e) => !e)}
+                        aria-expanded={leaseIqExpanded}
+                        className="focus-ring flex min-w-0 flex-1 flex-wrap items-center gap-2 text-left"
                       >
-                        {resp.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-[10px]" style={{ color: 'var(--color-text-primary)' }}>
-                        {ticket.leaseIqResult.confidence} confidence
-                      </span>
-                    </button>
+                        <Scale className="h-3.5 w-3.5 shrink-0" style={{ color: POLISH_THEME.accent }} />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--color-text-primary)' }}>
+                          Lease IQ
+                        </span>
+                        <span
+                          className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{
+                            background: badgeBg,
+                            color: accentColor,
+                            boxShadow: `inset 0 0 0 1px ${badgeBorder}`,
+                          }}
+                        >
+                          {resp.replace(/_/g, ' ')}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-text-primary)' }}>
+                          {leaseIqConfidenceLabel(ticket.leaseIqResult.confidence)} confidence
+                        </span>
+                      </button>
+                      <InfoPopover ariaLabel="How confidence is calculated" direction="up">
+                        <p className="font-semibold mb-2" style={{ color: 'var(--color-accent)' }}>Confidence levels</p>
+                        <ul className="space-y-1.5">
+                          <li><span className="font-semibold">High:</span> Strong match — category and priority terms both point clearly to one party.</li>
+                          <li><span className="font-semibold">Medium:</span> Partial match — either a category or priority signal was found, but not both.</li>
+                          <li><span className="font-semibold">Low:</span> Weak match — only general keywords matched, or signals conflicted.</li>
+                        </ul>
+                      </InfoPopover>
+                    </div>
                     {canManage && (
                       <button
                         type="button"
@@ -693,7 +754,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
             >
 
               {/* ── Panel 0: Subtasks ─────────────────────────────────────────── */}
-              <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
+              <div
+                style={{ flex: '0 0 25%', overflowY: 'auto' }}
+                className={`px-6 py-5 ${POLISH_CLASS.sectionGap} ${POLISH_CLASS.drawerScrollRoomForAgentFab}`}
+              >
                 {/* Progress summary */}
                 <div
                   className="dashboard-card rounded-[var(--radius-lg)] px-3.5 py-3 flex items-center justify-between"
@@ -755,6 +819,16 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                         boxShadow: POLISH_THEME.shadowCard,
                       }}
                     >
+                      <span className="shrink-0">
+                        <SubtaskStatusBadge status={s.status} />
+                      </span>
+                      <span
+                        className="shrink-0 select-none text-sm font-light leading-none tabular-nums"
+                        style={{ color: 'var(--color-border-default)' }}
+                        aria-hidden
+                      >
+                        |
+                      </span>
                       <div className="flex-1 min-w-0">
                         <p
                           className="text-sm font-medium transition-all duration-200"
@@ -772,7 +846,6 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
                           </p>
                         )}
                       </div>
-                      <SubtaskStatusBadge status={s.status} />
                       {canManage && (
                         <Select
                           value={s.status}
@@ -815,7 +888,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </div>
 
               {/* ── Panel 1: Comments ────────────────────────────────────────── */}
-              <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
+              <div
+                style={{ flex: '0 0 25%', overflowY: 'auto' }}
+                className={`px-6 py-5 ${POLISH_CLASS.sectionGap} ${POLISH_CLASS.drawerScrollRoomForAgentFab}`}
+              >
                 <CommentThread
                   ticketId={ticket.id}
                   comments={ticket.comments ?? []}
@@ -823,7 +899,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </div>
 
               {/* ── Panel 2: Ticket Submission ───────────────────────────────── */}
-              <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
+              <div
+                style={{ flex: '0 0 25%', overflowY: 'auto' }}
+                className={`px-6 py-5 ${POLISH_CLASS.sectionGap} ${POLISH_CLASS.drawerScrollRoomForAgentFab}`}
+              >
                 <div
                   className="dashboard-card rounded-[var(--radius-lg)] overflow-hidden"
                   style={{
@@ -945,7 +1024,10 @@ export function TicketDrawer({ ticketId, onClose }: Props) {
               </div>
 
               {/* ── Panel 3: History ─────────────────────────────────────────── */}
-              <div style={{ flex: '0 0 25%', overflowY: 'auto' }} className={`px-6 py-5 ${POLISH_CLASS.sectionGap}`}>
+              <div
+                style={{ flex: '0 0 25%', overflowY: 'auto' }}
+                className={`px-6 py-5 ${POLISH_CLASS.sectionGap} ${POLISH_CLASS.drawerScrollRoomForAgentFab}`}
+              >
                 {(historyRes?.data ?? []).length === 0 ? (
                   <p className="text-sm text-center py-10" style={{ color: POLISH_THEME.metaDim }}>No history yet.</p>
                 ) : (

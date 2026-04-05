@@ -126,7 +126,7 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
           {canManage && (
             <div className="flex flex-wrap gap-2">
               <div className="flex-1 min-w-[140px]">
-                <label className="text-[10px] font-bold uppercase tracking-[0.1em] block mb-1" style={{ color: POLISH_THEME.metaDim }}>Trade Type</label>
+                <label className="text-[10px] font-bold uppercase tracking-[0.1em] block mb-1" style={{ color: POLISH_THEME.metaDim }}>Trade type needed?</label>
                 <Select
                   value={ticket.dispatchTradeType ?? ''}
                   onChange={(e) => updateMut.mutate({ dispatchTradeType: e.target.value || undefined })}

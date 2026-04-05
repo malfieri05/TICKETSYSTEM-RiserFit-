@@ -4,20 +4,22 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket, CheckCircle2, Clock, Search, MapPin, MessageCircle } from 'lucide-react';
+import { Ticket, CheckCircle2, Clock, MapPin, MessageCircle } from 'lucide-react';
 import {
   ticketsApi,
   dashboardApi,
   adminApi,
-  invalidateTicketLists,
+  updateTicketRowInListCaches,
   type StudioDashboardSummaryResponse,
 } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketFeedSearchField } from '@/components/tickets/TicketFeedSearchField';
 import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import { Button } from '@/components/ui/Button';
+import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { Input, Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { useAuth } from '@/hooks/useAuth';
@@ -106,9 +108,22 @@ export default function PortalPage() {
   const addTagMut = useMutation({
     mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
       ticketsApi.addTag(ticketId, { label }),
-    onSuccess: (_, variables) => {
+    onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      invalidateTicketLists(qc);
+      const body = res.data;
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: [
+          ...(t.tags ?? []),
+          {
+            id: body.tag.id,
+            name: body.tag.name,
+            color: body.tag.color ?? null,
+            createdAt: body.createdAt,
+            createdBy: body.createdBy,
+          },
+        ],
+      }));
     },
   });
   const handleAddTag = useCallback(
@@ -123,7 +138,10 @@ export default function PortalPage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      invalidateTicketLists(qc);
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
+      }));
     },
   });
   const handleRemoveTag = useCallback(
@@ -238,19 +256,13 @@ export default function PortalPage() {
 
   const myFiltersBar = (
     <div className="flex flex-wrap gap-3 items-end">
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
-          style={{ color: 'var(--color-text-muted)' }}
-        />
-        <Input
-          placeholder="Search tickets..."
-          value={mySearch}
-          onChange={(e) => setMySearch(e.target.value)}
-          elevated
-          className="w-56 pl-9"
-        />
-      </div>
+      <TicketFeedSearchField
+        id="portal-my-search"
+        value={mySearch}
+        onChange={setMySearch}
+        elevated
+        className="w-56"
+      />
       <ComboBox
         placeholder="Support vs. Maintenance"
         options={mySupportVsMaintenanceOptions}
@@ -280,21 +292,21 @@ export default function PortalPage() {
         className="w-48"
       />
       <div className="flex items-center gap-2">
-        <input
-          type="date"
+        <DateFilterInput
+          variant="filter"
+          elevated
           value={myCreatedAfter}
-          onChange={(e) => setMyCreatedAfter(e.target.value)}
-          className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
-          style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
+          onChange={setMyCreatedAfter}
+          style={{ color: 'var(--color-text-muted)' }}
           title="From date"
         />
         <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>–</span>
-        <input
-          type="date"
+        <DateFilterInput
+          variant="filter"
+          elevated
           value={myCreatedBefore}
-          onChange={(e) => setMyCreatedBefore(e.target.value)}
-          className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
-          style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
+          onChange={setMyCreatedBefore}
+          style={{ color: 'var(--color-text-muted)' }}
           title="To date"
         />
       </div>
@@ -448,19 +460,13 @@ export default function PortalPage() {
           </option>
         ))}
       </Select>
-      <div className="relative">
-        <Search
-          className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none"
-          style={{ color: 'var(--color-text-muted)' }}
-        />
-        <Input
-          placeholder="Search tickets..."
-          value={studioSearch}
-          onChange={(e) => setStudioSearch(e.target.value)}
-          elevated
-          className="w-56 pl-9"
-        />
-      </div>
+      <TicketFeedSearchField
+        id="portal-studio-search"
+        value={studioSearch}
+        onChange={setStudioSearch}
+        elevated
+        className="w-56"
+      />
     </div>
   );
 
@@ -559,6 +565,12 @@ export default function PortalPage() {
     }
     return allowedStudios.find((s) => s.id === dashboardStudioFilter)?.name ?? 'Location';
   }, [dashboardStudioFilter, allowedStudios]);
+
+  const portalFeedTicketIds = useMemo(() => {
+    if (activeTab === 'my') return myTickets.map((t) => t.id);
+    if (activeTab === 'studio') return studioTickets.map((t) => t.id);
+    return [];
+  }, [activeTab, myTickets, studioTickets]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
@@ -713,7 +725,12 @@ export default function PortalPage() {
           </div>
         </div>
       )}
-      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
+      <TicketDrawer
+        ticketId={selectedId}
+        onClose={handleClose}
+        feedTicketIds={portalFeedTicketIds}
+        onNavigateTicket={setSelectedId}
+      />
     </div>
   );
 }

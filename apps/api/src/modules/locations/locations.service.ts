@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { LeaseRuleSetStatus } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
 import type { RequestUser } from '../auth/strategies/jwt.strategy';
 import type {
@@ -41,6 +42,12 @@ export class LocationsService {
     if (!studio) {
       throw new NotFoundException(`Studio ${studioId} not found`);
     }
+
+    const publishedLeaseIq = await this.prisma.leaseRuleSet.findFirst({
+      where: { studioId, status: LeaseRuleSetStatus.PUBLISHED },
+      select: { id: true },
+    });
+    const hasPublishedLeaseIqRuleset = !!publishedLeaseIq;
 
     const isPrivileged = PRIVILEGED_ROLES.includes(user.role);
     const hasProfile = !!studio.profile;
@@ -112,6 +119,7 @@ export class LocationsService {
         showContact: isPrivileged && hasProfile,
         showIdentifiers: isPrivileged && hasProfile,
       },
+      hasPublishedLeaseIqRuleset,
     };
   }
 }

@@ -45,6 +45,7 @@ export class LeaseSourceService {
         studioId,
         sourceType: LeaseSourceType.PASTED_EXTRACTION,
         rawText: pastedText,
+        textCharCount: pastedText.length,
         uploadedByUserId: uploadedByUserId ?? null,
       },
     });
@@ -79,6 +80,8 @@ export class LeaseSourceService {
         rawText,
         fileStoragePath,
         originalFileName: file.originalname ?? null,
+        uploadedBytes: file.size,
+        textCharCount: rawText.length,
         uploadedByUserId: uploadedByUserId ?? null,
       },
     });
@@ -95,16 +98,26 @@ export class LeaseSourceService {
         originalFileName: true,
         uploadedAt: true,
         uploadedByUserId: true,
+        uploadedBytes: true,
+        textCharCount: true,
       },
     });
   }
 
-  async getLatestForStudio(studioId: string) {
-    const source = await this.prisma.leaseSource.findFirst({
-      where: { studioId },
-      orderBy: { uploadedAt: 'desc' },
+  async getManyByStudioIds(studioId: string, ids: string[]) {
+    if (ids.length === 0) return [];
+    return this.prisma.leaseSource.findMany({
+      where: { studioId, id: { in: ids } },
     });
-    return source;
+  }
+
+  async deleteSource(studioId: string, sourceId: string) {
+    await this.ensureStudioExists(studioId);
+    const row = await this.prisma.leaseSource.findFirst({
+      where: { id: sourceId, studioId },
+    });
+    if (!row) throw new NotFoundException(`Lease source ${sourceId} not found`);
+    await this.prisma.leaseSource.delete({ where: { id: sourceId } });
   }
 
   private async ensureStudioExists(studioId: string) {

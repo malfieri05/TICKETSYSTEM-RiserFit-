@@ -61,15 +61,19 @@ export function TicketFeedLayout({
 
       {filters != null && <div>{filters}</div>}
 
+      {/* Outer: shadow only (inner keeps overflow-hidden so shadow is not clipped). */}
       <div
-        className={`rounded-[var(--radius-lg)] overflow-hidden relative ${fixedChrome ? 'flex-1 min-h-0 flex flex-col' : ''}`}
-        style={{
-          background: POLISH_THEME.listBg,
-          border: `1px solid ${POLISH_THEME.listBorder}`,
-          borderTop: `1px solid var(--color-feed-accent-border)`,
-          boxShadow: POLISH_THEME.listContainerShadow,
-        }}
+        className={`rounded-[var(--radius-lg)] mx-0.5 sm:mx-2 ${fixedChrome ? 'flex min-h-0 min-w-0 flex-1 flex-col' : ''}`}
+        style={{ boxShadow: POLISH_THEME.feedListFloatShadow }}
       >
+        <div
+          className={`relative overflow-hidden rounded-[var(--radius-lg)] ${fixedChrome ? 'flex min-h-0 min-w-0 flex-1 flex-col' : ''}`}
+          style={{
+            background: POLISH_THEME.listBg,
+            border: `1px solid ${POLISH_THEME.listBorder}`,
+            borderTop: `1px solid var(--color-feed-accent-border)`,
+          }}
+        >
         {isFetching && hasTickets && !isInitialLoading && (
           <div
             style={{
@@ -105,6 +109,7 @@ export function TicketFeedLayout({
             {pagination}
           </>
         )}
+        </div>
       </div>
     </div>
   );

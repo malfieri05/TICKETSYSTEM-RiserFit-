@@ -120,6 +120,10 @@ export function ComboBox({
   }, [highlightIndex, isOpen]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab' && isOpen) {
+      close();
+      return;
+    }
     if (e.key === 'Escape') {
       close();
       (e.target as HTMLElement).blur();
@@ -159,15 +163,15 @@ export function ComboBox({
       )}
       <div
         className={cn(
-          'flex items-center rounded-lg border text-sm min-h-[38px]',
-          'focus-within:ring-1 focus-within:ring-[var(--color-accent)]',
+          'flex items-center rounded-lg border-2 border-solid border-[var(--color-border-default)] text-sm min-h-[38px]',
+          'transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-out',
+          'focus-within:border-[var(--color-accent)]',
           elevated && 'filter-elevated-shadow',
           disabled && 'opacity-50 cursor-not-allowed',
           error && 'ring-1 ring-red-500',
         )}
         style={{
           background: 'var(--color-bg-surface)',
-          borderColor: 'var(--color-border-default)',
         }}
       >
         {!isOpen ? (
@@ -231,9 +235,11 @@ export function ComboBox({
                 role="option"
                 aria-selected={value === opt.value}
                 className={cn(
-                  'px-3 py-2 cursor-pointer text-sm truncate',
+                  'mx-1 rounded-md px-3 py-2 cursor-pointer text-sm truncate transition-colors duration-[var(--duration-fast)]',
                   value === opt.value && 'font-medium',
-                  highlightIndex === i ? 'bg-[var(--color-bg-surface)]' : 'hover:bg-[var(--color-bg-surface)]',
+                  highlightIndex === i
+                    ? 'bg-[var(--color-row-selected)]'
+                    : 'hover:bg-[var(--color-row-selected)]',
                 )}
                 style={{
                   color: value === opt.value ? 'var(--color-accent)' : (opt.value === '' ? 'var(--color-text-muted)' : 'var(--color-text-primary)'),

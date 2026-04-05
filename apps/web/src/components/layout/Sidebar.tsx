@@ -87,9 +87,9 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
   {
     label: 'Content / Tools:',
     items: [
+      { href: '/admin/lease-iq', label: 'Lease IQ', icon: BookMarked },
       { href: '/admin/dispatch', label: 'Vendor Dispatch', icon: Truck },
       { href: '/admin/email-automation', label: 'Email Automation', icon: Mail },
-      { href: '/admin/lease-iq', label: 'Lease IQ', icon: BookMarked },
     ],
   },
   {
@@ -228,14 +228,17 @@ export function Sidebar() {
       <div className="flex h-full min-h-0 flex-col" style={innerStyle}>
         <div
           className={cn(
-            'flex h-14 shrink-0 items-center border-b',
-            collapsed ? 'justify-start pl-4 pr-2' : 'gap-2.5 px-5',
+            'flex h-[4.75rem] shrink-0 items-center border-b',
+            collapsed ? 'justify-start pl-3 pr-2' : 'gap-3 px-6',
           )}
           style={{ borderColor: 'var(--sidebar-divider)' }}
         >
           <BrandMark size="sm" />
           {!collapsed ? (
-            <SidebarLabel className="font-bold tracking-tight" style={{ color: 'var(--sidebar-text-active)' }}>
+            <SidebarLabel
+              className="text-[1.4rem] font-bold leading-tight tracking-tight"
+              style={{ color: 'var(--sidebar-text-active)' }}
+            >
               Riser Fitness
             </SidebarLabel>
           ) : null}

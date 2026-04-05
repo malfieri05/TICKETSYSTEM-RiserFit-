@@ -3,12 +3,11 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
-import { adminApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
+import { adminApi, ticketsApi, updateTicketRowInListCaches } from '@/lib/api';
 import type { TicketFilters } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { TicketDrawer } from '@/components/tickets/TicketDrawer';
 import {
@@ -18,6 +17,7 @@ import {
 } from '@/components/tickets/TicketRow';
 import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/TicketFeedThead';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
+import { TicketFeedSearchField } from '@/components/tickets/TicketFeedSearchField';
 import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
@@ -208,38 +208,22 @@ export default function TicketsPage() {
   const addTagMut = useMutation({
     mutationFn: ({ ticketId, label, color }: { ticketId: string; label: string; color: string }) =>
       ticketsApi.addTag(ticketId, { label, color }),
-    onSuccess: (data, variables) => {
-      // Refresh the individual ticket record (drawer / panel).
+    onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-
-      // Patch the new tag directly into every cached list page so the feed row
-      // updates immediately — without re-fetching or re-sorting the list.
-      qc.setQueriesData<{ tickets: import('@/types').TicketListItem[]; total: number }>(
-        { queryKey: ['tickets'], exact: false },
-        (old) => {
-          if (!old?.tickets) return old;
-          return {
-            ...old,
-            tickets: old.tickets.map((t) =>
-              t.id !== variables.ticketId
-                ? t
-                : {
-                    ...t,
-                    tags: [
-                      ...(t.tags ?? []),
-                      {
-                        id: data.data.tag.id,
-                        name: data.data.tag.name,
-                        color: data.data.tag.color ?? variables.color,
-                        createdAt: new Date().toISOString(),
-                        createdBy: { id: '', name: '' },
-                      },
-                    ],
-                  },
-            ),
-          };
-        },
-      );
+      const body = res.data;
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: [
+          ...(t.tags ?? []),
+          {
+            id: body.tag.id,
+            name: body.tag.name,
+            color: body.tag.color ?? variables.color,
+            createdAt: body.createdAt,
+            createdBy: body.createdBy,
+          },
+        ],
+      }));
     },
   });
 
@@ -255,24 +239,10 @@ export default function TicketsPage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      qc.setQueriesData<{ tickets: import('@/types').TicketListItem[]; total: number }>(
-        { queryKey: ['tickets'], exact: false },
-        (old) => {
-          if (!old?.tickets) return old;
-          return {
-            ...old,
-            tickets: old.tickets.map((t) =>
-              t.id !== variables.ticketId
-                ? t
-                : {
-                    ...t,
-                    tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
-                  },
-            ),
-          };
-        },
-      );
-      invalidateTicketLists(qc);
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
+      }));
     },
   });
 
@@ -308,6 +278,8 @@ export default function TicketsPage() {
     isInitialLoading,
     isFetching,
   } = useTicketListQuery('list', listParams);
+
+  const feedTicketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
 
   const countParamsBase = {
     page: 1,
@@ -394,16 +366,14 @@ export default function TicketsPage() {
           fixedChrome
           filters={
             <div className="flex flex-wrap gap-3 items-end">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-                <Input
-                  placeholder="Search tickets or paste ID..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  elevated
-                  className="w-64 pl-9"
-                />
-              </div>
+              <TicketFeedSearchField
+                id="tickets-feed-search"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search tickets or paste ID..."
+                elevated
+                className="w-64"
+              />
               <ComboBox
                 placeholder="All departments"
                 options={(taxonomy?.departments ?? []).map((d) => ({ value: d.id, label: d.name }))}
@@ -437,21 +407,21 @@ export default function TicketsPage() {
                 className="w-48"
               />
               <div className="flex items-center gap-2">
-                <input
-                  type="date"
+                <DateFilterInput
+                  variant="filter"
+                  elevated
                   value={filters.createdAfter ? filters.createdAfter.slice(0, 10) : ''}
-                  onChange={(e) => setDateFilter('createdAfter', e.target.value)}
-                  className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
-                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
+                  onChange={(v) => setDateFilter('createdAfter', v)}
+                  style={{ color: 'var(--color-text-muted)' }}
                   title="From date"
                 />
                 <span className="text-xs" style={{ color: 'var(--color-text-muted)' }}>–</span>
-                <input
-                  type="date"
+                <DateFilterInput
+                  variant="filter"
+                  elevated
                   value={filters.createdBefore ? filters.createdBefore.slice(0, 10) : ''}
-                  onChange={(e) => setDateFilter('createdBefore', e.target.value)}
-                  className="filter-elevated-shadow rounded-lg border px-3 py-2 text-sm focus-ring"
-                  style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }}
+                  onChange={(v) => setDateFilter('createdBefore', v)}
+                  style={{ color: 'var(--color-text-muted)' }}
                   title="To date"
                 />
               </div>
@@ -569,7 +539,12 @@ export default function TicketsPage() {
         />
       </div>
 
-      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
+      <TicketDrawer
+        ticketId={selectedId}
+        onClose={handleClose}
+        feedTicketIds={feedTicketIds}
+        onNavigateTicket={setSelectedId}
+      />
     </div>
   );
 }

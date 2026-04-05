@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsEnum,
   IsArray,
+  ArrayMinSize,
   ValidateNested,
   IsInt,
   Min,
@@ -51,6 +52,13 @@ export class LeaseRuleDto {
 export class PasteSourceDto {
   @IsString()
   pastedText!: string;
+}
+
+export class ParseSourcesDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  sourceIds!: string[];
 }
 
 export class UpdateRulesDto {

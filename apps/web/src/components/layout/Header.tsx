@@ -16,7 +16,7 @@ export function Header({ title, action }: HeaderProps) {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-14 min-h-14 shrink-0 items-center justify-between px-6 box-border"
+      className="sticky top-0 z-30 flex h-14 min-h-14 w-full min-w-0 shrink-0 items-center justify-between rounded-b-[var(--radius-lg)] px-6 box-border"
       style={{
         background: 'var(--color-bg-app-header)',
         boxShadow: 'var(--shadow-app-header)',

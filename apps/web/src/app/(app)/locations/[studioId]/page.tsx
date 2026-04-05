@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Building2, Users, Phone,
-  FileText, Tag, AlertTriangle, ChevronDown,
+  FileText, Ticket, Tag, AlertTriangle, ChevronDown, Check,
 } from 'lucide-react';
-import { locationsApi, ticketsApi, invalidateTicketLists } from '@/lib/api';
+import { locationsApi, ticketsApi, updateTicketRowInListCaches } from '@/lib/api';
 import type { TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +24,7 @@ import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
 import { useAuth } from '@/hooks/useAuth';
+import { InstantTooltip } from '@/components/tickets/TicketTagCapsule';
 
 type ViewTab = 'active' | 'completed';
 const PAGE_SIZE = 20;
@@ -166,6 +167,7 @@ export default function LocationProfilePage() {
   const tickets: TicketListItem[] = ticketsRes?.data?.data ?? [];
   const ticketsTotal = ticketsRes?.data?.total ?? 0;
   const totalPages = Math.ceil(ticketsTotal / PAGE_SIZE);
+  const feedTicketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
   const isProfile403 = (profileError as { response?: { status?: number } })?.response?.status === 403;
   const isTickets403 = (ticketsError as { response?: { status?: number } })?.response?.status === 403;
 
@@ -178,10 +180,22 @@ export default function LocationProfilePage() {
   const addTagMut = useMutation({
     mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
       ticketsApi.addTag(ticketId, { label }),
-    onSuccess: (_, variables) => {
+    onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      qc.invalidateQueries({ queryKey: ['location-tickets', studioId] });
-      invalidateTicketLists(qc);
+      const body = res.data;
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: [
+          ...(t.tags ?? []),
+          {
+            id: body.tag.id,
+            name: body.tag.name,
+            color: body.tag.color ?? null,
+            createdAt: body.createdAt,
+            createdBy: body.createdBy,
+          },
+        ],
+      }));
     },
   });
   const handleAddTag = useCallback(
@@ -196,8 +210,10 @@ export default function LocationProfilePage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
-      qc.invalidateQueries({ queryKey: ['location-tickets', studioId] });
-      invalidateTicketLists(qc);
+      updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
+        ...t,
+        tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
+      }));
     },
   });
   const handleRemoveTag = useCallback(
@@ -268,7 +284,7 @@ export default function LocationProfilePage() {
             <HeaderSkeleton />
           ) : profile ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Building2 className="h-6 w-6 shrink-0" style={{ color: 'var(--color-accent)' }} />
                 <h1 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
                   {profile.studio.name}
@@ -281,6 +297,35 @@ export default function LocationProfilePage() {
                     Inactive
                   </span>
                 )}
+                {profile.hasPublishedLeaseIqRuleset ? (
+                  <>
+                    <span
+                      className="text-xl font-light leading-none text-[var(--color-text-muted)] opacity-70 select-none"
+                      aria-hidden
+                    >
+                      |
+                    </span>
+                    <InstantTooltip
+                      content={
+                        <span className="inline-flex items-center gap-1.5 text-left">
+                          <Check
+                            className="h-3.5 w-3.5 shrink-0"
+                            strokeWidth={2.5}
+                            style={{ color: POLISH_THEME.success }}
+                            aria-hidden
+                          />
+                          <span>Has published LeaseIQ ruleset</span>
+                        </span>
+                      }
+                      compact
+                      className="inline-flex shrink-0 text-[var(--color-text-muted)]"
+                    >
+                      <span className="inline-flex">
+                        <FileText className="h-4 w-4 opacity-70" strokeWidth={2} aria-hidden />
+                      </span>
+                    </InstantTooltip>
+                  </>
+                ) : null}
               </div>
               {profile.studio.formattedAddress && (
                 <p className="flex items-center gap-1.5 text-sm" style={{ color: 'var(--color-text-secondary)' }}>
@@ -400,7 +445,7 @@ export default function LocationProfilePage() {
           ) : profile ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
+                <Ticket className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
                 <h2 className="text-base font-semibold" style={{ color: 'var(--color-text-primary)' }}>
                   Tickets
                 </h2>
@@ -444,11 +489,19 @@ export default function LocationProfilePage() {
                 })}
               </div>
 
-              {/* Ticket List */}
+              {/* Ticket List — shadow on outer wrapper so it is not clipped */}
               <div
-                className="rounded-lg border overflow-hidden"
-                style={{ borderColor: POLISH_THEME.listBorder, background: POLISH_THEME.listBg }}
+                className="mx-0.5 rounded-[var(--radius-lg)] sm:mx-2"
+                style={{ boxShadow: POLISH_THEME.feedListFloatShadow }}
               >
+                <div
+                  className="relative overflow-hidden rounded-[var(--radius-lg)]"
+                  style={{
+                    background: POLISH_THEME.listBg,
+                    border: `1px solid ${POLISH_THEME.listBorder}`,
+                    borderTop: `1px solid var(--color-feed-accent-border)`,
+                  }}
+                >
                 {ticketsLoading ? (
                   <table className={POLISH_CLASS.feedTable}>
                     <TicketFeedColgroup showIdColumn={showTicketIdColumn} />
@@ -457,7 +510,7 @@ export default function LocationProfilePage() {
                   </table>
                 ) : tickets.length === 0 ? (
                   <div className={`flex flex-col items-center justify-center ${POLISH_CLASS.emptyStatePadding} gap-2`}>
-                    <FileText className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
+                    <Ticket className="h-8 w-8" style={{ color: 'var(--color-text-muted)' }} />
                     <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                       {viewTab === 'active'
                         ? 'No active tickets for this location.'
@@ -521,13 +574,19 @@ export default function LocationProfilePage() {
                     )}
                   </>
                 )}
+                </div>
               </div>
             </div>
           ) : null}
         </div>
       </div>
 
-      <TicketDrawer ticketId={selectedTicketId} onClose={handleCloseDrawer} />
+      <TicketDrawer
+        ticketId={selectedTicketId}
+        onClose={handleCloseDrawer}
+        feedTicketIds={feedTicketIds}
+        onNavigateTicket={setSelectedTicketId}
+      />
     </div>
   );
 }

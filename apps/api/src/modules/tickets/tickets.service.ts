@@ -1715,11 +1715,6 @@ export class TicketsService {
         throw e;
       }
 
-      await tx.ticket.update({
-        where: { id: ticketId },
-        data: { updatedAt: new Date() },
-      });
-
       await tx.auditLog.create({
         data: {
           actorId: actor.id,
@@ -1818,10 +1813,6 @@ export class TicketsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.ticketTag.delete({
         where: { ticketId_tagId: { ticketId, tagId } },
-      });
-      await tx.ticket.update({
-        where: { id: ticketId },
-        data: { updatedAt: new Date() },
       });
       await tx.auditLog.create({
         data: {

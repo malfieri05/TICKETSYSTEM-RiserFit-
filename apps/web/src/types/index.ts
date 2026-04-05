@@ -486,6 +486,7 @@ export interface LocationProfileResponse {
     showContact: boolean;
     showIdentifiers: boolean;
   };
+  hasPublishedLeaseIqRuleset: boolean;
 }
 
 /** Stage 7A: workflow execution visibility — GET /subtask-workflow/templates/:id/stats */

@@ -44,7 +44,6 @@ export function UserSearchSelect({
 }: UserSearchSelectProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const eligible = useMemo(() => users.filter(filter), [users, filter]);
@@ -88,13 +87,11 @@ export function UserSearchSelect({
   };
 
   const handleFocus = () => {
-    setIsFocused(true);
     if (!selectedUser) setIsOpen(true);
     else setQuery('');
   };
 
   const handleBlur = () => {
-    setIsFocused(false);
     // Delay so click on dropdown item registers
     setTimeout(() => setIsOpen(false), 150);
   };
@@ -120,12 +117,12 @@ export function UserSearchSelect({
       )}
       <div
         className={cn(
-          'flex items-center rounded-lg border text-sm transition-colors',
-          'focus-within:ring-1 focus-within:ring-[var(--color-accent)]',
+          'relative flex items-center rounded-lg border-2 border-solid border-[var(--color-border-default)] text-sm',
+          'transition-[border-color] duration-[var(--duration-fast)] ease-out',
+          'focus-within:border-[var(--color-accent)]',
         )}
         style={{
           background: 'var(--color-bg-surface)',
-          borderColor: isFocused ? 'var(--color-accent)' : 'var(--color-border-default)',
         }}
       >
         {selectedUser ? (
@@ -194,7 +191,7 @@ export function UserSearchSelect({
               <li
                 key={u.id}
                 role="option"
-                className="flex flex-col gap-0.5 px-3 py-2 cursor-pointer transition-colors hover:bg-[var(--color-bg-surface)]"
+                className="mx-1 flex flex-col gap-0.5 rounded-md px-3 py-2 cursor-pointer transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
                 style={{ color: 'var(--color-text-primary)' }}
                 onClick={() => handleSelect(u)}
               >

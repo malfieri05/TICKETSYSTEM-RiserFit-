@@ -20,10 +20,22 @@ function NotificationStreamInit() {
   return null;
 }
 
+/**
+ * Layout resilience checklist (enforce in every new page / component):
+ *  ✓ flex/grid children that shrink or scroll → min-w-0 / min-h-0
+ *  ✓ avoid blind flex-1 + h-full stacks that force false equal-heights
+ *  ✓ content-driven card heights by default; max-h + overflow-auto to cap long lists
+ *  ✓ fixed-width label spans inside flex bar rows → shrink-0
+ *  ✓ tables inside cards → overflow-x-auto wrapper
+ *  ✓ text-overflow truncation → min-w-0 on the parent flex child
+ *  ✓ no magic px for layout/spacing that doesn't scale with zoom; prefer rem / CSS vars
+ *  ✓ charts → width: 100% + ResizeObserver; min-height only for chart area itself
+ *  ✓ reuse .dashboard-card for surface + border + shadow; don't inline-style those three
+ */
 function AppShell({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebarCollapse();
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-full overflow-hidden">
       <NotificationStreamInit />
       <Sidebar />
       <main

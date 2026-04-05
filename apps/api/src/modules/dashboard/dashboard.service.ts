@@ -15,13 +15,13 @@ export interface DashboardSummaryDto {
   avgFirstResponseHours: number | null;
   /** When set, top KPI cards use this inclusive date range (YYYY-MM-DD). */
   kpiRange?: { from: string; to: string };
-  /** Support tickets grouped by department. */
+  /** Support tickets grouped by department (created in `kpiRange` when set; else all time). */
   supportByDepartment: { deptId: string; deptName: string; count: number }[];
-  /** Support tickets grouped by support topic. */
+  /** Support tickets grouped by support topic (same date rule). */
   supportByType: { typeId: string; typeName: string; count: number }[];
-  /** Maintenance tickets grouped by maintenance category. */
+  /** Maintenance tickets grouped by category (same date rule). */
   maintenanceByCategory: { categoryId: string; categoryName: string; count: number }[];
-  /** Maintenance tickets grouped by studio location. */
+  /** Maintenance tickets grouped by studio (same date rule). */
   maintenanceByLocation: {
     locationId: string;
     locationName: string;
@@ -54,6 +54,17 @@ export class DashboardService {
       return this.getStudioSummary(actor, studioId);
     }
     return this.getAdminOrDeptSummary(actor, fromStr, toStr);
+  }
+
+  /** Narrow dashboard breakdowns to tickets created in the KPI window. */
+  private withCreatedInRange(
+    base: Prisma.TicketWhereInput,
+    from: Date,
+    to: Date,
+  ): Prisma.TicketWhereInput {
+    return {
+      AND: [base, { createdAt: { gte: from, lte: to } }],
+    };
   }
 
   private parseDayBoundary(isoDate: string, endOfDay: boolean): Date {
@@ -178,21 +189,21 @@ export class DashboardService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const [supportByDepartment, supportByType, maintenanceByCategory, maintenanceByLocation] =
-      await Promise.all([
-        this.computeSupportByDepartment(where),
-        this.computeSupportByType(where),
-        this.computeMaintenanceByCategory(where),
-        this.computeMaintenanceByLocation(where),
-      ]);
-
     if (fromStr && toStr) {
       const fromStart = this.parseDayBoundary(fromStr, false);
       const toEnd = this.parseDayBoundary(toStr, true);
       if (fromStart.getTime() > toEnd.getTime()) {
         throw new BadRequestException('"from" must be on or before "to"');
       }
-      const k = await this.computeKpiForWindow(where, fromStart, toEnd);
+      const breakdownWhere = this.withCreatedInRange(where, fromStart, toEnd);
+      const [supportByDepartment, supportByType, maintenanceByCategory, maintenanceByLocation, k] =
+        await Promise.all([
+          this.computeSupportByDepartment(breakdownWhere),
+          this.computeSupportByType(breakdownWhere),
+          this.computeMaintenanceByCategory(breakdownWhere),
+          this.computeMaintenanceByLocation(breakdownWhere),
+          this.computeKpiForWindow(where, fromStart, toEnd),
+        ]);
       return {
         newTickets: k.newTickets,
         inProgressTickets: k.inProgressTickets,
@@ -207,6 +218,14 @@ export class DashboardService {
         maintenanceByLocation,
       };
     }
+
+    const [supportByDepartment, supportByType, maintenanceByCategory, maintenanceByLocation] =
+      await Promise.all([
+        this.computeSupportByDepartment(where),
+        this.computeSupportByType(where),
+        this.computeMaintenanceByCategory(where),
+        this.computeMaintenanceByLocation(where),
+      ]);
 
     const [
       newTickets,
@@ -338,7 +357,7 @@ export class DashboardService {
   }
 
   private async computeSupportByDepartment(
-    baseWhere: Record<string, unknown>,
+    baseWhere: Prisma.TicketWhereInput,
   ): Promise<{ deptId: string; deptName: string; count: number }[]> {
     const rows = await this.prisma.ticket.groupBy({
       by: ['departmentId'],
@@ -369,7 +388,7 @@ export class DashboardService {
   }
 
   private async computeMaintenanceByCategory(
-    baseWhere: Record<string, unknown>,
+    baseWhere: Prisma.TicketWhereInput,
   ): Promise<{ categoryId: string; categoryName: string; count: number }[]> {
     const rows = await this.prisma.ticket.groupBy({
       by: ['maintenanceCategoryId'],
@@ -400,7 +419,7 @@ export class DashboardService {
   }
 
   private async computeSupportByType(
-    baseWhere: Record<string, unknown>,
+    baseWhere: Prisma.TicketWhereInput,
   ): Promise<{ typeId: string; typeName: string; count: number }[]> {
     const rows = await this.prisma.ticket.groupBy({
       by: ['supportTopicId'],
@@ -431,7 +450,7 @@ export class DashboardService {
   }
 
   private async computeMaintenanceByLocation(
-    baseWhere: Record<string, unknown>,
+    baseWhere: Prisma.TicketWhereInput,
   ): Promise<
     { locationId: string; locationName: string; count: number }[]
   > {

@@ -1,4 +1,11 @@
-import { Controller, Get, Query, Res, Header } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Query,
+  Res,
+  Header,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { ReportingService } from './reporting.service';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -17,10 +24,21 @@ export class ReportingController {
     return this.reportingService.getSummary();
   }
 
-  // GET /api/reporting/volume?days=30
-  // Ticket volume per day over last N days
+  // GET /api/reporting/volume?days=30  OR  ?from=YYYY-MM-DD&to=YYYY-MM-DD (dashboard timeframe)
   @Get('volume')
-  getVolumeByDay(@Query('days') days?: string) {
+  getVolumeByDay(
+    @Query('days') days?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    if (from || to) {
+      if (!from || !to) {
+        throw new BadRequestException(
+          'Query params "from" and "to" must both be provided (YYYY-MM-DD) for a date range.',
+        );
+      }
+      return this.reportingService.getVolumeByDayInRange(from, to);
+    }
     return this.reportingService.getVolumeByDay(days ? parseInt(days, 10) : 30);
   }
 

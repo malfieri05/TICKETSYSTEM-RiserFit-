@@ -29,8 +29,7 @@ export function AttachmentRow({
   showDivider,
 }: AttachmentRowProps) {
   return (
-    <button
-      type="button"
+    <div
       className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-bg-surface-raised)]"
       style={
         showDivider
@@ -72,8 +71,7 @@ export function AttachmentRow({
           e.stopPropagation();
           onDownload(attachment);
         }}
-        className="p-1.5 rounded transition-colors duration-150 hover:text-[var(--color-accent)]"
-        style={{ color: 'var(--color-text-muted)' }}
+        className="focus-ring p-1.5 rounded-md text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[var(--color-bg-surface)] hover:text-[var(--color-accent)]"
         title="Download"
       >
         <Download className="h-4 w-4" />
@@ -85,14 +83,13 @@ export function AttachmentRow({
             e.stopPropagation();
             onDelete(attachment.id);
           }}
-          className="p-1.5 rounded transition-colors duration-150 hover:text-red-600"
-          style={{ color: 'var(--color-text-muted)' }}
+          className="focus-ring p-1.5 rounded-md text-[var(--color-text-muted)] transition-colors duration-150 hover:bg-[color-mix(in_srgb,var(--color-danger)_14%,transparent)] hover:text-[var(--color-danger-hover)] active:scale-95"
           title="Delete"
         >
           <Trash2 className="h-4 w-4" />
         </button>
       )}
-    </button>
+    </div>
   );
 }
 

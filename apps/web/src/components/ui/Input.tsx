@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { POLISH_CLASS } from '@/lib/polish';
 import { InputHTMLAttributes, forwardRef } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
@@ -9,7 +10,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, elevated, className, id, ...props }, ref) => {
+  ({ label, error, elevated, className, id, style, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -21,14 +22,30 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={id}
           className={cn(
-            'focus-ring block h-9 w-full rounded-[var(--radius-md)] px-3 text-sm placeholder:text-[var(--color-text-muted)] placeholder:opacity-100',
-            'transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            elevated && 'filter-elevated-shadow',
-            error && 'ring-1 ring-red-500',
+            elevated
+              ? cn(
+                  'block w-full box-border placeholder:text-[var(--color-text-muted)] placeholder:opacity-100',
+                  POLISH_CLASS.filterBarControl,
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'filter-elevated-shadow',
+                  error && 'ring-1 ring-red-500',
+                )
+              : cn(
+                  'block h-9 w-full box-border rounded-[var(--radius-md)] border-2 border-solid border-[var(--color-input-border)] px-3 text-sm',
+                  'placeholder:text-[var(--color-text-muted)] placeholder:opacity-100',
+                  'outline-none transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
+                  'focus-visible:border-[var(--color-accent)]',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  error && 'border-red-500 focus-visible:border-red-500',
+                ),
             className,
           )}
-          style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          style={{
+            ...(elevated
+              ? { background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }
+              : { background: 'var(--color-input-bg)', color: 'var(--color-text-primary)' }),
+            ...style,
+          }}
           {...props}
         />
         {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}
@@ -45,7 +62,7 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  ({ label, error, elevated, className, id, children, ...props }, ref) => {
+  ({ label, error, elevated, className, id, children, style, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -57,14 +74,29 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           id={id}
           className={cn(
-            'focus-ring block h-9 w-full rounded-[var(--radius-md)] px-3 text-sm',
-            'transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
-            'disabled:opacity-50 disabled:cursor-not-allowed',
-            elevated && 'filter-elevated-shadow',
-            error && 'ring-1 ring-red-500',
+            elevated
+              ? cn(
+                  'block w-full box-border',
+                  POLISH_CLASS.filterBarControl,
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  'filter-elevated-shadow',
+                  error && 'ring-1 ring-red-500',
+                )
+              : cn(
+                  'block h-9 w-full box-border rounded-[var(--radius-md)] border-2 border-solid border-[var(--color-input-border)] px-3 text-sm',
+                  'outline-none transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
+                  'focus-visible:border-[var(--color-accent)]',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                  error && 'border-red-500 focus-visible:border-red-500',
+                ),
             className,
           )}
-          style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          style={{
+            ...(elevated
+              ? { background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }
+              : { background: 'var(--color-input-bg)', color: 'var(--color-text-primary)' }),
+            ...style,
+          }}
           {...props}
         >
           {children}
@@ -82,7 +114,7 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, error, className, id, ...props }, ref) => {
+  ({ label, error, className, id, style, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -94,13 +126,15 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={id}
           className={cn(
-            'focus-ring block w-full rounded-[var(--radius-md)] px-3 py-2 text-sm placeholder:text-[var(--color-text-muted)] placeholder:opacity-100 resize-y',
-            'transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
+            'block w-full box-border rounded-[var(--radius-md)] border-2 border-solid border-[var(--color-input-border)] px-3 py-2 text-sm',
+            'placeholder:text-[var(--color-text-muted)] placeholder:opacity-100 resize-y',
+            'outline-none transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
+            'focus-visible:border-[var(--color-accent)]',
             'disabled:opacity-50 disabled:cursor-not-allowed',
-            error && 'ring-1 ring-red-500',
+            error && 'border-red-500 focus-visible:border-red-500',
             className,
           )}
-          style={{ background: 'var(--color-input-bg)', border: '1px solid var(--color-input-border)', color: 'var(--color-text-primary)' }}
+          style={{ background: 'var(--color-input-bg)', color: 'var(--color-text-primary)', ...style }}
           {...props}
         />
         {error && <p className="text-xs" style={{ color: 'var(--color-danger)' }}>{error}</p>}

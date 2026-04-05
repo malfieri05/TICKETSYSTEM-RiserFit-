@@ -37,6 +37,11 @@
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.32), 0 8px 28px -16px rgba(0, 0, 0, 0.55);
+  /* Ticket feed table shell — stronger lift than generic panels */
+  --shadow-feed-float:
+    0 0 0 1px rgba(0, 0, 0, 0.18),
+    0 3px 12px rgba(0, 0, 0, 0.42),
+    0 18px 48px -12px rgba(0, 0, 0, 0.68);
   /* Ticket / portal filter row — inputs & combos read as lifted off the bar */
   --shadow-filter-elevated:
     0 1px 2px rgba(0, 0, 0, 0.45),
@@ -70,7 +75,7 @@
   --color-app-header-info-hover-bg: rgba(255, 255, 255, 0.1);
   --color-app-header-info-hover-fg: var(--color-accent-hover);
   /* Ticket feed shimmer bar — green in dark mode */
-  --color-feed-shimmer: #22c55e;
+  --color-feed-shimmer: var(--color-accent);
   /* Ticket drawer / slide-over — depth from the main canvas */
   --shadow-drawer: -12px 0 40px rgba(0, 0, 0, 0.55), -4px 0 16px rgba(0, 0, 0, 0.35);
   /* Drawer tab strip — depth only below (no halo above; flush with header chrome) */
@@ -138,6 +143,12 @@
   --duration-fast: 140ms;
   --duration-base: 180ms;
   --shadow-panel: 0 1px 3px rgba(16, 24, 40, 0.06), 0 10px 24px -14px rgba(16, 24, 40, 0.18);
+  --shadow-feed-float:
+    0 0 0 1px rgba(16, 24, 40, 0.06),
+    0 1px 2px rgba(16, 24, 40, 0.05),
+    0 4px 12px rgba(16, 24, 40, 0.07),
+    0 16px 36px -12px rgba(16, 24, 40, 0.12),
+    0 32px 72px -24px rgba(16, 24, 40, 0.14);
   --shadow-filter-elevated:
     0 1px 2px rgba(16, 24, 40, 0.08),
     0 5px 16px rgba(16, 24, 40, 0.12),
@@ -285,6 +296,42 @@ body {
   100% { background-position: -200% 0; }
 }
 
+/* Create ticket success overlay — check in circle */
+@keyframes ticketSuccessCircle {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes ticketSuccessCheck {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.ticket-success-circle-anim {
+  animation: ticketSuccessCircle 0.52s cubic-bezier(0.34, 1.45, 0.64, 1) forwards;
+}
+.ticket-success-check-anim {
+  animation: ticketSuccessCheck 0.32s ease-out 0.16s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ticket-success-circle-anim,
+  .ticket-success-check-anim {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Stage 4: Premium polish — subtle row hover/focus elevation on ticket feed rows */
 [data-theme="dark"] {
   --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -336,12 +383,21 @@ body {
 }
 
 .focus-ring {
+  transition:
+    outline var(--duration-fast) ease-out,
+    outline-offset var(--duration-fast) ease-out,
+    box-shadow var(--duration-fast) ease-out,
+    border-color var(--duration-fast) ease-out;
+}
+
+/* Keyboard / screen-reader focus: clear accent “border”. Mouse: no stray ring. */
+.focus-ring:focus:not(:focus-visible) {
   outline: none;
-  transition: box-shadow var(--duration-fast) ease-out, border-color var(--duration-fast) ease-out;
 }
 
 .focus-ring:focus-visible {
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
+  outline: 2px solid var(--color-accent);
+  outline-offset: 0;
 }
 
 /*
@@ -408,6 +464,8 @@ body {
   --shadow-dashboard-card-hover: 0 4px 12px rgba(0, 0, 0, 0.52), 0 14px 36px rgba(0, 0, 0, 0.68);
 }
 .dashboard-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
   box-shadow: var(--shadow-dashboard-card);
   transition: box-shadow 220ms ease-out, transform 220ms ease-out;
 }
@@ -501,4 +559,14 @@ body {
 
 .filter-elevated-shadow {
   box-shadow: var(--shadow-filter-elevated);
+}
+
+/* DateFilterInput: hide WebKit’s long mm/dd/yyyy hint; overlay shows `m/d/y` until focus/value. */
+input.date-filter-empty::-webkit-datetime-edit,
+input.date-filter-empty::-webkit-datetime-edit-fields-wrapper {
+  color: transparent;
+}
+input.date-filter-empty:focus::-webkit-datetime-edit,
+input.date-filter-empty:focus::-webkit-datetime-edit-fields-wrapper {
+  color: inherit;
 }

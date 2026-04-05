@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { MessageCircle, Search } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ticketsApi } from '@/lib/api';
 import type { TicketFilters, TicketListItem } from '@/types';
@@ -18,12 +18,13 @@ import {
   ticketRequesterPrimaryLine,
 } from '@/components/tickets/TicketRow';
 import { Button } from '@/components/ui/Button';
-import { Input, Select } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
+import { TicketFeedSearchField } from '@/components/tickets/TicketFeedSearchField';
 
 const PAGE_SIZE = 20;
 
@@ -74,6 +75,7 @@ export default function PortalTicketsPage() {
   const tickets: TicketListItem[] = data?.data?.data ?? [];
   const total = data?.data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const feedTicketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
 
   // Location options: Stage 23 use allowedStudios when available; else derive from result set
   const { studioOptions, departmentOptions } = useMemo(() => {
@@ -135,16 +137,19 @@ export default function PortalTicketsPage() {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
-              <Input
-                placeholder="Search tickets..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-56 pl-9"
-              />
-            </div>
-            <Select value={filters.status ?? ''} onChange={(e) => setFilter('status', e.target.value)} className="w-40">
+            <TicketFeedSearchField
+              id="portal-legacy-tickets-search"
+              value={search}
+              onChange={setSearch}
+              elevated
+              className="w-56"
+            />
+            <Select
+              elevated
+              value={filters.status ?? ''}
+              onChange={(e) => setFilter('status', e.target.value)}
+              className="w-40"
+            >
               <option value="">All statuses</option>
               <option value="NEW">New</option>
               <option value="TRIAGED">Triaged</option>
@@ -155,6 +160,7 @@ export default function PortalTicketsPage() {
               <option value="CLOSED">Closed</option>
             </Select>
             <ComboBox
+              elevated
               placeholder="All departments"
               options={departmentOptions.map((d) => ({ value: d.id, label: d.name }))}
               value={filters.departmentId ?? ''}
@@ -162,6 +168,7 @@ export default function PortalTicketsPage() {
               className="w-44"
             />
             <ComboBox
+              elevated
               placeholder="All locations"
               options={studioOptions.map((s) => ({ value: s.id, label: s.name }))}
               value={filters.studioId ?? ''}
@@ -273,7 +280,12 @@ export default function PortalTicketsPage() {
           )}
         </div>
       </div>
-      <TicketDrawer ticketId={selectedId} onClose={handleClose} />
+      <TicketDrawer
+        ticketId={selectedId}
+        onClose={handleClose}
+        feedTicketIds={feedTicketIds}
+        onNavigateTicket={setSelectedId}
+      />
     </div>
   );
 }

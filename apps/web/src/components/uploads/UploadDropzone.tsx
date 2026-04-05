@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from 'react';
 import { Upload } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface UploadDropzoneProps {
   /** Omit or pass empty string to hide the label row (e.g. when the parent already has a heading). */
@@ -42,6 +43,9 @@ export function UploadDropzone({
   onFilesSelected,
 }: UploadDropzoneProps) {
   const [error, setError] = useState<string | null>(null);
+  /** Nested dragenter/dragleave on children toggles depth; avoids flicker. */
+  const [fileDragDepth, setFileDragDepth] = useState(0);
+  const isFileOver = fileDragDepth > 0;
   const maxMb = Math.max(1, Math.round(maxSizeBytes / (1024 * 1024)));
   const resolvedLabel = label === undefined ? 'Click or drag to upload' : label;
 
@@ -70,8 +74,31 @@ export function UploadDropzone({
 
   const onDrop: React.DragEventHandler<HTMLElement> = (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    setFileDragDepth(0);
     if (!e.dataTransfer.files?.length) return;
     handleFiles(multiple ? e.dataTransfer.files : [e.dataTransfer.files[0]]);
+  };
+
+  const onDragEnter: React.DragEventHandler<HTMLElement> = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (![...e.dataTransfer.types].includes('Files')) return;
+    setFileDragDepth((d) => d + 1);
+  };
+
+  const onDragLeave: React.DragEventHandler<HTMLElement> = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFileDragDepth((d) => Math.max(0, d - 1));
+  };
+
+  const onDragOver: React.DragEventHandler<HTMLElement> = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if ([...e.dataTransfer.types].includes('Files')) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
   };
 
   const onChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -84,6 +111,7 @@ export function UploadDropzone({
   const mainPrompt =
     selectPrompt ?? `Click to select file${multiple ? 's' : ''}`;
   const subPrompt = secondaryPrompt ?? 'or drag and drop here';
+  const dropPrompt = multiple ? 'Drop files to upload' : 'Drop file to upload';
 
   return (
     <div className="space-y-2">
@@ -98,20 +126,37 @@ export function UploadDropzone({
         </p>
       )}
       <label
-        className="flex min-h-[132px] flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 cursor-pointer border-2 border-dashed transition-colors duration-150 hover:border-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)]"
-        style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-root)' }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
+        className={cn(
+          'flex min-h-[132px] flex-col items-center justify-center gap-2 rounded-lg px-4 py-8 cursor-pointer border-2 border-dashed transition-all duration-200 ease-out',
+          isFileOver
+            ? 'scale-[1.02] border-[var(--color-accent)]'
+            : 'border-[var(--color-border-default)] bg-[var(--color-bg-root)] hover:border-[var(--color-accent)] hover:bg-[var(--color-bg-surface-raised)]',
+        )}
+        style={
+          isFileOver
+            ? {
+                background: 'color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-root))',
+                boxShadow:
+                  '0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 45%, transparent)',
+              }
+            : undefined
+        }
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDragOver={onDragOver}
         onDrop={onDrop}
       >
-        <Upload className="h-9 w-9 shrink-0" strokeWidth={1.5} style={{ color: 'var(--color-accent)' }} aria-hidden />
+        <Upload
+          className={`h-9 w-9 shrink-0 transition-transform duration-200 ${isFileOver ? 'scale-110' : ''}`}
+          strokeWidth={1.5}
+          style={{ color: 'var(--color-accent)' }}
+          aria-hidden
+        />
         <span className="text-center text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
-          {mainPrompt}
+          {isFileOver ? dropPrompt : mainPrompt}
         </span>
         <span className="text-center text-xs" style={{ color: 'var(--color-text-muted)' }}>
-          {subPrompt}
+          {isFileOver ? 'Release to add' : subPrompt}
         </span>
         <input
           type="file"

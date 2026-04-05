@@ -12,7 +12,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   Ticket,
   Clock,
@@ -29,12 +29,16 @@ import {
 import { Header } from '@/components/layout/Header';
 import { InstantTooltip } from '@/components/tickets/TicketTagCapsule';
 import { ComboBox } from '@/components/ui/ComboBox';
+import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
 
-type Preset = 'today' | 'last7' | 'last30';
+type Preset = 'today' | 'last7' | 'last30' | 'all';
+
+/** Lower bound for “All” preset — aligns KPI + breakdowns with same windowed logic as other presets. */
+const ALL_PRESET_FROM = '2000-01-01';
 
 function ymd(d: Date): string {
   const y = d.getFullYear();
@@ -51,6 +55,9 @@ function startOfToday(): Date {
 
 function rangeForPreset(preset: Preset): { from: string; to: string } {
   const end = startOfToday();
+  if (preset === 'all') {
+    return { from: ALL_PRESET_FROM, to: ymd(end) };
+  }
   const start = new Date(end);
   if (preset === 'last7') start.setDate(start.getDate() - 6);
   else if (preset === 'last30') start.setDate(start.getDate() - 29);
@@ -85,27 +92,26 @@ function StatCard({
   const headerRow = (
     <>
       <div
-        className="rounded-xl p-3 shrink-0"
+        className="rounded-xl p-2.5 sm:p-3 shrink-0 self-start"
         style={iconStyle}
       >
         <Icon className="h-5 w-5 lg:h-6 lg:w-6" />
       </div>
-      <p className="text-[0.7rem] lg:text-xs text-[var(--color-text-secondary)] font-bold uppercase tracking-[0.1em] leading-tight pt-0.5 min-w-0">
+      <p className="flex-1 min-w-0 text-[0.7rem] lg:text-xs text-[var(--color-text-secondary)] font-bold uppercase tracking-[0.1em] leading-snug sm:leading-tight pt-0.5 break-words">
         {label}
       </p>
     </>
   );
 
+  const headerFlexClass =
+    'flex w-full min-w-0 shrink-0 items-start gap-2 sm:gap-3 md:gap-4';
+
   return (
     <div
       className={cn(
-        'dashboard-card rounded-xl p-5 lg:p-6 flex flex-col min-h-[8.5rem]',
+        'dashboard-card flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl p-4 sm:p-5 lg:p-6',
         className,
       )}
-      style={{
-        background: 'var(--color-bg-surface)',
-        border: '1px solid var(--color-border-default)',
-      }}
     >
       {headerTooltip ? (
         <InstantTooltip
@@ -113,20 +119,20 @@ function StatCard({
           align="left"
           maxWidth="min(18rem, calc(100vw - 2rem))"
           tooltipId={tipId}
-          className="block w-full shrink-0"
+          className="block w-full min-w-0 shrink-0"
         >
           <div
-            className="flex w-full shrink-0 cursor-help items-start gap-4 outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]"
+            className={`${headerFlexClass} cursor-help outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]`}
             tabIndex={0}
           >
             {headerRow}
           </div>
         </InstantTooltip>
       ) : (
-        <div className="flex items-start gap-4 w-full shrink-0">{headerRow}</div>
+        <div className={headerFlexClass}>{headerRow}</div>
       )}
-      <div className="flex-1 flex items-center justify-center px-1 pt-1">
-        <p className="text-3xl font-bold text-[var(--color-text-primary)] text-center tabular-nums lg:text-4xl">
+      <div className="flex min-h-0 min-w-0 items-center pt-3 pb-1">
+        <p className="min-w-0 max-w-full text-2xl font-bold tabular-nums text-[var(--color-text-primary)] sm:text-3xl lg:text-4xl break-words">
           {value}
         </p>
       </div>
@@ -158,14 +164,18 @@ function HorizontalBar({
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
-      <span className="w-8 text-right text-[var(--color-text-muted)] font-medium">{count}</span>
+      <span className="w-8 shrink-0 text-right text-[var(--color-text-muted)] font-medium">{count}</span>
     </div>
   );
 }
 
-/** Fixed visual height; header stays put, list scrolls inside. */
+/**
+ * Content-driven height, capped so long lists stay scrollable.
+ * Panels shrink to their content when few items — no false dead space.
+ * Senior pattern: max-h + overflow-auto, NOT fixed h.
+ */
 const BREAKDOWN_PANEL_CLASS =
-  'dashboard-card flex min-h-[12rem] h-[min(22rem,60vh)] flex-col overflow-hidden rounded-xl p-5';
+  'dashboard-card flex min-h-[12rem] max-h-[min(22rem,60vh)] flex-col overflow-hidden rounded-xl p-5';
 
 function BreakdownPanelScrollBody({
   isEmpty,
@@ -196,6 +206,26 @@ function formatDateLabel(iso: string): string {
   const [, m, d] = iso.split('-');
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${months[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+}
+
+/** Caption under Ticket Volume — matches KPI From/To. */
+function formatDashboardRangeCaption(from: string, to: string): string {
+  const parse = (s: string) => {
+    const [y, mo, d] = s.split('-').map((n) => Number(n));
+    return new Date(y, mo - 1, d, 12, 0, 0, 0);
+  };
+  const a = parse(from);
+  const b = parse(to);
+  const opts = (dt: Date, withYear: boolean): Intl.DateTimeFormatOptions => ({
+    month: 'short',
+    day: 'numeric',
+    ...(withYear ? { year: 'numeric' as const } : {}),
+  });
+  if (from === to) {
+    return a.toLocaleDateString(undefined, opts(a, true));
+  }
+  const sameYear = a.getFullYear() === b.getFullYear();
+  return `${a.toLocaleDateString(undefined, opts(a, !sameYear))} – ${b.toLocaleDateString(undefined, opts(b, true))}`;
 }
 
 const TOOLTIP_W = 136; // px — used for left/right side placement
@@ -467,19 +497,13 @@ const PRESET_SEGMENTS: { key: Preset; label: string }[] = [
   { key: 'today', label: 'Today' },
   { key: 'last7', label: 'Last 7 days' },
   { key: 'last30', label: 'Last 30 days' },
+  { key: 'all', label: 'All' },
 ];
 
 const KPI_PRESET_OPTIONS = PRESET_SEGMENTS.map((s) => ({
   value: s.key,
   label: s.label,
 }));
-
-const VOLUME_SEGMENT_OPTIONS = [
-  { value: '1d', label: '1d' },
-  { value: '7d', label: '1w' },
-  { value: '30d', label: '1m' },
-  { value: 'all', label: 'All' },
-] as const;
 
 const AVG_FIRST_RESPONSE_TOOLTIP =
   'Time between ticket creation and first action.';
@@ -536,7 +560,7 @@ export default function DashboardPage() {
 
   const {
     data,
-    isLoading,
+    isPending: summaryIsPending,
     isError,
     error: summaryError,
     refetch: refetchSummary,
@@ -547,21 +571,22 @@ export default function DashboardPage() {
     enabled: !skipForStudio && rangeValid,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
 
   const rawSummary = data?.data;
   const summary = isAdminDashboardSummary(rawSummary) ? rawSummary : undefined;
 
-  const [volumeRange, setVolumeRange] = useState<'1d' | '7d' | '30d' | 'all'>('all');
-  const volumeDays =
-    volumeRange === '1d' ? 1 : volumeRange === '7d' ? 7 : volumeRange === '30d' ? 30 : 0;
-
-  const { data: volumeRes } = useQuery({
-    queryKey: ['dashboard', 'reporting-volume', volumeDays],
-    queryFn: () => reportingApi.volumeByDay(volumeDays),
-    enabled: !skipForStudio,
+  const { data: volumeRes, isPending: volumeIsPending } = useQuery({
+    queryKey: ['dashboard', 'reporting-volume', rangeFrom, rangeTo],
+    queryFn: () => reportingApi.volumeByDateRange(rangeFrom, rangeTo),
+    enabled: !skipForStudio && rangeValid,
     refetchOnWindowFocus: false,
+    placeholderData: keepPreviousData,
   });
+
+  /** First paint + range changes without cached placeholder: keep KPI + volume in lockstep. */
+  const topSectionSkeleton = !isError && (summaryIsPending || volumeIsPending);
 
 
   const { data: resolutionRes } = useQuery({
@@ -637,33 +662,33 @@ export default function DashboardPage() {
         )}
 
         {rangeValid && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-stretch">
-            {/* Left: KPI grid — each half matches 2 of the 4 breakdown boxes below */}
-            <div className="flex min-h-0 w-full flex-col xl:h-full xl:min-h-0">
-              {isLoading ? (
-                <div className="grid min-h-[20rem] w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:min-h-0 xl:h-full xl:grid-cols-4 xl:grid-rows-[1fr_1fr]">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-start">
+            {/* Left: KPI grid */}
+            <div className="flex min-h-0 w-full flex-col">
+              {topSectionSkeleton ? (
+                <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   <div
-                    className="col-span-full min-h-[8.5rem] shrink-0 rounded-xl animate-pulse sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1 xl:min-h-0 xl:h-full min-w-0"
+                    className="col-span-full min-h-[8.5rem] shrink-0 rounded-xl animate-pulse sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                   <div
-                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-4 xl:row-start-1 xl:min-h-0 xl:h-full min-w-0"
+                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-4 xl:row-start-1 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                   <div
-                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-1 xl:row-start-2 xl:min-h-0 xl:h-full min-w-0"
+                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-1 xl:row-start-2 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                   <div
-                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-2 xl:row-start-2 xl:min-h-0 xl:h-full min-w-0"
+                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-2 xl:row-start-2 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                   <div
-                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-3 xl:row-start-2 xl:min-h-0 xl:h-full min-w-0"
+                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-3 xl:row-start-2 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                   <div
-                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-4 xl:row-start-2 xl:min-h-0 xl:h-full min-w-0"
+                    className="min-h-[8.5rem] rounded-xl animate-pulse xl:col-start-4 xl:row-start-2 min-w-0"
                     style={{ background: 'var(--color-bg-surface-inset)' }}
                   />
                 </div>
@@ -709,20 +734,16 @@ export default function DashboardPage() {
                   </p>
                 </div>
               ) : (
-                <div className="grid min-h-[20rem] w-full grid-cols-1 items-stretch gap-4 min-w-0 sm:grid-cols-2 md:grid-cols-3 xl:min-h-0 xl:h-full xl:grid-cols-4 xl:grid-rows-[1fr_1fr]">
+                <div className="grid w-full min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   <div
-                    className="dashboard-card col-span-full flex min-h-[8.5rem] w-full shrink-0 flex-col rounded-xl px-6 py-4 sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1 xl:min-h-0 xl:h-full"
-                    style={{
-                      background: 'var(--color-bg-surface)',
-                      border: '1px solid var(--color-border-default)',
-                    }}
+                    className="dashboard-card col-span-full flex min-h-0 min-w-0 w-full shrink-0 flex-col overflow-hidden rounded-xl px-4 py-5 sm:px-6 sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1"
                   >
                     {/* Card label */}
-                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)] mb-3 shrink-0">
+                    <p className="mb-4 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
                       Timeframe
                     </p>
-                    {/* Controls — vertically centred in remaining space */}
-                    <div className="flex flex-1 flex-col items-center justify-center gap-3 min-h-0">
+                    {/* Controls — stacked naturally, no forced flex-1 stretch */}
+                    <div className="flex w-full min-w-0 flex-col items-stretch gap-3 sm:items-center">
                       {/* Preset buttons */}
                       <SlidingSegmentedControl
                         options={KPI_PRESET_OPTIONS}
@@ -730,24 +751,24 @@ export default function DashboardPage() {
                         onChange={(v) => selectPreset(v as Preset)}
                         aria-label="Date range preset"
                         size="sm"
-                        className="w-fit max-w-full shrink-0"
+                        className="w-full max-w-full shrink-0 justify-center sm:w-fit"
                       />
                       {/* Custom date range — single row, subordinate to presets */}
-                      <div className="flex shrink-0 flex-wrap items-center justify-center gap-2">
+                      <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-2">
                         <label
                           htmlFor="kpi-range-from"
                           className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
                         >
                           From
                         </label>
-                        <input
+                        <DateFilterInput
                           id="kpi-range-from"
-                          type="date"
                           value={rangeFrom}
-                          onChange={(e) => onDateFromChange(e.target.value)}
-                          className="shrink-0 rounded-lg border px-2.5 py-1.5 text-sm"
+                          onChange={onDateFromChange}
+                          hintOffsetClassName="left-2.5"
+                          variant="filter"
+                          className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
                           style={{
-                            borderColor: 'var(--color-border-default)',
                             background: 'var(--color-bg-surface-inset)',
                             color: 'var(--color-text-primary)',
                             width: '8.5rem',
@@ -760,14 +781,14 @@ export default function DashboardPage() {
                         >
                           To
                         </label>
-                        <input
+                        <DateFilterInput
                           id="kpi-range-to"
-                          type="date"
                           value={rangeTo}
-                          onChange={(e) => onDateToChange(e.target.value)}
-                          className="shrink-0 rounded-lg border px-2.5 py-1.5 text-sm"
+                          onChange={onDateToChange}
+                          hintOffsetClassName="left-2.5"
+                          variant="filter"
+                          className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
                           style={{
-                            borderColor: 'var(--color-border-default)',
                             background: 'var(--color-bg-surface-inset)',
                             color: 'var(--color-text-primary)',
                             width: '8.5rem',
@@ -776,104 +797,99 @@ export default function DashboardPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-4 xl:row-start-1 xl:min-h-0 xl:h-full">
+                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-4 xl:row-start-1">
                     <StatCard
                       label="Avg response time"
                       value={formatHoursLabel(summary.avgFirstResponseHours)}
                       icon={MessageCircle}
                       color="sky"
                       headerTooltip={AVG_FIRST_RESPONSE_TOOLTIP}
-                      className="h-full min-h-[8.5rem] w-full min-w-0 xl:min-h-0"
+                      className="min-h-[8.5rem] w-full min-w-0"
                     />
                   </div>
-                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-1 xl:row-start-2 xl:min-h-0 xl:h-full">
+                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-1 xl:row-start-2">
                     <StatCard
                       label="New Tickets"
                       value={summary.newTickets}
                       icon={Ticket}
                       color="indigo"
-                      className="h-full min-h-[8.5rem] w-full min-w-0 xl:min-h-0"
+                      className="min-h-[8.5rem] w-full min-w-0"
                     />
                   </div>
-                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-2 xl:row-start-2 xl:min-h-0 xl:h-full">
+                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-2 xl:row-start-2">
                     <StatCard
                       label="In progress"
                       value={summary.inProgressTickets}
                       icon={Clock}
                       color="amber"
-                      className="h-full min-h-[8.5rem] w-full min-w-0 xl:min-h-0"
+                      className="min-h-[8.5rem] w-full min-w-0"
                     />
                   </div>
-                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-3 xl:row-start-2 xl:min-h-0 xl:h-full">
+                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-3 xl:row-start-2">
                     <StatCard
                       label="Closed"
                       value={summary.closedTickets}
                       icon={CheckCircle}
                       color="green"
-                      className="h-full min-h-[8.5rem] w-full min-w-0 xl:min-h-0"
+                      className="min-h-[8.5rem] w-full min-w-0"
                     />
                   </div>
-                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-4 xl:row-start-2 xl:min-h-0 xl:h-full">
+                  <div className="flex min-h-[8.5rem] min-w-0 xl:col-start-4 xl:row-start-2">
                     <StatCard
                       label="Avg resolution"
                       value={formatHoursLabel(summary.avgCompletionHours)}
                       icon={Clock}
                       color="indigo"
                       headerTooltip={AVG_RESOLUTION_TOOLTIP}
-                      className="h-full min-h-[8.5rem] w-full min-w-0 xl:min-h-0"
+                      className="min-h-[8.5rem] w-full min-w-0"
                     />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Right: ticket volume — same xl:grid-cols-2 cell = half of 4-col below */}
-            <div className="flex min-h-0 w-full min-w-0 flex-col xl:h-full xl:min-h-0">
-              <div
-                className="dashboard-card rounded-xl px-6 pt-5 pb-4"
-                style={{
-                  background: 'var(--color-bg-surface)',
-                  border: '1px solid var(--color-border-default)',
-                }}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-1">
-                  <div>
+            {/* Right: ticket volume */}
+            <div className="flex min-h-0 w-full min-w-0 flex-col">
+              {topSectionSkeleton ? (
+                <div
+                  className="dashboard-card flex min-h-[320px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4"
+                  style={{ background: 'var(--color-bg-surface-inset)' }}
+                >
+                  <div className="mb-4 h-3 w-28 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
+                  <div className="mb-6 flex flex-wrap items-baseline gap-3">
+                    <div className="h-10 w-24 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
+                    <div className="h-5 w-40 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_40%,transparent)]" />
+                  </div>
+                  <div className="mt-auto min-h-[240px] flex-1 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
+                </div>
+              ) : (
+                <div
+                  className="dashboard-card rounded-xl px-6 pt-5 pb-4"
+                >
+                  <div className="mb-1 min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
                       Ticket Volume
                     </p>
-                    <div className="flex items-baseline gap-3">
+                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className="text-4xl font-bold text-[var(--color-text-primary)]">
                         {volume.reduce((s, d) => s + d.count, 0).toLocaleString()}
                       </span>
                       <span className="text-sm text-[var(--color-text-muted)]">
-                        {volumeRange === '1d' && 'last 24 h'}
-                        {volumeRange === '7d' && 'last 7 days'}
-                        {volumeRange === '30d' && 'last 30 days'}
-                        {volumeRange === 'all' && 'all time'}
+                        {formatDashboardRangeCaption(rangeFrom, rangeTo)}
                       </span>
                     </div>
                   </div>
-                  <SlidingSegmentedControl
-                    options={[...VOLUME_SEGMENT_OPTIONS]}
-                    value={volumeRange}
-                    onChange={(v) =>
-                      setVolumeRange(v as '1d' | '7d' | '30d' | 'all')
-                    }
-                    aria-label="Ticket volume time range"
-                    size="sm"
-                    className="w-fit shrink-0"
-                  />
+                  <div className="mt-4 min-h-[240px]">
+                    {volume.length === 0 ? (
+                      <div className="flex h-[240px] items-center justify-center text-sm text-[var(--color-text-muted)]">
+                        No ticket data yet.
+                      </div>
+                    ) : (
+                      <VolumeLineChart data={volume} />
+                    )}
+                  </div>
                 </div>
-                <div className="mt-4">
-                  {volume.length === 0 ? (
-                    <div className="flex items-center justify-center py-16 text-sm text-[var(--color-text-muted)]">
-                      No ticket data yet.
-                    </div>
-                  ) : (
-                    <VolumeLineChart data={volume} />
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -892,10 +908,6 @@ export default function DashboardPage() {
                   {/* Support by Department */}
                   <div
                     className={BREAKDOWN_PANEL_CLASS}
-                    style={{
-                      background: 'var(--color-bg-surface)',
-                      border: '1px solid var(--color-border-default)',
-                    }}
                   >
                     <h3 className="mb-3 shrink-0 text-sm font-semibold text-[var(--color-text-primary)]">
                       By Department
@@ -918,10 +930,6 @@ export default function DashboardPage() {
                   {/* Support by Topic */}
                   <div
                     className={BREAKDOWN_PANEL_CLASS}
-                    style={{
-                      background: 'var(--color-bg-surface)',
-                      border: '1px solid var(--color-border-default)',
-                    }}
                   >
                     <div className="mb-3 flex shrink-0 items-center gap-2">
                       <BarChart2 className="h-4 w-4 text-[var(--color-text-muted)]" />
@@ -954,10 +962,6 @@ export default function DashboardPage() {
                   {/* Maintenance by Location */}
                   <div
                     className={BREAKDOWN_PANEL_CLASS}
-                    style={{
-                      background: 'var(--color-bg-surface)',
-                      border: '1px solid var(--color-border-default)',
-                    }}
                   >
                     <div className="mb-3 flex shrink-0 items-center gap-2">
                       <MapPin className="h-4 w-4 text-[var(--color-text-muted)]" />
@@ -983,10 +987,6 @@ export default function DashboardPage() {
                   {/* Maintenance by Category */}
                   <div
                     className={BREAKDOWN_PANEL_CLASS}
-                    style={{
-                      background: 'var(--color-bg-surface)',
-                      border: '1px solid var(--color-border-default)',
-                    }}
                   >
                     <h3 className="mb-3 shrink-0 text-sm font-semibold text-[var(--color-text-primary)]">
                       By Category
@@ -1010,13 +1010,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Avg resolution by category */}
-            <div
-              className="dashboard-card rounded-xl p-5"
-              style={{
-                background: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border-default)',
-              }}
-            >
+            <div className="dashboard-card rounded-xl p-5">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
                 Avg Resolution Time by Category
               </h3>
@@ -1042,10 +1036,10 @@ export default function DashboardPage() {
                           }}
                         />
                       </div>
-                      <span className="w-14 text-right text-[var(--color-text-muted)] font-medium">
+                      <span className="w-14 shrink-0 text-right text-[var(--color-text-muted)] font-medium">
                         {formatHoursLabel(row.avgHours)}
                       </span>
-                      <span className="w-16 text-right text-[var(--color-text-secondary)] text-xs">
+                      <span className="w-16 shrink-0 text-right text-[var(--color-text-secondary)] text-xs">
                         {row.ticketCount} tickets
                       </span>
                     </div>
@@ -1055,13 +1049,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Completion time by owner */}
-            <div
-              className="dashboard-card rounded-xl p-5"
-              style={{
-                background: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border-default)',
-              }}
-            >
+            <div className="dashboard-card rounded-xl p-5">
               <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
                 Avg Completion Time by Owner
               </h3>
@@ -1101,13 +1089,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Workflow timing */}
-            <div
-              className="dashboard-card rounded-xl p-5"
-              style={{
-                background: 'var(--color-bg-surface)',
-                border: '1px solid var(--color-border-default)',
-              }}
-            >
+            <div className="dashboard-card rounded-xl p-5">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">
                   Workflow / Subtask Completion Timing
@@ -1151,31 +1133,33 @@ export default function DashboardPage() {
                         No step data available.
                       </p>
                     ) : (
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr
-                            className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide"
-                            style={{ background: 'var(--color-bg-content-header)' }}
-                          >
-                            <th className="text-left py-2 pr-4">Step</th>
-                            <th className="text-right py-2 pr-4">Avg Completion</th>
-                            <th className="text-right py-2 pr-2">Avg Active Work</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeWorkflow.steps.map((step) => (
-                            <tr key={step.stepId} className="border-b border-[var(--color-border-default)]">
-                              <td className="py-2 pr-4 text-[var(--color-text-primary)]">{step.stepName}</td>
-                              <td className="py-2 pr-4 text-right text-[var(--color-text-primary)]">
-                                {formatHoursLabel(step.avgSubtaskCompletionHours)}
-                              </td>
-                              <td className="py-2 pr-2 text-right text-[var(--color-text-secondary)]">
-                                {formatHoursLabel(step.avgActiveWorkHours)}
-                              </td>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr
+                              className="border-b border-[var(--color-border-default)] text-[var(--color-text-muted)] text-xs uppercase tracking-wide"
+                              style={{ background: 'var(--color-bg-content-header)' }}
+                            >
+                              <th className="text-left py-2 pr-4">Step</th>
+                              <th className="text-right py-2 pr-4">Avg Completion</th>
+                              <th className="text-right py-2 pr-2">Avg Active Work</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {activeWorkflow.steps.map((step) => (
+                              <tr key={step.stepId} className="border-b border-[var(--color-border-default)]">
+                                <td className="py-2 pr-4 text-[var(--color-text-primary)]">{step.stepName}</td>
+                                <td className="py-2 pr-4 text-right text-[var(--color-text-primary)]">
+                                  {formatHoursLabel(step.avgSubtaskCompletionHours)}
+                                </td>
+                                <td className="py-2 pr-2 text-right text-[var(--color-text-secondary)]">
+                                  {formatHoursLabel(step.avgActiveWorkHours)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 ) : null}

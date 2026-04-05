@@ -1375,6 +1375,10 @@ model LeaseSource {
   rawText          String?         // extracted text for PDF; pasted text for PASTED_EXTRACTION
   fileStoragePath  String?
   originalFileName String?
+  /** Original PDF byte size when uploaded; null for pasted sources or legacy rows. */
+  uploadedBytes    Int?
+  /** Length of rawText at ingest; for admin list UI without loading full text. */
+  textCharCount    Int?
   uploadedAt       DateTime       @default(now())
   uploadedByUserId String?
 

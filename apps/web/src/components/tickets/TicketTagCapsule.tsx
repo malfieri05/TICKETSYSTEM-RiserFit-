@@ -21,13 +21,16 @@ import {
 } from '@/lib/tooltip-layer';
 import { Button } from '@/components/ui/Button';
 
-const TAG_COLOR_STYLES: Record<string, { background: string; color: string; boxShadow: string }> = {
-  red:    { background: 'rgba(239,68,68,0.15)',   color: '#dc2626', boxShadow: 'inset 0 0 0 1px rgba(239,68,68,0.3)' },
-  orange: { background: 'rgba(249,115,22,0.15)',  color: '#ea580c', boxShadow: 'inset 0 0 0 1px rgba(249,115,22,0.3)' },
-  yellow: { background: 'rgba(234,179,8,0.15)',   color: '#a16207', boxShadow: 'inset 0 0 0 1px rgba(234,179,8,0.3)' },
-  green:  { background: 'rgba(34,197,94,0.15)',   color: '#15803d', boxShadow: 'inset 0 0 0 1px rgba(34,197,94,0.3)' },
-  blue:   { background: 'rgba(59,130,246,0.15)',  color: '#1d4ed8', boxShadow: 'inset 0 0 0 1px rgba(59,130,246,0.3)' },
-  purple: { background: 'rgba(168,85,247,0.15)',  color: '#7e22ce', boxShadow: 'inset 0 0 0 1px rgba(168,85,247,0.3)' },
+/** Solid capsule; label + remove control use black for contrast on pastel fills. */
+const TAG_CAPSULE_FG = '#0a0a0a';
+
+const TAG_COLOR_STYLES: Record<string, { background: string; color: string; border: string }> = {
+  red:    { background: '#fca5a5', color: TAG_CAPSULE_FG, border: '1.25px solid #dc2626' },
+  orange: { background: '#fdba74', color: TAG_CAPSULE_FG, border: '1.25px solid #ea580c' },
+  yellow: { background: '#fde047', color: TAG_CAPSULE_FG, border: '1.25px solid #ca8a04' },
+  green:  { background: '#86efac', color: TAG_CAPSULE_FG, border: '1.25px solid #16a34a' },
+  blue:   { background: '#7dd3fc', color: TAG_CAPSULE_FG, border: '1.25px solid #0284c7' },
+  purple: { background: '#e9d5ff', color: TAG_CAPSULE_FG, border: '1.25px solid #9333ea' },
 };
 
 function getPillStyle(color?: string | null) {
@@ -333,7 +336,7 @@ function RemoveTagConfirmDialog({ name, open, isRemoving, onCancel, onConfirm }:
         aria-modal="true"
         aria-labelledby="remove-tag-confirm-title"
         aria-describedby="remove-tag-confirm-desc"
-        className="fixed left-1/2 top-1/2 w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl p-4 shadow-[var(--shadow-panel)]"
+        className="fixed left-1/2 top-1/2 w-[min(calc(100vw-2rem),20rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl p-4 text-center shadow-[var(--shadow-panel)]"
         style={{
           zIndex: CONFIRM_DIALOG_Z_INDEX_PANEL,
           background: 'var(--color-bg-surface-raised)',
@@ -342,16 +345,16 @@ function RemoveTagConfirmDialog({ name, open, isRemoving, onCancel, onConfirm }:
         onClick={(e) => e.stopPropagation()}
       >
         <p id="remove-tag-confirm-title" className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-          Are you sure?
+          Remove Tag?
         </p>
         <p
           id="remove-tag-confirm-desc"
           className="mt-2 text-xs leading-relaxed"
           style={{ color: 'var(--color-text-muted)' }}
         >
-          Remove tag &ldquo;{name}&rdquo; from this ticket. This cannot be undone.
+          Remove tag &quot;{name}&quot; from this ticket.
         </p>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
           <Button variant="secondary" size="sm" type="button" onClick={onCancel} disabled={isRemoving}>
             Cancel
           </Button>
@@ -369,6 +372,8 @@ type CapsuleProps = {
   name: string;
   /** Global tag id (required when `removable` + `onRemoveTag`). */
   tagId?: string;
+  /** Use `-1` in dense lists (e.g. ticket feed) so Tab skips remove controls between filters. */
+  removeButtonTabIndex?: number;
   color?: string | null;
   /**
    * When set (e.g. panel view), hover tooltip shows this instead of the tag name
@@ -385,6 +390,7 @@ type CapsuleProps = {
 export function TicketTagCapsule({
   name,
   tagId,
+  removeButtonTabIndex,
   color,
   hoverText,
   tooltipTypography = 'tagDefault',
@@ -411,10 +417,10 @@ export function TicketTagCapsule({
     <>
       <span className="inline-flex max-w-full min-w-0 items-center align-middle rounded-full overflow-hidden">
         <span
-          className="inline-flex max-w-full min-w-0 items-center rounded-full"
+          className="inline-flex max-w-full min-w-0 items-center rounded-full box-border"
           style={{
             background: pillStyle.background,
-            boxShadow: pillStyle.boxShadow,
+            border: pillStyle.border,
           }}
         >
           <InstantTooltip
@@ -429,6 +435,7 @@ export function TicketTagCapsule({
           {showRemove ? (
             <button
               type="button"
+              {...(removeButtonTabIndex !== undefined ? { tabIndex: removeButtonTabIndex } : {})}
               className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-1 disabled:opacity-40"
               style={{
                 color: pillStyle.color,

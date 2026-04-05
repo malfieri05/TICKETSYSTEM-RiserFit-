@@ -187,18 +187,7 @@ export default function AdminMarketsPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header
-        title={
-          <h1 className="min-w-0 truncate text-base font-semibold">
-            <span style={{ color: 'var(--color-text-app-header)' }}>Locations: </span>
-            <span
-              className="tabular-nums"
-              style={{ color: 'var(--color-accent)' }}
-              aria-live="polite"
-            >
-              {isLoading ? '…' : locations.length}
-            </span>
-          </h1>
-        }
+        title={isLoading ? 'Locations' : `Locations (${locations.length})`}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -211,16 +200,17 @@ export default function AdminMarketsPage() {
               placeholder="Search locations..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="max-w-sm flex-1 min-w-[200px] h-9"
+              elevated
+              className="max-w-sm flex-1 min-w-[200px]"
             />
             <MarketSearchSelect
               markets={markets.map((m) => ({ id: m.id, name: m.name }))}
               value={selectedMarketId ?? ''}
               onChange={(id) => setSelectedMarketId(id === '' ? null : id)}
-              className="min-w-[160px] h-9"
+              className="min-w-[160px]"
             />
             {!showAddForm && (
-              <Button size="md" variant="secondary" onClick={openAddForm} className="w-fit shrink-0">
+              <Button size="md" variant="primary" onClick={openAddForm} className="w-fit shrink-0">
                 <Plus className="h-4 w-4" />
                 Add Location
               </Button>

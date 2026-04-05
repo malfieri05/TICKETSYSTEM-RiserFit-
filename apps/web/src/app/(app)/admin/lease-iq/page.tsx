@@ -16,16 +16,19 @@ import {
   Plus,
   Minus,
   X,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { UploadDropzone } from '@/components/uploads/UploadDropzone';
-import { adminApi, leaseIqApi } from '@/lib/api';
+import { adminApi, leaseIqApi, type LeaseIqSourceRow } from '@/lib/api';
 import { POLISH_THEME } from '@/lib/polish';
 import { InstantTooltip, TICKET_TAG_TOOLTIP_FONT_PX } from '@/components/tickets/TicketTagCapsule';
 import { formatDistanceToNow } from 'date-fns';
 import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
+import { InfoPopover } from '@/components/ui/InfoPopover';
 
 function SimulateLockedTooltipContent() {
   const fontPx = TICKET_TAG_TOOLTIP_FONT_PX * 0.9;
@@ -52,6 +55,22 @@ function formatLeasePdfBytes(bytes: number): string {
 
 function isLeasePdfFile(file: File): boolean {
   return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+function leaseIqConfidenceLabel(confidence: string): string {
+  if (confidence === 'HIGH') return 'High';
+  if (confidence === 'MEDIUM') return 'Medium';
+  return 'Low';
+}
+
+function leaseSourceSecondaryLabel(row: LeaseIqSourceRow): string {
+  if (row.sourceType === 'UPLOADED_PDF') {
+    if (row.uploadedBytes != null) return formatLeasePdfBytes(row.uploadedBytes);
+    if (row.textCharCount != null) return `${row.textCharCount.toLocaleString()} characters extracted`;
+    return '—';
+  }
+  if (row.textCharCount != null) return `${row.textCharCount.toLocaleString()} characters`;
+  return '—';
 }
 
 const TABS: { id: TabId; label: string; icon: typeof FileText }[] = [
@@ -387,7 +406,9 @@ function SourceTab({
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [sourceMode, setSourceMode] = useState<'upload' | 'paste'>('upload');
   const [uploadPickError, setUploadPickError] = useState<string | null>(null);
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
   const replacePdfInputRef = useRef<HTMLInputElement>(null);
+  const prevSourceListLenRef = useRef(0);
 
   const { data: sources, isPending: sourcesLoading } = useQuery({
     queryKey: ['lease-iq', 'sources', studioId],
@@ -395,27 +416,70 @@ function SourceTab({
     enabled: !!studioId,
   });
 
+  const sourceList = useMemo(() => {
+    const body = sources?.data;
+    return Array.isArray(body) ? body : [];
+  }, [sources?.data]);
+
+  useEffect(() => {
+    prevSourceListLenRef.current = 0;
+  }, [studioId]);
+
+  useEffect(() => {
+    if (sourcesLoading) return;
+    const len = sourceList.length;
+    const prevLen = prevSourceListLenRef.current;
+    prevSourceListLenRef.current = len;
+
+    if (len === 0) {
+      setSelectedSourceIds([]);
+      return;
+    }
+
+    setSelectedSourceIds((prev) => {
+      const valid = prev.filter((id) => sourceList.some((s) => s.id === id));
+      if (valid.length > 0) return valid;
+      if (prevLen === 0 && len > 0) return [sourceList[0].id];
+      return prev;
+    });
+  }, [sourcesLoading, studioId, sourceList]);
+
+  const selectedIdSet = useMemo(() => new Set(selectedSourceIds), [selectedSourceIds]);
+  const orderedSelectedIds = useMemo(
+    () => sourceList.filter((s) => selectedIdSet.has(s.id)).map((s) => s.id),
+    [sourceList, selectedIdSet],
+  );
+
   const uploadMutation = useMutation({
     mutationFn: () => {
       if (!uploadFile) throw new Error('No file selected');
       return leaseIqApi.uploadSource(studioId, uploadFile);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['lease-iq', 'sources', studioId] });
       setUploadFile(null);
+      const newId = res.data?.id;
+      if (newId) setSelectedSourceIds([newId]);
     },
   });
 
   const pasteMutation = useMutation({
     mutationFn: () => leaseIqApi.pasteSource(studioId, pastedText),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['lease-iq', 'sources', studioId] });
       setPastedText('');
+      const newId = res.data?.id;
+      if (newId) setSelectedSourceIds([newId]);
     },
   });
 
+  const deleteSourceMutation = useMutation({
+    mutationFn: (sourceId: string) => leaseIqApi.deleteSource(studioId, sourceId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['lease-iq', 'sources', studioId] }),
+  });
+
   const parseMutation = useMutation({
-    mutationFn: () => leaseIqApi.parse(studioId),
+    mutationFn: (sourceIds: string[]) => leaseIqApi.parse(studioId, sourceIds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lease-iq', 'rulesets', studioId] });
       qc.invalidateQueries({ queryKey: ['lease-iq', 'studios-with-rulesets'] });
@@ -423,9 +487,16 @@ function SourceTab({
     },
   });
 
-  const lastSource = sources?.data?.[0];
-  const canParse = !!lastSource && !sourcesLoading;
-  const parseDisabled = parseMutation.isPending || !canParse;
+  const hasPendingLocalSource =
+    uploadFile != null || (sourceMode === 'paste' && pastedText.trim().length > 0);
+  const hasServerSources = sourceList.length > 0 && !sourcesLoading;
+  const hasParseSelection = orderedSelectedIds.length > 0;
+  const canParse = hasServerSources && hasParseSelection && !hasPendingLocalSource;
+  const parseDisabled = parseMutation.isPending || !canParse || deleteSourceMutation.isPending;
+
+  function toggleSourceSelected(id: string) {
+    setSelectedSourceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   return (
     <div className="space-y-6" style={{ color: 'var(--color-text-primary)' }}>
@@ -433,40 +504,17 @@ function SourceTab({
         <h3 className="font-medium mb-3" style={{ color: 'var(--color-text-primary)' }}>
           Add lease source
         </h3>
-        <div
-          className="mb-4 flex h-9 w-full rounded-[var(--radius-md)] border text-sm"
-          style={{ borderColor: 'var(--color-border-default)' }}
-          role="tablist"
+        <SlidingSegmentedControl
+          options={[
+            { value: 'upload', label: 'Upload PDF' },
+            { value: 'paste', label: 'Paste Text' },
+          ]}
+          value={sourceMode}
+          onChange={(v) => setSourceMode(v as 'upload' | 'paste')}
           aria-label="Lease source input method"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === 'upload'}
-            className="flex-1 rounded-l-[var(--radius-md)] px-3 font-medium transition-colors duration-150"
-            style={{
-              background: sourceMode === 'upload' ? POLISH_THEME.adminStudioListSelectedBg : 'transparent',
-              color: sourceMode === 'upload' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-              borderRight: `1px solid var(--color-border-default)`,
-            }}
-            onClick={() => setSourceMode('upload')}
-          >
-            Upload PDF
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={sourceMode === 'paste'}
-            className="flex-1 rounded-r-[var(--radius-md)] px-3 font-medium transition-colors duration-150"
-            style={{
-              background: sourceMode === 'paste' ? POLISH_THEME.adminStudioListSelectedBg : 'transparent',
-              color: sourceMode === 'paste' ? 'var(--color-text-primary)' : 'var(--color-text-muted)',
-            }}
-            onClick={() => setSourceMode('paste')}
-          >
-            Paste Text
-          </button>
-        </div>
+          size="md"
+          className="mb-4 w-fit"
+        />
 
         {sourceMode === 'upload' ? (
           <>
@@ -584,7 +632,7 @@ function SourceTab({
         ) : (
           <>
             <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-              Paste structured extraction text (e.g. sections for Landlord / Tenant and line items). This becomes the latest source for Parse.
+              Paste structured extraction text (e.g. sections for Landlord / Tenant and line items). Saved entries appear under Uploaded documents for parsing.
             </p>
             <textarea
               value={pastedText}
@@ -609,38 +657,164 @@ function SourceTab({
         )}
       </section>
 
-      {lastSource && (
-        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-          Last source: {lastSource.sourceType} — {lastSource.originalFileName ?? 'pasted'} —{' '}
-          {formatDistanceToNow(new Date(lastSource.uploadedAt), { addSuffix: true })}
-        </p>
-      )}
-
       <section className="rounded-lg p-4" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-        <h3 className="font-medium mb-2">Parse</h3>
-        <p className="text-sm mb-2" style={{ color: 'var(--color-text-muted)' }}>
-          Create a DRAFT ruleset from the latest source. You can then edit rules and publish.
+        <h3 className="font-medium mb-1" style={{ color: 'var(--color-text-primary)' }}>
+          Uploaded documents
+        </h3>
+        <p className="mb-3 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+          Select one or more saved sources. Parse merges them in list order (newest at top) into one draft ruleset.
         </p>
-        {!canParse && !sourcesLoading && (
-          <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
-            Upload a PDF or save pasted text above first — then you can parse.
+
+        {sourcesLoading ? (
+          <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Loading sources…
           </p>
-        )}
-        <Button
-          size="lg"
-          className="min-w-[16rem] justify-center"
-          onClick={() => parseMutation.mutate()}
-          disabled={parseDisabled}
-          title={!canParse && !sourcesLoading ? 'Add a lease source for this location first' : undefined}
-        >
-          {parseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Parse latest source
-        </Button>
-        {parseMutation.isError && (
-          <p className="mt-2 text-sm text-red-500">
-            {(parseMutation.error as Error).message}
+        ) : sourceList.length === 0 ? (
+          <p className="mb-4 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            No sources yet for this location. Add a PDF or pasted text above.
           </p>
+        ) : (
+          <>
+            <div className="mb-3 flex flex-wrap gap-3 text-xs font-medium">
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                style={{ color: 'var(--color-accent)' }}
+                onClick={() => setSelectedSourceIds(sourceList.map((s) => s.id))}
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                className="underline-offset-2 hover:underline"
+                style={{ color: 'var(--color-accent)' }}
+                onClick={() => setSelectedSourceIds([])}
+              >
+                Clear selection
+              </button>
+            </div>
+            <ul className="mb-6 space-y-2" aria-label="Saved lease sources for this location">
+              {sourceList.map((row) => {
+                const isPdf = row.sourceType === 'UPLOADED_PDF';
+                const title = isPdf
+                  ? row.originalFileName ?? 'Uploaded PDF'
+                  : 'Pasted extraction';
+                const checkId = `lease-src-${row.id}`;
+                const deleting = deleteSourceMutation.isPending && deleteSourceMutation.variables === row.id;
+                return (
+                  <li
+                    key={row.id}
+                    className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+                    style={{
+                      borderColor: 'var(--color-border-default)',
+                      background: 'var(--color-bg-root)',
+                    }}
+                  >
+                    <input
+                      id={checkId}
+                      type="checkbox"
+                      className="h-4 w-4 shrink-0 rounded border cursor-pointer"
+                      style={{ borderColor: 'var(--color-border-default)', accentColor: 'var(--color-accent)' }}
+                      checked={selectedIdSet.has(row.id)}
+                      onChange={() => toggleSourceSelected(row.id)}
+                      aria-label={`Include ${title} in parse`}
+                    />
+                    <label htmlFor={checkId} className="flex min-w-0 flex-1 cursor-pointer items-center gap-4">
+                      <div
+                        className="flex h-11 w-10 shrink-0 items-center justify-center rounded border text-[10px] font-bold leading-none tracking-tight"
+                        style={{
+                          background: 'var(--color-bg-surface)',
+                          borderColor: 'var(--color-border-default)',
+                          color: isPdf ? POLISH_THEME.dueDateToday : '#9333ea',
+                        }}
+                        aria-hidden
+                      >
+                        {isPdf ? 'PDF' : 'TEXT'}
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="truncate text-sm font-medium" style={{ color: 'var(--color-text-primary)' }} title={title}>
+                          {title}
+                        </p>
+                        <p className="mt-0.5 text-xs font-medium tabular-nums" style={{ color: POLISH_THEME.success }}>
+                          {leaseSourceSecondaryLabel(row)}
+                        </p>
+                        <p className="mt-0.5 text-[11px]" style={{ color: 'var(--color-text-muted)' }}>
+                          {formatDistanceToNow(new Date(row.uploadedAt), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </label>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md p-2 transition-colors hover:bg-[var(--color-bg-surface-raised)] disabled:opacity-50"
+                      style={{ color: 'var(--color-text-muted)' }}
+                      aria-label={`Remove ${title}`}
+                      disabled={deleting}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Remove "${title}" from this location? This cannot be undone.`,
+                          )
+                        ) {
+                          return;
+                        }
+                        deleteSourceMutation.mutate(row.id);
+                      }}
+                    >
+                      {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
+
+        <div className="border-t pt-4" style={{ borderColor: 'var(--color-border-default)' }}>
+          <h3 className="font-medium mb-2">Parse</h3>
+          <p className="text-sm mb-2" style={{ color: 'var(--color-text-muted)' }}>
+            Create a DRAFT ruleset from the selected saved sources. A PDF you only picked in the field above is not used until you click Upload.
+          </p>
+          {!hasServerSources && !sourcesLoading && (
+            <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Upload a PDF or save pasted text first — then select sources and parse.
+            </p>
+          )}
+          {hasServerSources && hasPendingLocalSource && (
+            <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Finish or clear your draft above before parsing so you are not surprised by which text is merged.
+            </p>
+          )}
+          {hasServerSources && !hasPendingLocalSource && !hasParseSelection && (
+            <p className="mb-2 text-xs" style={{ color: 'var(--color-text-muted)' }}>
+              Select at least one document above to parse.
+            </p>
+          )}
+          <Button
+            size="lg"
+            className="min-w-[16rem] justify-center"
+            onClick={() => parseMutation.mutate(orderedSelectedIds)}
+            disabled={parseDisabled}
+            title={
+              !hasServerSources && !sourcesLoading
+                ? 'Add a lease source for this location first'
+                : hasPendingLocalSource
+                  ? 'Upload or clear your draft first'
+                  : !hasParseSelection
+                    ? 'Select one or more sources in the list'
+                    : undefined
+            }
+          >
+            {parseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Parse selected
+          </Button>
+          {parseMutation.isError && (
+            <p className="mt-2 text-sm text-red-500">
+              {(
+                parseMutation.error as { response?: { data?: { message?: string } } } & Error
+              ).response?.data?.message?.toString() ?? (parseMutation.error as Error).message}
+            </p>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -929,8 +1103,16 @@ function PlaygroundTab({ studioId }: { studioId: string }) {
           <p className="text-sm">
             <strong>Suggested responsibility:</strong> {result.suggestedResponsibility.replace(/_/g, ' ')}
           </p>
-          <p className="text-sm">
-            <strong>Confidence:</strong> {result.confidence}
+          <p className="text-sm flex items-center gap-1.5">
+            <strong>Confidence:</strong> {leaseIqConfidenceLabel(result.confidence)}
+            <InfoPopover ariaLabel="How confidence is calculated" direction="up">
+              <p className="font-semibold mb-2" style={{ color: 'var(--color-accent)' }}>Confidence levels</p>
+              <ul className="space-y-1.5">
+                <li><span className="font-semibold">High:</span> Strong match — category and priority terms both point clearly to one party.</li>
+                <li><span className="font-semibold">Medium:</span> Partial match — either a category or priority signal was found, but not both.</li>
+                <li><span className="font-semibold">Low:</span> Weak match — only general keywords matched, or signals conflicted.</li>
+              </ul>
+            </InfoPopover>
           </p>
           <p className="text-sm mt-1">{result.explanation}</p>
           {result.matchedTerms?.length > 0 && (
