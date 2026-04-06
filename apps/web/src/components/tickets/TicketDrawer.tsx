@@ -23,7 +23,7 @@ import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecom
 import { LocationLink } from '@/components/ui/LocationLink';
 import { InfoPopover } from '@/components/ui/InfoPopover';
 import { cn } from '@/lib/utils';
-import { getDocumentZoom } from '@/lib/zoom';
+import { measureThumbInsideContainer } from '@/lib/measure-thumb-in-container';
 import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
 
 function leaseIqConfidenceLabel(confidence: string): string {
@@ -38,6 +38,8 @@ interface Props {
   /** Current feed page order; prev/next step within this list only. */
   feedTicketIds?: string[];
   onNavigateTicket?: (id: string) => void;
+  /** Suppress the semi-transparent backdrop overlay (e.g. dispatch map view). */
+  noBackdrop?: boolean;
 }
 
 /** Must match drawer slide duration (open + close use the same easing). */
@@ -54,7 +56,7 @@ function formatFieldLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicket }: Props) {
+export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicket, noBackdrop = false }: Props) {
   const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -247,46 +249,104 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
   const tabIndex = TAB_ORDER.indexOf(activeTab);
   const tabNavRef = useRef<HTMLElement | null>(null);
   const tabBtnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tabBubbleRafAttempt = useRef(0);
   const [tabBubble, setTabBubble] = useState({ left: 0, top: 0, width: 0, height: 0 });
+
+  const tabsLayoutKey = TABS.map((t) => t.label).join('|');
 
   const updateTabBubble = useCallback(() => {
     const nav = tabNavRef.current;
     const btn = tabBtnRefs.current[tabIndex];
-    if (!nav || !btn) return;
-    const zoom = getDocumentZoom();
-    const n = nav.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
-    setTabBubble({
-      left: (b.left - n.left) / zoom + nav.scrollLeft,
-      top:  (b.top  - n.top)  / zoom + nav.scrollTop,
-      width:  b.width  / zoom,
-      height: b.height / zoom,
-    });
+    if (!nav) {
+      tabBubbleRafAttempt.current = 0;
+      setTabBubble({ left: 0, top: 0, width: 0, height: 0 });
+      return;
+    }
+    if (!btn) {
+      if (tabBubbleRafAttempt.current < 24) {
+        tabBubbleRafAttempt.current += 1;
+        requestAnimationFrame(() => updateTabBubble());
+      } else {
+        tabBubbleRafAttempt.current = 0;
+        setTabBubble({ left: 0, top: 0, width: 0, height: 0 });
+      }
+      return;
+    }
+    tabBubbleRafAttempt.current = 0;
+    const m = measureThumbInsideContainer(nav, btn);
+    if (!m || m.width <= 0 || m.height <= 0) {
+      setTabBubble({ left: 0, top: 0, width: 0, height: 0 });
+      return;
+    }
+    setTabBubble(m);
   }, [tabIndex]);
 
   useLayoutEffect(() => {
     updateTabBubble();
-  }, [updateTabBubble, activeTab, TABS]);
+
+    const nav = tabNavRef.current;
+    const onWinResize = () => requestAnimationFrame(updateTabBubble);
+
+    if (!nav) {
+      window.addEventListener('resize', onWinResize);
+      return () => window.removeEventListener('resize', onWinResize);
+    }
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', onWinResize);
+      return () => window.removeEventListener('resize', onWinResize);
+    }
+
+    const ro = new ResizeObserver(() => requestAnimationFrame(updateTabBubble));
+    ro.observe(nav);
+    for (const el of tabBtnRefs.current) {
+      if (el) ro.observe(el);
+    }
+    window.addEventListener('resize', onWinResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', onWinResize);
+    };
+  }, [updateTabBubble, activeTab, tabsLayoutKey]);
 
   useEffect(() => {
-    window.addEventListener('resize', updateTabBubble);
-    return () => window.removeEventListener('resize', updateTabBubble);
-  }, [updateTabBubble]);
+    if (typeof document === 'undefined' || !document.fonts?.ready) return;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) requestAnimationFrame(() => updateTabBubble());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [updateTabBubble, tabsLayoutKey]);
+
+  const showBackdrop = displayTicketId != null && !noBackdrop;
 
   return (
-    <div
-      className="fixed top-0 right-0 z-50 h-full flex flex-col"
-      style={{
-        width: 'min(828px, 68vw)',
-        background: 'var(--color-bg-page)',
-        /* Darken from app-header hue so the seam isn’t a pale “white” line against the navy top bars */
-        borderLeft: '1px solid color-mix(in srgb, var(--color-bg-app-header) 78%, #000000)',
-        /* No top border — keeps drawer header flush with viewport top and same height as <Header /> (h-14) */
-        transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
-        boxShadow: panelOpen ? POLISH_THEME.drawerShadow : 'none',
-        transition: `transform ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}, box-shadow ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}`,
-      }}
-    >
+    <>
+      {showBackdrop && (
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="Dismiss ticket panel"
+          className="fixed inset-0 z-[1090] cursor-default border-0 p-0"
+          style={{ background: 'rgba(15, 23, 42, 0.22)' }}
+          onClick={onClose}
+        />
+      )}
+      <div
+        className="fixed top-0 right-0 z-[1100] h-full flex flex-col"
+        style={{
+          width: 'min(828px, 68vw)',
+          background: 'var(--color-bg-page)',
+          /* Darken from app-header hue so the seam isn’t a pale “white” line against the navy top bars */
+          borderLeft: '1px solid color-mix(in srgb, var(--color-bg-app-header) 78%, #000000)',
+          /* No top border — keeps drawer header flush with viewport top and same height as <Header /> (h-14) */
+          transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
+          boxShadow: panelOpen ? POLISH_THEME.drawerShadow : 'none',
+          transition: `transform ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}, box-shadow ${DRAWER_SLIDE_MS}ms ${DRAWER_EASE}`,
+        }}
+      >
       {/* ── Top bar: ticket # (left) + close — match <Header /> height (h-14) ───────── */}
       <div
         className="flex h-14 min-h-14 shrink-0 box-border items-center justify-between gap-3 px-6"
@@ -707,7 +767,7 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
                       tabBtnRefs.current[i] = el;
                     }}
                     onClick={() => setActiveTab(key)}
-                    className={`focus-ring relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-colors duration-150 ${
+                    className={`focus-ring relative z-10 flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm font-medium transition-colors duration-150 ${
                       active
                         ? ''
                         : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]'
@@ -1077,6 +1137,7 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
           <span>All subtasks complete</span>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

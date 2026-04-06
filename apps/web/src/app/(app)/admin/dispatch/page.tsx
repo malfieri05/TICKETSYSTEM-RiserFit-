@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { BarChart2, Package, Zap } from 'lucide-react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
+import { BarChart2, MapPin, Package, Zap } from 'lucide-react';
 import { reportingApi, adminApi, dispatchApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { DispatchWorkspacePanel } from '@/components/dispatch/DispatchWorkspacePanel';
@@ -14,6 +16,18 @@ import { ComboBox } from '@/components/ui/ComboBox';
 import { StatusBadge } from '@/components/ui/Badge';
 import { DISPATCH_TRADE_TYPE_LABELS, DISPATCH_READINESS_LABELS } from '@ticketing/types';
 import { LocationLink } from '@/components/ui/LocationLink';
+import { POLISH_THEME } from '@/lib/polish';
+import {
+  MaintenanceCountWithTooltip,
+  type OpenMaintenanceTicketLine,
+} from '@/components/ui/MaintenanceCountWithTooltip';
+import { TicketDrawer } from '@/components/tickets/TicketDrawer';
+import { TICKETS_PANEL_QUERY_PARAM } from '@/lib/tickets-deep-link';
+
+const LocationsMap = dynamic(
+  () => import('@/components/admin/LocationsMap').then((m) => m.LocationsMap),
+  { ssr: false },
+);
 
 type DispatchFilters = {
   studioId?: string;
@@ -38,15 +52,35 @@ function toParams(f: DispatchFilters): Record<string, string> {
 function SectionCard({
   title,
   children,
+  className = '',
+  headerDivider = false,
+  icon: Icon = BarChart2,
 }: {
-  title: string;
+  title: ReactNode;
   children: React.ReactNode;
+  className?: string;
+  headerDivider?: boolean;
+  icon?: LucideIcon;
 }) {
   return (
-    <div className="dashboard-card rounded-xl p-5" style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}>
-      <div className="flex items-center gap-2 mb-4">
-        <BarChart2 className="h-4 w-4 text-[var(--color-text-secondary)]" />
-        <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">{title}</h3>
+    <div
+      className={`dashboard-card rounded-xl p-5 ${className}`.trim()}
+      style={{ background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
+    >
+      <div
+        className={
+          headerDivider ? 'flex items-center gap-2 pb-4 mb-4' : 'flex items-center gap-2 mb-4'
+        }
+        style={
+          headerDivider
+            ? { borderBottom: '1px solid var(--color-border-default)' }
+            : undefined
+        }
+      >
+        <Icon className="h-4 w-4 text-[var(--color-text-secondary)] shrink-0" />
+        <h3 className="text-sm font-semibold text-[var(--color-text-primary)] flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+          {title}
+        </h3>
       </div>
       {children}
     </div>
@@ -57,26 +91,50 @@ function DispatchRow({
   name,
   marketName,
   count,
+  categoryNames,
+  ticketsWithLinks,
+  isSelected,
   onClick,
+  onViewTicket,
+  highlightedTicketId,
 }: {
   name: string;
   marketName?: string;
   count: number;
+  categoryNames: string[];
+  ticketsWithLinks: OpenMaintenanceTicketLine[];
+  isSelected?: boolean;
   onClick: () => void;
+  onViewTicket?: (ticketId: string) => void;
+  highlightedTicketId?: string | null;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="dispatch-feed-item w-full flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg text-left transition-colors"
+      className="dispatch-feed-item w-full flex items-center justify-between gap-2 py-2.5 px-3 rounded-lg text-left transition-colors hover:bg-[var(--color-bg-surface-raised)]"
+      style={{
+        background: isSelected ? POLISH_THEME.adminStudioListSelectedBg : undefined,
+        borderLeft: isSelected ? '3px solid var(--color-accent)' : '3px solid transparent',
+      }}
     >
-      <div className="min-w-0 flex-1">
-        <span className="text-[var(--color-text-primary)] font-medium truncate block">{name}</span>
+      <div className="text-left">
+        <span className="text-[var(--color-text-primary)] font-medium block">{name}</span>
         {marketName != null && marketName !== '' && (
-          <span className="text-xs text-[var(--color-text-muted)] truncate block">{marketName}</span>
+          <span className="text-xs text-[var(--color-text-muted)] block">{marketName}</span>
         )}
       </div>
-      <span className="text-sm font-semibold text-[var(--color-accent)] shrink-0">{count}</span>
+      <span className="shrink-0 text-sm font-semibold">
+        <MaintenanceCountWithTooltip
+          count={count}
+          categoryNames={categoryNames}
+          ticketsWithLinks={ticketsWithLinks}
+          onViewTicket={onViewTicket}
+          highlightedTicketId={highlightedTicketId}
+          countStyle="accent"
+          showParens={false}
+        />
+      </span>
     </button>
   );
 }
@@ -85,11 +143,38 @@ type DispatchTab = 'overview' | 'intelligence' | 'groups';
 
 export default function DispatchPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<DispatchTab>('overview');
   const [filters, setFilters] = useState<DispatchFilters>(emptyFilters);
   const [tradeFilter, setTradeFilter] = useState('');
   const [workspaceAnchorTicketId, setWorkspaceAnchorTicketId] = useState<string | null>(null);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
+  const [overviewSelectedStudioId, setOverviewSelectedStudioId] = useState<string | null>(null);
+
+  const panelParam = searchParams.get(TICKETS_PANEL_QUERY_PARAM);
+  const ticketPanelId =
+    panelParam && panelParam.length > 0 ? panelParam : null;
+
+  const closeTicketPanel = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete(TICKETS_PANEL_QUERY_PARAM);
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
+  const openTicketPanel = useCallback(
+    (id: string) => {
+      if (ticketPanelId === id) {
+        closeTicketPanel();
+        return;
+      }
+      const next = new URLSearchParams(searchParams.toString());
+      next.set(TICKETS_PANEL_QUERY_PARAM, id);
+      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+    },
+    [ticketPanelId, closeTicketPanel, pathname, router, searchParams],
+  );
 
   const params = useMemo(() => toParams(filters), [filters]);
 
@@ -98,10 +183,6 @@ export default function DispatchPage() {
     queryFn: () => adminApi.getTicketTaxonomy(),
   });
   const taxonomy = taxonomyRes?.data;
-  const maintenanceClassId = useMemo(
-    () => taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE')?.id ?? null,
-    [taxonomy],
-  );
 
   const { data: marketsRes } = useQuery({
     queryKey: ['markets'],
@@ -117,32 +198,44 @@ export default function DispatchPage() {
     queryKey: ['reporting', 'dispatch', 'by-studio', params],
     queryFn: () => reportingApi.dispatchByStudio(params),
   });
-  const { data: byCategoryRes, isLoading: loadingCategory } = useQuery({
-    queryKey: ['reporting', 'dispatch', 'by-category', params],
-    queryFn: () => reportingApi.dispatchByCategory(params),
-  });
-  const { data: byMarketRes, isLoading: loadingMarket } = useQuery({
-    queryKey: ['reporting', 'dispatch', 'by-market', params],
-    queryFn: () => reportingApi.dispatchByMarket(params),
-  });
-  const { data: multipleRes, isLoading: loadingMultiple } = useQuery({
-    queryKey: ['reporting', 'dispatch', 'studios-with-multiple', params],
-    queryFn: () => reportingApi.dispatchStudiosWithMultiple(params),
-  });
 
   const byStudio = byStudioRes?.data ?? [];
-  const byCategory = byCategoryRes?.data ?? [];
-  const byMarket = byMarketRes?.data ?? [];
-  const studiosWithMultiple = multipleRes?.data ?? [];
 
-  const buildTicketsUrl = (extra: { studioId?: string; marketId?: string; maintenanceCategoryId?: string }) => {
-    const search = new URLSearchParams();
-    if (maintenanceClassId) search.set('ticketClass', maintenanceClassId);
-    if (extra.studioId) search.set('studioId', extra.studioId);
-    if (extra.marketId) search.set('state', extra.marketId);
-    if (extra.maintenanceCategoryId) search.set('maintenanceCategoryId', extra.maintenanceCategoryId);
-    return `/tickets?${search.toString()}`;
-  };
+  const mapLocations = useMemo(() => {
+    const byId = new Map(studios.map((s) => [s.id, s]));
+    return byStudio
+      .map((r) => {
+        if (!r.studioId) return null;
+        const s = byId.get(r.studioId);
+        if (!s) return null;
+        return {
+          id: s.id,
+          name: s.name,
+          formattedAddress: (s as { formattedAddress?: string | null }).formattedAddress ?? null,
+          latitude: (s as { latitude?: number | null }).latitude ?? null,
+          longitude: (s as { longitude?: number | null }).longitude ?? null,
+          openTickets: (r.openTickets ?? []).map((t) => ({
+            id: t.id,
+            maintenanceCategoryName: t.maintenanceCategoryName,
+          })),
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null);
+  }, [byStudio, studios]);
+
+  useEffect(() => {
+    if (activeTab !== 'overview') {
+      setOverviewSelectedStudioId(null);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!overviewSelectedStudioId) return;
+    const stillInList = byStudio.some((r) => r.studioId === overviewSelectedStudioId);
+    if (!stillInList) {
+      setOverviewSelectedStudioId(null);
+    }
+  }, [byStudio, overviewSelectedStudioId]);
 
   const setFilter = (key: keyof DispatchFilters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value || undefined }));
@@ -270,102 +363,94 @@ export default function DispatchPage() {
           className={`flex-1 min-w-0 min-h-0 overflow-y-auto px-6 pt-4 pb-6 space-y-6 ${activeTab === 'intelligence' ? 'max-w-[50%]' : ''}`}
         >
 
-      {activeTab === 'overview' && (<>
-      {/* Overview tab content */}
-        {/* Open Issues by Studio */}
-        <SectionCard title="Open Issues by Location">
-          {loadingStudio ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
-            </div>
-          ) : byStudio.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
-          ) : (
-            <div className="space-y-0.5">
-              {byStudio.map((r) => (
-                <DispatchRow
-                  key={r.studioId ?? 'none'}
-                  name={r.studioName}
-                  marketName={r.marketName}
-                  count={r.count}
-                  onClick={() => router.push(buildTicketsUrl({ studioId: r.studioId ?? undefined }))}
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
+      {activeTab === 'overview' && (
+        <div className="flex flex-col xl:flex-row gap-6 items-start w-full">
+          <SectionCard title="Open Issues by Location" className="w-fit max-w-full shrink-0" headerDivider>
+            {loadingStudio ? (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+                <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
+              </div>
+            ) : byStudio.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
+            ) : (
+              <div className="space-y-0.5">
+                {byStudio.map((r) => (
+                  <DispatchRow
+                    key={r.studioId ?? 'none'}
+                    name={r.studioName}
+                    marketName={r.marketName}
+                    count={r.count}
+                    categoryNames={r.categoryNames ?? []}
+                    ticketsWithLinks={(r.openTickets ?? []).map((t) => ({
+                      id: t.id,
+                      maintenanceCategoryName: t.maintenanceCategoryName,
+                    }))}
+                    isSelected={
+                      r.studioId != null && r.studioId === overviewSelectedStudioId
+                    }
+                    onClick={() => {
+                      if (r.studioId) {
+                        setOverviewSelectedStudioId(r.studioId);
+                      } else {
+                        setOverviewSelectedStudioId(null);
+                      }
+                    }}
+                    onViewTicket={
+                      r.studioId
+                        ? (ticketId) => {
+                            setOverviewSelectedStudioId(r.studioId!);
+                            openTicketPanel(ticketId);
+                          }
+                        : openTicketPanel
+                    }
+                    highlightedTicketId={ticketPanelId}
+                  />
+                ))}
+              </div>
+            )}
+          </SectionCard>
 
-        {/* Open Issues by Category */}
-        <SectionCard title="Open Issues by Category">
-          {loadingCategory ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
-            </div>
-          ) : byCategory.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
-          ) : (
-            <div className="space-y-0.5">
-              {byCategory.map((r) => (
-                <DispatchRow
-                  key={r.maintenanceCategoryId ?? 'none'}
-                  name={r.categoryName}
-                  count={r.count}
-                  onClick={() => router.push(buildTicketsUrl({ maintenanceCategoryId: r.maintenanceCategoryId ?? undefined }))}
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Open Issues by Market */}
-        <SectionCard title="Open Issues by Market">
-          {loadingMarket ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
-            </div>
-          ) : byMarket.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
-          ) : (
-            <div className="space-y-0.5">
-              {byMarket.map((r) => (
-                <DispatchRow
-                  key={r.marketId ?? 'none'}
-                  name={r.marketName}
-                  count={r.count}
-                  onClick={() => router.push(buildTicketsUrl({ marketId: r.marketId ?? undefined }))}
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Studios With Multiple Open Issues */}
-        <SectionCard title="Locations With Multiple Open Issues">
-          {loadingMultiple ? (
-            <div className="flex flex-col items-center justify-center py-8 gap-2">
-              <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              <span className="text-xs text-[var(--color-text-muted)]">Loading…</span>
-            </div>
-          ) : studiosWithMultiple.length === 0 ? (
-            <p className="text-sm text-[var(--color-text-muted)] py-4">No locations with 2+ open issues</p>
-          ) : (
-            <div className="space-y-0.5">
-              {studiosWithMultiple.map((r) => (
-                <DispatchRow
-                  key={r.studioId ?? 'none'}
-                  name={r.studioName}
-                  marketName={r.marketName}
-                  count={r.count}
-                  onClick={() => router.push(buildTicketsUrl({ studioId: r.studioId ?? undefined }))}
-                />
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </>)}
+          <SectionCard
+            title={
+              <>
+                Map
+                <span
+                  className="text-[var(--color-text-muted)] font-normal shrink-0"
+                  aria-hidden
+                >
+                  |
+                </span>
+                <span className="text-xs font-normal text-[var(--color-text-muted)]">
+                  Locations with active maintenance tickets:
+                </span>
+              </>
+            }
+            icon={MapPin}
+            className="flex-1 min-w-0 w-full"
+          >
+            {loadingStudio ? (
+              <div
+                className="flex flex-col items-center justify-center gap-2 rounded-lg border py-16 h-[min(520px,55vh)] xl:h-[580px]"
+                style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface)' }}
+              >
+                <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
+                <span className="text-xs text-[var(--color-text-muted)]">Loading map…</span>
+              </div>
+            ) : (
+              <LocationsMap
+                locations={mapLocations}
+                className="h-[min(520px,55vh)] xl:h-[580px] border-0 rounded-lg"
+                selectedLocationId={overviewSelectedStudioId}
+                onLocationClick={(id) => setOverviewSelectedStudioId(id)}
+                onViewTicket={openTicketPanel}
+                ticketDrawerOpen={!!ticketPanelId}
+                highlightedTicketId={ticketPanelId}
+              />
+            )}
+          </SectionCard>
+        </div>
+      )}
 
       {/* Intelligence tab: Ready to Dispatch tickets grouped by trade */}
       {activeTab === 'intelligence' && (
@@ -516,6 +601,8 @@ export default function DispatchPage() {
           </div>
         )}
       </div>
+
+      <TicketDrawer ticketId={ticketPanelId} onClose={closeTicketPanel} noBackdrop />
     </div>
   );
 }
