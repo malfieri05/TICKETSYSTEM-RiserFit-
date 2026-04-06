@@ -215,7 +215,7 @@
 }
 
 html {
-  font-size: 75%; /* 12px base — scales all rem units to ~75% of browser default */
+  zoom: 0.75; /* Scale entire UI uniformly — maintains all proportions */
 }
 
 * {
