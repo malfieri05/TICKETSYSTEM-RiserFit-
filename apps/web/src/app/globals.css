@@ -214,6 +214,10 @@
   --sidebar-text-active: #ffffff;
 }
 
+html {
+  font-size: 75%; /* 12px base — scales all rem units to ~75% of browser default */
+}
+
 * {
   box-sizing: border-box;
 }
