@@ -23,6 +23,7 @@ import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecom
 import { LocationLink } from '@/components/ui/LocationLink';
 import { InfoPopover } from '@/components/ui/InfoPopover';
 import { cn } from '@/lib/utils';
+import { getDocumentZoom } from '@/lib/zoom';
 import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
 
 function leaseIqConfidenceLabel(confidence: string): string {
@@ -252,13 +253,14 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
     const nav = tabNavRef.current;
     const btn = tabBtnRefs.current[tabIndex];
     if (!nav || !btn) return;
+    const zoom = getDocumentZoom();
     const n = nav.getBoundingClientRect();
     const b = btn.getBoundingClientRect();
     setTabBubble({
-      left: b.left - n.left + nav.scrollLeft,
-      top: b.top - n.top + nav.scrollTop,
-      width: b.width,
-      height: b.height,
+      left: (b.left - n.left) / zoom + nav.scrollLeft,
+      top:  (b.top  - n.top)  / zoom + nav.scrollTop,
+      width:  b.width  / zoom,
+      height: b.height / zoom,
     });
   }, [tabIndex]);
 
