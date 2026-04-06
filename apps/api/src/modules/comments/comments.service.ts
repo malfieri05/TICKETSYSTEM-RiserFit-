@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
+import { Prisma } from '@prisma/client';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { DomainEventsService } from '../events/domain-events.service';
 import { MentionParserService } from './mention-parser.service';
@@ -384,23 +385,24 @@ export class CommentsService {
     const mentionableIds = await this.getMentionableUserIds(ticketId, ticket);
     if (mentionableIds.length === 0) return [];
 
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       id: { in: mentionableIds },
       isActive: true,
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-    }
 
     const users = await this.prisma.user.findMany({
       where,
       select: { id: true, name: true, email: true, avatarUrl: true },
       orderBy: [{ name: 'asc' }, { id: 'asc' }],
-      take: 100,
+      take: 20, // 20 is sufficient for autocomplete; 100 was over-fetching
     });
 
     return users.map((u) => ({

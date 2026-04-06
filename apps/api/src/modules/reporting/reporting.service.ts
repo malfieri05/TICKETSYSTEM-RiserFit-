@@ -538,111 +538,106 @@ export class ReportingService {
       },
     });
 
+    if (templates.length === 0) return { workflows: [] };
+
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const workflows = await Promise.all(
-      templates.map(async (tpl) => {
-        const subtaskTemplateIds = tpl.subtaskTemplates.map((st) => st.id);
-
-        const ticketAvg = await this.prisma.$queryRaw<
-          [{ avg_hours: number | null }]
-        >`
-          SELECT ROUND(
-            AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
-            1
-          )::float AS avg_hours
-          FROM tickets t
-          WHERE t.status IN ('RESOLVED', 'CLOSED')
-            AND t.resolved_at IS NOT NULL
-            AND t.resolved_at >= ${thirtyDaysAgo}
-            AND EXISTS (
-              SELECT 1 FROM subtasks s
-              WHERE s.ticket_id = t.id
-                AND s.subtask_template_id = ANY(${subtaskTemplateIds})
-            )
-        `;
-
-        const stepTimings = await Promise.all(
-          tpl.subtaskTemplates.map(async (st) => {
-            const rows = await this.prisma.$queryRaw<
-              [
-                {
-                  avg_completion_hours: number | null;
-                  avg_active_hours: number | null;
-                },
-              ]
-            >`
-              SELECT
-                ROUND(
-                  AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
-                  1
-                )::float AS avg_completion_hours,
-                ROUND(
-                  AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
-                  1
-                )::float AS avg_active_hours
-              FROM subtasks s
-              WHERE s.subtask_template_id = ${st.id}
-                AND s.completed_at IS NOT NULL
-                AND s.available_at IS NOT NULL
-                AND s.completed_at >= ${thirtyDaysAgo}
-            `;
-            return {
-              stepId: st.id,
-              stepName: st.title,
-              avgSubtaskCompletionHours:
-                rows?.[0]?.avg_completion_hours != null
-                  ? Number(rows[0].avg_completion_hours)
-                  : null,
-              avgActiveWorkHours:
-                rows?.[0]?.avg_active_hours != null
-                  ? Number(rows[0].avg_active_hours)
-                  : null,
-            };
-          }),
-        );
-
-        return {
-          workflowId: tpl.id,
-          workflowName: tpl.name ?? tpl.id,
-          avgTicketCompletionHours:
-            ticketAvg?.[0]?.avg_hours != null
-              ? Number(ticketAvg[0].avg_hours)
-              : null,
-          steps: stepTimings,
-        };
-      }),
+    const allTemplateIds = templates.map((t) => t.id);
+    const allSubtaskTemplateIds = templates.flatMap((t) =>
+      t.subtaskTemplates.map((st) => st.id),
     );
+
+    // ── Two batched queries replace N + N*M individual queries ──────────────
+
+    // 1. Ticket completion averages per workflow template (one query)
+    const ticketAvgRows = await this.prisma.$queryRaw<
+      { workflow_template_id: string; avg_hours: number | null }[]
+    >`
+      SELECT
+        st.workflow_template_id,
+        ROUND(
+          AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+          1
+        )::float AS avg_hours
+      FROM tickets t
+      JOIN subtasks s ON s.ticket_id = t.id
+      JOIN subtask_templates st ON st.id = s.subtask_template_id
+      WHERE t.status IN ('RESOLVED', 'CLOSED')
+        AND t.resolved_at IS NOT NULL
+        AND t.resolved_at >= ${thirtyDaysAgo}
+        AND st.workflow_template_id = ANY(${allTemplateIds})
+      GROUP BY st.workflow_template_id
+    `;
+
+    // 2. Step timings for all subtask templates (one query)
+    const stepTimingRows = await this.prisma.$queryRaw<
+      {
+        subtask_template_id: string;
+        avg_completion_hours: number | null;
+        avg_active_hours: number | null;
+      }[]
+    >`
+      SELECT
+        s.subtask_template_id,
+        ROUND(
+          AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
+          1
+        )::float AS avg_completion_hours,
+        ROUND(
+          AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
+          1
+        )::float AS avg_active_hours
+      FROM subtasks s
+      WHERE s.subtask_template_id = ANY(${allSubtaskTemplateIds})
+        AND s.completed_at IS NOT NULL
+        AND s.available_at IS NOT NULL
+        AND s.completed_at >= ${thirtyDaysAgo}
+      GROUP BY s.subtask_template_id
+    `;
+
+    // ── Assemble in memory ───────────────────────────────────────────────────
+
+    const ticketAvgByTemplate = new Map(
+      ticketAvgRows.map((r) => [r.workflow_template_id, r.avg_hours]),
+    );
+    const stepTimingById = new Map(
+      stepTimingRows.map((r) => [r.subtask_template_id, r]),
+    );
+
+    const workflows = templates.map((tpl) => {
+      const avgHours = ticketAvgByTemplate.get(tpl.id) ?? null;
+      const steps = tpl.subtaskTemplates.map((st) => {
+        const timing = stepTimingById.get(st.id);
+        return {
+          stepId: st.id,
+          stepName: st.title,
+          avgSubtaskCompletionHours:
+            timing?.avg_completion_hours != null
+              ? Number(timing.avg_completion_hours)
+              : null,
+          avgActiveWorkHours:
+            timing?.avg_active_hours != null
+              ? Number(timing.avg_active_hours)
+              : null,
+        };
+      });
+      return {
+        workflowId: tpl.id,
+        workflowName: tpl.name ?? tpl.id,
+        avgTicketCompletionHours: avgHours != null ? Number(avgHours) : null,
+        steps,
+      };
+    });
 
     return { workflows };
   }
 
   // ── CSV export of all tickets ─────────────────────────────────────────────
+  // Batched cursor-based approach: fetches BATCH_SIZE rows at a time and
+  // assembles the CSV incrementally, avoiding loading all tickets into memory.
   async exportTicketsCsv(): Promise<string> {
-    const tickets = await this.prisma.ticket.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        status: true,
-        priority: true,
-        createdAt: true,
-        updatedAt: true,
-        resolvedAt: true,
-        closedAt: true,
-        description: true,
-        requester: { select: { name: true, email: true } },
-        owner: { select: { name: true, email: true } },
-        supportTopic: { select: { name: true } },
-        maintenanceCategory: { select: { name: true } },
-        market: { select: { name: true } },
-        studio: { select: { name: true } },
-        _count: {
-          select: { comments: true, subtasks: true, attachments: true },
-        },
-      },
-    });
+    const BATCH_SIZE = 500;
 
     const headers = [
       'ID',
@@ -667,35 +662,74 @@ export class ReportingService {
     const escape = (val: string | null | undefined) => {
       if (val == null) return '';
       const str = String(val);
-      // Wrap in quotes if it contains commas, newlines, or quotes
       if (str.includes(',') || str.includes('"') || str.includes('\n')) {
         return `"${str.replace(/"/g, '""')}"`;
       }
       return str;
     };
 
-    const rows = tickets.map((t) =>
-      [
-        t.id,
-        escape(t.title),
-        t.status,
-        t.priority,
-        escape(t.maintenanceCategory?.name ?? t.supportTopic?.name ?? null),
-        escape(t.market?.name),
-        escape(t.studio?.name),
-        escape(t.requester?.name),
-        escape(t.requester?.email),
-        escape(t.owner?.name ?? ''),
-        escape(t.owner?.email ?? ''),
-        t._count.comments,
-        t._count.subtasks,
-        t._count.attachments,
-        t.createdAt.toISOString(),
-        t.resolvedAt?.toISOString() ?? '',
-        t.closedAt?.toISOString() ?? '',
-      ].join(','),
-    );
+    const ticketSelect = {
+      id: true,
+      title: true,
+      status: true,
+      priority: true,
+      createdAt: true,
+      updatedAt: true,
+      resolvedAt: true,
+      closedAt: true,
+      description: true,
+      requester: { select: { name: true, email: true } },
+      owner: { select: { name: true, email: true } },
+      supportTopic: { select: { name: true } },
+      maintenanceCategory: { select: { name: true } },
+      market: { select: { name: true } },
+      studio: { select: { name: true } },
+      _count: {
+        select: { comments: true, subtasks: true, attachments: true },
+      },
+    } as const;
 
-    return [headers.join(','), ...rows].join('\n');
+    const csvLines: string[] = [headers.join(',')];
+    let cursor: string | undefined;
+
+    while (true) {
+      const batch = await this.prisma.ticket.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: ticketSelect,
+        take: BATCH_SIZE,
+        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      });
+
+      if (batch.length === 0) break;
+
+      for (const t of batch) {
+        csvLines.push(
+          [
+            t.id,
+            escape(t.title),
+            t.status,
+            t.priority,
+            escape(t.maintenanceCategory?.name ?? t.supportTopic?.name ?? null),
+            escape(t.market?.name),
+            escape(t.studio?.name),
+            escape(t.requester?.name),
+            escape(t.requester?.email),
+            escape(t.owner?.name ?? ''),
+            escape(t.owner?.email ?? ''),
+            t._count.comments,
+            t._count.subtasks,
+            t._count.attachments,
+            t.createdAt.toISOString(),
+            t.resolvedAt?.toISOString() ?? '',
+            t.closedAt?.toISOString() ?? '',
+          ].join(','),
+        );
+      }
+
+      if (batch.length < BATCH_SIZE) break; // last page
+      cursor = batch[batch.length - 1].id;
+    }
+
+    return csvLines.join('\n');
   }
 }

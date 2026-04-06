@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { MapPin, Navigation, Package, ChevronDown, ChevronRight } from 'lucide-react';
@@ -23,7 +23,7 @@ interface Props {
   variant?: 'detail' | 'drawer';
 }
 
-export function DispatchRecommendationPanel({ ticketId, ticket, canManage, variant = 'detail' }: Props) {
+function DispatchRecommendationPanelComponent({ ticketId, ticket, canManage, variant = 'detail' }: Props) {
   const router = useRouter();
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
@@ -289,6 +289,8 @@ export function DispatchRecommendationPanel({ ticketId, ticket, canManage, varia
     </div>
   );
 }
+
+export const DispatchRecommendationPanel = memo(DispatchRecommendationPanelComponent);
 
 function CandidateRow({
   candidate,

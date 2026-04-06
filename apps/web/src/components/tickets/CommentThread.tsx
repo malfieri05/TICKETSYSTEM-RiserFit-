@@ -54,7 +54,7 @@ interface Props {
 
 const COLLAPSE_THRESHOLD = 5;
 
-export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
+const CommentThreadComponent = function CommentThread({ ticketId, comments, isStudioUser }: Props) {
   const { user } = useAuth();
   const qc = useQueryClient();
   const canManage = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
@@ -223,7 +223,9 @@ export function CommentThread({ ticketId, comments, isStudioUser }: Props) {
       />
     </div>
   );
-}
+};
+
+export const CommentThread = memo(CommentThreadComponent);
 
 const CommentBubble = memo(function CommentBubble({
   comment,

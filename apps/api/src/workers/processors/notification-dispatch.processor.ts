@@ -68,37 +68,51 @@ export class NotificationDispatchProcessor extends WorkerHost {
     const { notification } = delivery;
     const { user } = notification;
 
-    switch (channel) {
-      case 'EMAIL':
-        await this.emailChannel.send({
-          to: user.email,
-          subject: notification.title,
-          htmlBody: this.buildEmailHtml(
-            notification.title,
-            notification.body,
-            notification.ticketId,
-          ),
-          textBody: `${notification.title}\n\n${notification.body}`,
-          notificationDeliveryId,
-        });
-        break;
+    try {
+      switch (channel) {
+        case 'EMAIL':
+          await this.emailChannel.send({
+            to: user.email,
+            subject: notification.title,
+            htmlBody: this.buildEmailHtml(
+              notification.title,
+              notification.body,
+              notification.ticketId,
+            ),
+            textBody: `${notification.title}\n\n${notification.body}`,
+            notificationDeliveryId,
+          });
+          break;
 
-      case 'TEAMS':
-        await this.teamsChannel.send({
-          title: notification.title,
-          body: notification.body,
-          ticketId: notification.ticketId,
-          notificationDeliveryId,
-        });
-        break;
+        case 'TEAMS':
+          await this.teamsChannel.send({
+            title: notification.title,
+            body: notification.body,
+            ticketId: notification.ticketId,
+            notificationDeliveryId,
+          });
+          break;
 
-      case 'IN_APP':
-        // In-app is handled synchronously in the fan-out processor
-        // This case shouldn't normally be reached via queue
-        break;
+        case 'IN_APP':
+          // In-app is handled synchronously in the fan-out processor
+          // This case shouldn't normally be reached via queue
+          break;
 
-      default:
-        this.logger.warn(`Unknown channel ${channel} — skipping`);
+        default:
+          this.logger.warn(`Unknown channel ${channel} — skipping`);
+      }
+    } catch (err) {
+      // Record the failure reason before BullMQ retries or dead-letters the job.
+      // Without this, deliveries stay in an ambiguous state with only attemptCount incremented.
+      const isLastAttempt = job.attemptsMade >= (job.opts.attempts ?? 1) - 1;
+      await this.prisma.notificationDelivery.update({
+        where: { id: notificationDeliveryId },
+        data: {
+          status: isLastAttempt ? 'FAILED' : undefined,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        },
+      });
+      throw err; // re-throw so BullMQ can retry / dead-letter
     }
   }
 

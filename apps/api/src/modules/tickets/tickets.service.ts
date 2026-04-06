@@ -182,6 +182,7 @@ const TICKET_DETAIL_SELECT = {
   description: true,
   comments: {
     orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+    take: 50, // prevents massive payloads on long-lived tickets; load-more via separate endpoint
     include: {
       author: {
         select: { id: true, name: true, email: true, avatarUrl: true },
@@ -193,6 +194,7 @@ const TICKET_DETAIL_SELECT = {
   },
   subtasks: {
     orderBy: { createdAt: 'asc' as const },
+    take: 30, // subtasks beyond 30 indicate a workflow template issue; cap the payload
     include: {
       team: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true, avatarUrl: true } },

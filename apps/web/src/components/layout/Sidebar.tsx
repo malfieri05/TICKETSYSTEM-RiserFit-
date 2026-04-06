@@ -28,6 +28,7 @@ import {
   Mail,
   Bot,
   Truck,
+  MapPin,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
@@ -102,7 +103,7 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
   {
     label: 'Configuration:',
     items: [
-      { href: '/admin/markets', label: 'Locations', icon: LayoutDashboard },
+      { href: '/admin/markets', label: 'Locations', icon: MapPin },
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
       { href: '/admin/users', label: 'Users', icon: Settings },
       { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },

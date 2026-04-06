@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../common/database/prisma.service';
-import { DispatchTradeType, Prisma } from '@prisma/client';
+import { DispatchGroupStatus, DispatchTradeType, Prisma } from '@prisma/client';
 import { distanceMiles } from './distance.util';
 
 const CANDIDATE_LIMIT = 20;
@@ -17,7 +17,7 @@ const DEFAULT_RADIUS_BY_TRADE: Record<DispatchTradeType, number> = {
 
 const MAINTENANCE_CLASS_CODE = 'MAINTENANCE';
 
-const ACTIVE_GROUP_STATUSES = ['DRAFT', 'READY_TO_SEND'];
+const ACTIVE_GROUP_STATUSES: DispatchGroupStatus[] = ['DRAFT', 'READY_TO_SEND'];
 
 const CANDIDATE_SELECT = {
   id: true,
@@ -39,10 +39,13 @@ const CANDIDATE_SELECT = {
   },
 } satisfies Prisma.TicketSelect;
 
+type CandidateTicket = Prisma.TicketGetPayload<{ select: typeof CANDIDATE_SELECT }>;
+type CandidateTicketWithDistance = CandidateTicket & { distanceMiles: number };
+
 export interface RecommendationResult {
-  primaryTicket: any;
-  sameLocationCandidates: any[];
-  nearbyLocationCandidates: any[];
+  primaryTicket: CandidateTicket;
+  sameLocationCandidates: CandidateTicket[];
+  nearbyLocationCandidates: CandidateTicketWithDistance[];
   summary: {
     sameLocationCount: number;
     nearbyCount: number;
@@ -142,7 +145,7 @@ export class DispatchRecommendationService {
   private async getTicketIdsInActiveGroups(): Promise<Set<string>> {
     const items = await this.prisma.dispatchGroupItem.findMany({
       where: {
-        group: { status: { in: ACTIVE_GROUP_STATUSES as any } },
+        group: { status: { in: ACTIVE_GROUP_STATUSES } },
       },
       select: { ticketId: true },
     });
@@ -150,7 +153,7 @@ export class DispatchRecommendationService {
   }
 
   private async getSameLocationCandidates(
-    primary: any,
+    primary: CandidateTicket,
     tradeType: DispatchTradeType,
     maintenanceClassId: string,
     excludeTicketIds: Set<string>,
@@ -180,7 +183,7 @@ export class DispatchRecommendationService {
   }
 
   private async getNearbyLocationCandidates(
-    primary: any,
+    primary: CandidateTicket,
     tradeType: DispatchTradeType,
     maintenanceClassId: string,
     excludeTicketIds: Set<string>,
@@ -245,8 +248,8 @@ export class DispatchRecommendationService {
     anchorTicketId: string,
     radiusMiles: number,
   ): Promise<{
-    anchor: any | null;
-    nearby: any[];
+    anchor: CandidateTicket | null;
+    nearby: CandidateTicketWithDistance[];
     message?: string;
   }> {
     const maintenanceClass = await this.prisma.ticketClass.findFirst({
@@ -260,23 +263,9 @@ export class DispatchRecommendationService {
     const anchor = await this.prisma.ticket.findUnique({
       where: { id: anchorTicketId },
       select: {
-        id: true,
-        title: true,
-        status: true,
-        createdAt: true,
-        studioId: true,
-        dispatchTradeType: true,
-        maintenanceCategoryId: true,
+        ...CANDIDATE_SELECT,
         ticketClassId: true,
-        studio: {
-          select: {
-            id: true,
-            name: true,
-            formattedAddress: true,
-            latitude: true,
-            longitude: true,
-          },
-        },
+        maintenanceCategoryId: true,
         maintenanceCategory: { select: { id: true, name: true } },
       },
     });
@@ -313,22 +302,8 @@ export class DispatchRecommendationService {
         },
       },
       select: {
-        id: true,
-        title: true,
-        status: true,
-        createdAt: true,
-        studioId: true,
-        dispatchReadiness: true,
+        ...CANDIDATE_SELECT,
         maintenanceCategoryId: true,
-        studio: {
-          select: {
-            id: true,
-            name: true,
-            formattedAddress: true,
-            latitude: true,
-            longitude: true,
-          },
-        },
         maintenanceCategory: { select: { id: true, name: true } },
       },
     });

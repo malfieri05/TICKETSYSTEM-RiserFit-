@@ -51,6 +51,7 @@ export const FANOUT_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 2_000 },
   removeOnComplete: 100,
   removeOnFail: 200,
+  timeout: 30_000, // 30s — fan-out is fast DB work; hanging beyond this is a bug
 };
 
 export const DISPATCH_JOB_OPTIONS = {
@@ -58,6 +59,7 @@ export const DISPATCH_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 5_000 },
   removeOnComplete: 200,
   removeOnFail: 500,
+  timeout: 30_000, // 30s — external calls (Postmark, Teams) must resolve promptly
 };
 
 export const KNOWLEDGE_INGESTION_JOB_OPTIONS = {
@@ -65,6 +67,7 @@ export const KNOWLEDGE_INGESTION_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 5_000 },
   removeOnComplete: 100,
   removeOnFail: 200,
+  timeout: 120_000, // 2m — embedding large docs can take time; still must not hang
 };
 
 export const EMAIL_INGEST_JOB_OPTIONS = {
@@ -72,6 +75,7 @@ export const EMAIL_INGEST_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 30_000 },
   removeOnComplete: 50,
   removeOnFail: 100,
+  timeout: 60_000, // 60s — Gmail fetch + parse; generous but bounded
 };
 
 export const INVITE_EMAIL_JOB_OPTIONS = {
@@ -79,4 +83,5 @@ export const INVITE_EMAIL_JOB_OPTIONS = {
   backoff: { type: 'exponential' as const, delay: 5_000 },
   removeOnComplete: 100,
   removeOnFail: 200,
+  timeout: 30_000, // 30s — single transactional email send
 };

@@ -1,18 +1,28 @@
 'use client';
 
+import type { LucideIcon } from 'lucide-react';
 import { Bell } from 'lucide-react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useNotificationCount } from '@/hooks/useNotifications';
 import { useNotificationsPanel } from '@/contexts/NotificationsPanelContext';
 import { ProfileMenu } from '@/components/layout/ProfileMenu';
+import { getNavHeaderIcon } from '@/lib/nav-header-icon';
 
 interface HeaderProps {
   title: React.ReactNode;
   action?: React.ReactNode;
+  /** Omit: auto from route. Pass a Lucide icon to override. Pass `null` to hide. */
+  titleIcon?: LucideIcon | null;
 }
 
-export function Header({ title, action }: HeaderProps) {
+export function Header({ title, action, titleIcon }: HeaderProps) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { unreadCount } = useNotificationCount();
   const { open: openNotificationsPanel } = useNotificationsPanel();
+
+  const ResolvedIcon =
+    titleIcon === null ? null : (titleIcon ?? getNavHeaderIcon(pathname, searchParams));
 
   return (
     <header
@@ -23,6 +33,13 @@ export function Header({ title, action }: HeaderProps) {
       }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
+        {ResolvedIcon ? (
+          <ResolvedIcon
+            className="h-5 w-5 shrink-0 opacity-90"
+            style={{ color: 'var(--color-text-app-header-muted)' }}
+            aria-hidden
+          />
+        ) : null}
         {typeof title === 'string' ? (
           <h1
             className="min-w-0 truncate text-base font-semibold"
@@ -31,7 +48,7 @@ export function Header({ title, action }: HeaderProps) {
             {title}
           </h1>
         ) : (
-          title
+          <div className="min-w-0 flex-1">{title}</div>
         )}
       </div>
       <div className="flex items-center gap-2">

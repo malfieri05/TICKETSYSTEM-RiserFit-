@@ -524,8 +524,8 @@ function isAdminDashboardSummary(
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const initRange = useMemo(() => rangeForPreset('last7'), []);
-  const [preset, setPreset] = useState<Preset>('last7');
+  const initRange = useMemo(() => rangeForPreset('all'), []);
+  const [preset, setPreset] = useState<Preset>('all');
   const [manualRange, setManualRange] = useState(false);
   const [rangeFrom, setRangeFrom] = useState(initRange.from);
   const [rangeTo, setRangeTo] = useState(initRange.to);

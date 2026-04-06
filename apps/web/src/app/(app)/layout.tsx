@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { AppErrorBoundary } from '@/components/layout/AppErrorBoundary';
 import { AiChatWidgetProvider } from '@/components/ai/AiChatWidget';
 import { NotificationsPanelProvider } from '@/contexts/NotificationsPanelContext';
 import {
@@ -76,12 +77,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <SidebarCollapseProvider>
-      <NotificationsPanelProvider>
-        <AiChatWidgetProvider>
-          <AppShell>{children}</AppShell>
-        </AiChatWidgetProvider>
-      </NotificationsPanelProvider>
-    </SidebarCollapseProvider>
+    <AppErrorBoundary>
+      <SidebarCollapseProvider>
+        <NotificationsPanelProvider>
+          <AiChatWidgetProvider>
+            <AppShell>{children}</AppShell>
+          </AiChatWidgetProvider>
+        </NotificationsPanelProvider>
+      </SidebarCollapseProvider>
+    </AppErrorBoundary>
   );
 }

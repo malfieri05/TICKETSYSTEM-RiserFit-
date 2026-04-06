@@ -14,7 +14,7 @@ interface TicketAttachmentsSectionProps {
   variant?: 'detail' | 'drawer';
 }
 
-export function TicketAttachmentsSection({
+function TicketAttachmentsSectionComponent({
   ticketId,
   canManage,
   variant = 'detail',
@@ -179,4 +179,6 @@ export function TicketAttachmentsSection({
     </div>
   );
 }
+
+export const TicketAttachmentsSection = React.memo(TicketAttachmentsSectionComponent);
 

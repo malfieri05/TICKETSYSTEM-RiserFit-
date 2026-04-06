@@ -88,15 +88,22 @@ export default function TicketsPage() {
     syncUrl({ page: 1, limit: PAGE_SIZE }, '');
   };
 
+  // Reset page when debounced search changes; sync URL after state update (never call router.* inside setState).
   useEffect(() => {
-    setFilters((f) => ({ ...f, page: 1 }));
-  }, [debouncedSearch]);
+    if (!hasInitializedFromUrl.current) return;
+    let next = {} as TicketFilters;
+    setFilters((f) => {
+      next = f.search !== debouncedSearch ? { ...f, page: 1 } : f;
+      return next;
+    });
+    syncUrl(next, debouncedSearch);
+  }, [debouncedSearch, syncUrl]);
 
   useEffect(() => {
     if (hasInitializedFromUrl.current) {
       syncUrl(filters, debouncedSearch);
     }
-  }, [filters, debouncedSearch, syncUrl]);
+  }, [filters, syncUrl]); // debouncedSearch handled above; filters covers all other filter changes
 
   const { data: taxonomyData } = useQuery({
     queryKey: ['ticket-taxonomy'],
