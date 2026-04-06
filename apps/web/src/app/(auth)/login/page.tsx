@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,7 +10,7 @@ import { BrandMark } from '@/components/layout/BrandMark';
 
 type Mode = 'login' | 'register';
 
-export default function LoginPage() {
+function LoginPageInner() {
   const { login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -224,5 +224,30 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function LoginFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: 'var(--color-bg-page)' }}>
+      <div className="flex flex-col items-center gap-4">
+        <BrandMark size="md" />
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-accent)] border-t-transparent"
+          aria-hidden
+        />
+        <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+          Loading…
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFallback />}>
+      <LoginPageInner />
+    </Suspense>
   );
 }

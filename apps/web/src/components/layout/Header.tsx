@@ -1,6 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
+import { Suspense, type ReactNode } from 'react';
 import { Bell } from 'lucide-react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useNotificationCount } from '@/hooks/useNotifications';
@@ -15,14 +16,40 @@ interface HeaderProps {
   titleIcon?: LucideIcon | null;
 }
 
+function HeaderAutoIcon({ pathname }: { pathname: string }) {
+  const searchParams = useSearchParams();
+  const ResolvedIcon = getNavHeaderIcon(pathname, searchParams);
+  if (!ResolvedIcon) return null;
+  return (
+    <ResolvedIcon
+      className="h-5 w-5 shrink-0 opacity-90"
+      style={{ color: 'var(--color-text-app-header-muted)' }}
+      aria-hidden
+    />
+  );
+}
+
+const headerTitleIconClass = 'h-5 w-5 shrink-0 opacity-90';
+const headerTitleIconStyle = { color: 'var(--color-text-app-header-muted)' as const };
+
 export function Header({ title, action, titleIcon }: HeaderProps) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { unreadCount } = useNotificationCount();
   const { open: openNotificationsPanel } = useNotificationsPanel();
 
-  const ResolvedIcon =
-    titleIcon === null ? null : (titleIcon ?? getNavHeaderIcon(pathname, searchParams));
+  const leadingIcon: ReactNode =
+    titleIcon === null
+      ? null
+      : titleIcon !== undefined
+        ? (() => {
+            const I = titleIcon;
+            return <I className={headerTitleIconClass} style={headerTitleIconStyle} aria-hidden />;
+          })()
+        : (
+            <Suspense fallback={null}>
+              <HeaderAutoIcon pathname={pathname} />
+            </Suspense>
+          );
 
   return (
     <header
@@ -33,13 +60,7 @@ export function Header({ title, action, titleIcon }: HeaderProps) {
       }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
-        {ResolvedIcon ? (
-          <ResolvedIcon
-            className="h-5 w-5 shrink-0 opacity-90"
-            style={{ color: 'var(--color-text-app-header-muted)' }}
-            aria-hidden
-          />
-        ) : null}
+        {leadingIcon}
         {typeof title === 'string' ? (
           <h1
             className="min-w-0 truncate text-base font-semibold"
