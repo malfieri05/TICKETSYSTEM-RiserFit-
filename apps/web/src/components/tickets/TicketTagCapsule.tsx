@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import { format } from 'date-fns';
 import { X } from 'lucide-react';
 import { POLISH_THEME } from '@/lib/polish';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 import {
   TOOLTIP_PORTAL_Z_INDEX,
   TOOLTIP_VIEWPORT_MARGIN,
@@ -156,10 +157,9 @@ export function InstantTooltip({
     const wrap = wrapRef.current;
     const panel = panelRef.current;
     if (!wrap || typeof window === 'undefined') return;
-    const tr = wrap.getBoundingClientRect();
+    const tr = getZoomedRect(wrap);
     const m = TOOLTIP_VIEWPORT_MARGIN;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    const { width: vw, height: vh } = getZoomedViewport();
 
     let placementEff: 'above' | 'below' = placementProp;
 
@@ -177,7 +177,7 @@ export function InstantTooltip({
     let left = align === 'center' ? tr.left + tr.width / 2 : tr.left;
 
     if (panel) {
-      const pr = panel.getBoundingClientRect();
+      const pr = getZoomedRect(panel);
       const w = pr.width;
       const h = pr.height;
 

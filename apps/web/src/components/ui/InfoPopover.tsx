@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 const POPOVER_WIDTH = 288; // w-72
 const GAP = 8; // px gap between button and popover
@@ -39,23 +40,25 @@ export function InfoPopover({
     if (!open || !btnRef.current) return;
 
     const reposition = () => {
-      const rect = btnRef.current!.getBoundingClientRect();
+      // Use zoomed coords so position:fixed values land in the right CSS px space.
+      const rect = getZoomedRect(btnRef.current!);
+      const vp = getZoomedViewport();
+      // offsetHeight is already in zoomed CSS px (layout measurement).
       const panelHeight = panelRef.current?.offsetHeight ?? 200;
 
-      // Prefer the requested direction, but flip if it would go off-screen.
       const spaceAbove = rect.top;
-      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceBelow = vp.height - rect.bottom;
       const goUp =
         direction === 'up' ? spaceAbove >= panelHeight + GAP || spaceAbove > spaceBelow
           : spaceBelow < panelHeight + GAP && spaceAbove > spaceBelow;
 
+      // position:fixed — no scroll offset needed.
       const top = goUp
-        ? rect.top + window.scrollY - panelHeight - GAP
-        : rect.bottom + window.scrollY + GAP;
+        ? rect.top - panelHeight - GAP
+        : rect.bottom + GAP;
 
-      // Center horizontally on the button, clamped to viewport edges.
-      const idealLeft = rect.left + window.scrollX + rect.width / 2 - POPOVER_WIDTH / 2;
-      const left = Math.max(8, Math.min(idealLeft, window.innerWidth - POPOVER_WIDTH - 8));
+      const idealLeft = rect.left + rect.width / 2 - POPOVER_WIDTH / 2;
+      const left = Math.max(8, Math.min(idealLeft, vp.width - POPOVER_WIDTH - 8));
 
       setCoords({ top, left });
     };
@@ -98,7 +101,7 @@ export function InfoPopover({
           role="dialog"
           aria-modal="false"
           style={{
-            position: 'absolute',
+            position: 'fixed',
             top: coords.top,
             left: coords.left,
             width: POPOVER_WIDTH,

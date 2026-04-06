@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getMutationErrorMessage } from '@/lib/utils';
 import { POLISH_THEME } from '@/lib/polish';
 import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 interface CommentAuthor {
   id: string;
@@ -403,20 +404,21 @@ const MentionComposer = memo(function MentionComposer({
       const ta = textareaRef.current;
       const menu = dropdownRef.current;
       if (!ta) return;
-      const tr = ta.getBoundingClientRect();
+      const tr = getZoomedRect(ta);
+      const vp = getZoomedViewport();
       const m = TOOLTIP_VIEWPORT_MARGIN;
-      const w = menu?.getBoundingClientRect().width ?? 288;
-      const h = menu?.getBoundingClientRect().height ?? 160;
+      const w = menu ? getZoomedRect(menu).width : 288;
+      const h = menu ? getZoomedRect(menu).height : 160;
       let left = tr.left + 8;
       let top = tr.top - 4;
       let transform = 'translateY(-100%)';
-      left = Math.max(m, Math.min(window.innerWidth - m - w, left));
+      left = Math.max(m, Math.min(vp.width - m - w, left));
       if (h > 0 && top - h < m) {
         top = tr.bottom + 4;
         transform = 'translateY(0)';
       }
-      if (h > 0 && transform === 'translateY(0)' && top + h > window.innerHeight - m) {
-        top = Math.max(m, window.innerHeight - m - h);
+      if (h > 0 && transform === 'translateY(0)' && top + h > vp.height - m) {
+        top = Math.max(m, vp.height - m - h);
       }
       setMenuFixed({ left, top, transform });
     };

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 export interface MultiComboBoxOption {
   value: string;
@@ -43,9 +44,10 @@ export function MultiComboBox({
 
   const updateMenuPosition = useCallback(() => {
     if (!isOpen || !buttonRef.current) return;
-    const r = buttonRef.current.getBoundingClientRect();
+    const r = getZoomedRect(buttonRef.current);
+    const vp = getZoomedViewport();
     const gap = 4;
-    const maxH = Math.min(240, Math.max(96, window.innerHeight - r.bottom - gap - 12));
+    const maxH = Math.min(240, Math.max(96, vp.height - r.bottom - gap - 12));
     setMenuStyle({
       position: 'fixed',
       top: r.bottom + gap,

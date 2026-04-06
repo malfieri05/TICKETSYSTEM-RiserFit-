@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/Button';
 import { POLISH_THEME } from '@/lib/polish';
 import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 import type { TagColor } from '@/types';
 /** Wide enough for swatch row + actions without clipping (positioning math uses same value). */
 const POPOVER_W = 280;
@@ -51,13 +52,13 @@ export function TicketTagAddPopover({
 
     const run = () => {
       const anchor = anchorRef.current;
-      const panel = panelRef.current;
       if (!anchor || typeof window === 'undefined') return;
-      const ar = anchor.getBoundingClientRect();
-      const ph = panel?.offsetHeight ?? 160;
-      const vw = window.innerWidth;
+      const ar = getZoomedRect(anchor);
+      const vp = getZoomedViewport();
+      // offsetHeight is in zoomed CSS px (layout measurement within zoomed html) — no division needed.
+      const ph = panelRef.current?.offsetHeight ?? 160;
       let left = ar.left + ar.width / 2 - POPOVER_W / 2;
-      left = Math.max(8, Math.min(left, vw - POPOVER_W - 8));
+      left = Math.max(8, Math.min(left, vp.width - POPOVER_W - 8));
       let top = ar.top - ph - 8;
       if (top < 8) {
         top = ar.bottom + 8;

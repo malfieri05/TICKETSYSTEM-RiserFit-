@@ -16,6 +16,7 @@ import type { TagColor, TicketStatus, TicketTagItem } from '@/types';
 import { StatusBadge } from '@/components/ui/Badge';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 import { getMutationErrorMessage } from '@/lib/utils';
 import { getDisplayNameInitials } from '@/lib/user-display';
 import {
@@ -162,14 +163,14 @@ export function RequesterAvatar({
     const trigger = triggerRef.current;
     const panel = panelRef.current;
     if (!trigger) return;
-    const tr = trigger.getBoundingClientRect();
+    const tr = getZoomedRect(trigger);
     let left = tr.left + tr.width / 2;
     const top = tr.top - 6;
     if (panel) {
-      const w = panel.getBoundingClientRect().width;
+      const w = getZoomedRect(panel).width;
       const half = w / 2;
       const m = TOOLTIP_VIEWPORT_MARGIN;
-      const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
+      const vw = typeof window !== 'undefined' ? getZoomedViewport().width : 0;
       left = Math.max(m + half, Math.min(vw - m - half, left));
     }
     setPos({ left, top });

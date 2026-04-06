@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { getDocumentZoom } from '@/lib/zoom';
 
 const RAIL_PX = 3;
 const TRANSITION =
@@ -22,11 +23,13 @@ function measureRail(
     `tr.ticket-feed-table-row[data-ticket-id="${CSS.escape(selectedId)}"]`,
   );
   if (!row) return { top: 0, height: 0, visible: false };
+  const zoom = getDocumentZoom();
   const ir = innerEl.getBoundingClientRect();
   const rr = row.getBoundingClientRect();
+  // Convert from viewport px to zoomed CSS px for position:absolute placement.
   return {
-    top: rr.top - ir.top,
-    height: rr.height,
+    top:    (rr.top - ir.top) / zoom,
+    height: rr.height / zoom,
     visible: true,
   };
 }

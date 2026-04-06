@@ -215,7 +215,8 @@
 }
 
 html {
-  zoom: 0.75; /* Scale entire UI uniformly — maintains all proportions */
+  zoom: 0.75;           /* Scale entire UI uniformly — maintains all proportions */
+  --app-zoom: 0.75;     /* Keep in sync ↑ — read by lib/zoom.ts for JS coordinate compensation */
 }
 
 * {

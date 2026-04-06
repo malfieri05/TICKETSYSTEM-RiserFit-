@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getDisplayNameInitials, profileAccountTypeLabel } from '@/lib/user-display';
 import { cn } from '@/lib/utils';
 import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 const THEME_STORAGE_KEY = 'theme';
 
@@ -40,8 +41,9 @@ export function ProfileMenu() {
   const updatePosition = useCallback(() => {
     const el = triggerRef.current;
     if (!el || typeof window === 'undefined') return;
-    const r = el.getBoundingClientRect();
-    setCoords({ top: r.bottom + 8, right: window.innerWidth - r.right });
+    const r = getZoomedRect(el);
+    const vp = getZoomedViewport();
+    setCoords({ top: r.bottom + 8, right: vp.width - r.right });
   }, []);
 
   useEffect(() => {

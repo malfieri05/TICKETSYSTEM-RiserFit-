@@ -9,6 +9,7 @@ import { AssistantLinkedText, flattenStudiosFromMarkets } from '@/components/ai/
 import { cn } from '@/lib/utils';
 import { infoExplainerInnerFrameStyle, infoExplainerTitleRuleStyle } from '@/components/ui/InfoExplainer';
 import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 function stripConfirmCancelPhrase(text: string): string {
   if (!text || typeof text !== 'string') return text;
@@ -98,11 +99,12 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   const updateWebHintPlacement = useCallback(() => {
     const anchor = webHintAnchorRef.current;
     if (!anchor) return;
-    const r = anchor.getBoundingClientRect();
+    const r = getZoomedRect(anchor);
+    const vp = getZoomedViewport();
     const gap = 8;
     setWebHintPlacement({
-      bottom: window.innerHeight - r.top + gap,
-      right: Math.max(8, window.innerWidth - r.right),
+      bottom: vp.height - r.top + gap,
+      right: Math.max(8, vp.width - r.right),
     });
   }, []);
 

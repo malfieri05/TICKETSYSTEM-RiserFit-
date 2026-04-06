@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { POLISH_THEME } from '@/lib/polish';
+import { getDocumentZoom } from '@/lib/zoom';
 
 export type SlidingSegmentOption = { value: string; label: string };
 
@@ -48,13 +49,16 @@ export function SlidingSegmentedControl({
     }
     const btn = btnRefs.current[selectedIndex];
     if (!btn) return;
+    const zoom = getDocumentZoom();
     const n = nav.getBoundingClientRect();
     const b = btn.getBoundingClientRect();
+    // getBoundingClientRect() returns viewport px; divide by zoom to get zoomed CSS px
+    // which is what position:absolute inside the zoomed html actually uses.
     setBubble({
-      left: b.left - n.left + nav.scrollLeft,
-      top: b.top - n.top + nav.scrollTop,
-      width: b.width,
-      height: b.height,
+      left: (b.left - n.left) / zoom + nav.scrollLeft,
+      top:  (b.top  - n.top)  / zoom + nav.scrollTop,
+      width:  b.width  / zoom,
+      height: b.height / zoom,
     });
   }, [selectedIndex]);
 
