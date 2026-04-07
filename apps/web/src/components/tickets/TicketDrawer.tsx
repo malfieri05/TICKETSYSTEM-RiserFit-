@@ -40,6 +40,19 @@ interface Props {
   onNavigateTicket?: (id: string) => void;
   /** Suppress the semi-transparent backdrop overlay (e.g. dispatch map view). */
   noBackdrop?: boolean;
+  /** Bubble `pointerdown` outside the drawer shell closes the panel (no backdrop). Vendor Dispatch only. */
+  closeOnOutsideClick?: boolean;
+}
+
+function shouldIgnoreOutsideClosePointerTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el?.closest) return false;
+  if (el.closest('[role="tooltip"]')) return true;
+  if (el.closest('[role="listbox"]')) return true;
+  if (el.closest('[role="option"]')) return true;
+  /** Let “View Ticket” / popup UI handle `pointerdown` → `click` (toggle); map tiles are outside this. */
+  if (el.closest('.leaflet-popup')) return true;
+  return false;
 }
 
 /** Must match drawer slide duration (open + close use the same easing). */
@@ -56,10 +69,18 @@ function formatFieldLabel(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicket, noBackdrop = false }: Props) {
+export function TicketDrawer({
+  ticketId,
+  onClose,
+  feedTicketIds,
+  onNavigateTicket,
+  noBackdrop = false,
+  closeOnOutsideClick = false,
+}: Props) {
   const router = useRouter();
   const { user } = useAuth();
   const qc = useQueryClient();
+  const drawerShellRef = useRef<HTMLDivElement | null>(null);
   /** Slide position: true while parent still has a selection; false during slide-out. */
   const panelOpen = !!ticketId;
   const lastTicketIdRef = useRef<string | null>(null);
@@ -121,6 +142,20 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  useEffect(() => {
+    if (!closeOnOutsideClick || !ticketId) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const shell = drawerShellRef.current;
+      const t = e.target;
+      if (!shell || !(t instanceof Node)) return;
+      if (shouldIgnoreOutsideClosePointerTarget(t)) return;
+      if (shell.contains(t)) return;
+      onClose();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [closeOnOutsideClick, ticketId, onClose]);
 
   useEffect(() => {
     return () => {
@@ -335,6 +370,7 @@ export function TicketDrawer({ ticketId, onClose, feedTicketIds, onNavigateTicke
         />
       )}
       <div
+        ref={drawerShellRef}
         className="fixed top-0 right-0 z-[1100] h-full flex flex-col"
         style={{
           width: 'min(828px, 68vw)',

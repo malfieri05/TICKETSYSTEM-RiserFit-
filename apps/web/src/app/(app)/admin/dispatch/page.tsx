@@ -602,7 +602,12 @@ export default function DispatchPage() {
         )}
       </div>
 
-      <TicketDrawer ticketId={ticketPanelId} onClose={closeTicketPanel} noBackdrop />
+      <TicketDrawer
+        ticketId={ticketPanelId}
+        onClose={closeTicketPanel}
+        noBackdrop
+        closeOnOutsideClick
+      />
     </div>
   );
 }

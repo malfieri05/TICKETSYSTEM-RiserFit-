@@ -47,6 +47,9 @@ const ROLE_LABEL: Record<Role, string> = {
 const MS_DAY = 86_400_000;
 const MS_VALIDATE_WINDOW = 15 * 60 * 1000;
 
+/** Matches web admin invite + Manage locations; expand to every studio at create time (first by name = default). */
+const INVITE_ALL_STUDIOS_SENTINEL = '__ALL__';
+
 @Injectable()
 export class InvitationsService {
   private readonly logger = new Logger(InvitationsService.name);
@@ -95,11 +98,11 @@ export class InvitationsService {
     await this.inviteEmailQueue.add('send', data, INVITE_EMAIL_JOB_OPTIONS);
   }
 
-  private validateCreatePayload(dto: CreateInvitationDto): {
+  private async validateCreatePayload(dto: CreateInvitationDto): Promise<{
     departments: Department[];
     defaultStudioId: string | null;
     additionalStudioIds: string[];
-  } {
+  }> {
     const role = dto.assignedRole;
     if (role === Role.ADMIN) {
       if (dto.defaultStudioId || (dto.additionalStudioIds?.length ?? 0) > 0)
@@ -119,6 +122,22 @@ export class InvitationsService {
         throw new BadRequestException('defaultStudioId required for studio users');
       if (dto.departments?.length)
         throw new BadRequestException('Studio invites must not include departments');
+      if (dto.defaultStudioId === INVITE_ALL_STUDIOS_SENTINEL) {
+        const studios = await this.prisma.studio.findMany({
+          select: { id: true },
+          orderBy: { name: 'asc' },
+        });
+        if (studios.length === 0) {
+          throw new BadRequestException(
+            'No studios exist yet. Add studios first, or pick a single default location.',
+          );
+        }
+        return {
+          departments: [],
+          defaultStudioId: studios[0].id,
+          additionalStudioIds: studios.slice(1).map((s) => s.id),
+        };
+      }
       const add = [...new Set(dto.additionalStudioIds ?? [])].filter(
         (id) => id !== dto.defaultStudioId,
       );
@@ -137,7 +156,7 @@ export class InvitationsService {
 
   async create(dto: CreateInvitationDto, invitedByUserId: string) {
     const emailNormalized = normalizeInviteEmail(dto.email);
-    const spec = this.validateCreatePayload(dto);
+    const spec = await this.validateCreatePayload(dto);
 
     const existingUser = await this.prisma.user.findFirst({
       where: { email: emailNormalized },

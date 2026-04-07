@@ -29,6 +29,7 @@ import { InstantTooltip, TICKET_TAG_TOOLTIP_FONT_PX } from '@/components/tickets
 import { formatDistanceToNow } from 'date-fns';
 import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
 import { InfoPopover } from '@/components/ui/InfoPopover';
+import { MaintenanceCountWithTooltip } from '@/components/ui/MaintenanceCountWithTooltip';
 
 function SimulateLockedTooltipContent() {
   const fontPx = TICKET_TAG_TOOLTIP_FONT_PX * 0.9;
@@ -83,6 +84,8 @@ interface StudioOption {
   id: string;
   name: string;
   marketName: string;
+  activeMaintenanceCount: number;
+  activeMaintenanceCategoryNames: string[];
 }
 
 export default function LeaseIQPage() {
@@ -111,8 +114,24 @@ export default function LeaseIQPage() {
   const publishedLeaseIqLocationCount = publishedStudioIdsSet.size;
 
   const studios: StudioOption[] = useMemo(() => {
-    const list = (marketsData?.data ?? []).flatMap((m: { id: string; name: string; studios: { id: string; name: string }[] }) =>
-      (m.studios ?? []).map((s) => ({ id: s.id, name: s.name, marketName: m.name })),
+    const list = (marketsData?.data ?? []).flatMap(
+      (m: {
+        id: string;
+        name: string;
+        studios?: {
+          id: string;
+          name: string;
+          activeMaintenanceCount?: number;
+          activeMaintenanceCategoryNames?: string[];
+        }[];
+      }) =>
+        (m.studios ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          marketName: m.name,
+          activeMaintenanceCount: s.activeMaintenanceCount ?? 0,
+          activeMaintenanceCategoryNames: s.activeMaintenanceCategoryNames ?? [],
+        })),
     );
     list.sort((a, b) => a.marketName.localeCompare(b.marketName) || a.name.localeCompare(b.name));
     return list;
@@ -253,11 +272,17 @@ export default function LeaseIQPage() {
                   >
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                       <span
-                        className="truncate text-sm font-medium"
+                        className="flex min-w-0 items-baseline gap-1 text-sm font-medium"
                         style={{ color: 'var(--color-text-primary)' }}
                         title={`${s.name} — ${s.marketName}`}
                       >
-                        {s.name}
+                        <span className="min-w-0 truncate">{s.name}</span>
+                        <span className="shrink-0">
+                          <MaintenanceCountWithTooltip
+                            count={s.activeMaintenanceCount}
+                            categoryNames={s.activeMaintenanceCategoryNames}
+                          />
+                        </span>
                       </span>
                       <span className="truncate text-xs" style={{ color: 'var(--color-text-muted)' }} title={s.marketName}>
                         {s.marketName}

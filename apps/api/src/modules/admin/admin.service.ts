@@ -10,11 +10,13 @@ import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QUEUES } from '../../common/queue/queue.constants';
+import type { Prisma } from '@prisma/client';
 import {
   CreateMarketDto,
   UpdateMarketDto,
   CreateStudioDto,
   UpdateStudioDto,
+  UpsertStudioProfileDto,
 } from './dto/admin.dto';
 import { haversineMiles } from '../../utils/geoDistance';
 
@@ -661,6 +663,8 @@ export class AdminService {
       formattedAddress?: string;
       latitude?: number;
       longitude?: number;
+      externalCode?: string | null;
+      isActive?: boolean;
     } = {};
     if (dto.name != null) {
       const trimmed = dto.name.trim();
@@ -679,10 +683,101 @@ export class AdminService {
     if (typeof dto.latitude === 'number') data.latitude = dto.latitude;
     if (typeof dto.longitude === 'number') data.longitude = dto.longitude;
 
+    if (dto.isActive !== undefined) {
+      data.isActive = dto.isActive;
+    }
+
+    if (dto.externalCode !== undefined) {
+      let code: string | null;
+      if (dto.externalCode === null) {
+        code = null;
+      } else {
+        const t = dto.externalCode.trim();
+        code = t === '' ? null : t;
+      }
+      if (code !== null) {
+        const taken = await this.prisma.studio.findFirst({
+          where: { externalCode: code, NOT: { id } },
+        });
+        if (taken) {
+          throw new ConflictException(
+            `externalCode "${code}" is already in use by another location`,
+          );
+        }
+      }
+      data.externalCode = code;
+    }
+
     return this.prisma.studio.update({
       where: { id },
       data,
       include: { market: true },
+    });
+  }
+
+  async upsertStudioProfile(studioId: string, dto: UpsertStudioProfileDto) {
+    const studio = await this.prisma.studio.findUnique({ where: { id: studioId } });
+    if (!studio) throw new NotFoundException(`Studio ${studioId} not found`);
+
+    const trim = (s: string): string | null => {
+      const t = s.trim();
+      return t === '' ? null : t;
+    };
+
+    const parseDate = (v: string | null | undefined): Date | null => {
+      if (v === null) return null;
+      if (v === undefined) return null;
+      if (v.trim() === '') return null;
+      const d = new Date(`${v.trim()}T12:00:00.000Z`);
+      if (Number.isNaN(d.getTime())) {
+        throw new BadRequestException('Invalid date; use YYYY-MM-DD');
+      }
+      return d;
+    };
+
+    const patch: Record<string, string | number | Date | null> = {};
+
+    if (dto.district !== undefined) patch.district = trim(dto.district);
+    if (dto.status !== undefined) patch.status = trim(dto.status);
+    if (dto.maturity !== undefined) patch.maturity = trim(dto.maturity);
+    if (dto.openType !== undefined) patch.openType = trim(dto.openType);
+
+    if (dto.studioSize !== undefined) {
+      patch.studioSize = dto.studioSize as number | null;
+    }
+    if (dto.priceTier !== undefined) {
+      patch.priceTier = dto.priceTier as number | null;
+    }
+
+    if (dto.studioOpenDate !== undefined) {
+      patch.studioOpenDate = parseDate(dto.studioOpenDate);
+    }
+    if (dto.rfSoftOpenDate !== undefined) {
+      patch.rfSoftOpenDate = parseDate(dto.rfSoftOpenDate);
+    }
+
+    if (dto.dm !== undefined) patch.dm = trim(dto.dm);
+    if (dto.gm !== undefined) patch.gm = trim(dto.gm);
+    if (dto.agm !== undefined) patch.agm = trim(dto.agm);
+    if (dto.edc !== undefined) patch.edc = trim(dto.edc);
+    if (dto.li !== undefined) patch.li = trim(dto.li);
+
+    if (dto.studioEmail !== undefined) patch.studioEmail = trim(dto.studioEmail);
+    if (dto.gmEmail !== undefined) patch.gmEmail = trim(dto.gmEmail);
+    if (dto.gmTeams !== undefined) patch.gmTeams = trim(dto.gmTeams);
+    if (dto.liEmail !== undefined) patch.liEmail = trim(dto.liEmail);
+
+    if (dto.studioCode !== undefined) patch.studioCode = trim(dto.studioCode);
+    if (dto.netsuiteName !== undefined) patch.netsuiteName = trim(dto.netsuiteName);
+    if (dto.ikismetName !== undefined) patch.ikismetName = trim(dto.ikismetName);
+    if (dto.crName !== undefined) patch.crName = trim(dto.crName);
+    if (dto.crId !== undefined) patch.crId = trim(dto.crId);
+    if (dto.paycomCode !== undefined) patch.paycomCode = trim(dto.paycomCode);
+
+    return this.prisma.studioProfile.upsert({
+      where: { studioId },
+      create: { studioId, ...patch },
+      update: patch as Prisma.StudioProfileUpdateInput,
     });
   }
 

@@ -236,11 +236,12 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const chartWrapRef = useRef<HTMLDivElement>(null);
   const chartTipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
-  const [svgWidth, setSvgWidth] = useState(800);
+  const [svgWidth, setSvgWidth] = useState(0);
   const [tipFixed, setTipFixed] = useState({ left: 0, top: 0 });
 
-  useEffect(() => {
-    const el = svgRef.current;
+  /** Measure the wrapper (not the SVG): `width="100%"` SVGs can report a stale width while the path still uses old `svgWidth`. */
+  useLayoutEffect(() => {
+    const el = chartWrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
       setSvgWidth(el.getBoundingClientRect().width);
@@ -255,7 +256,8 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const PAD_T = 20;
   const PAD_B = 44;
   const H = 240;
-  const innerW = Math.max(1, svgWidth - PAD_L - PAD_R);
+  const widthPx = Math.max(svgWidth, PAD_L + PAD_R + 1);
+  const innerW = Math.max(1, widthPx - PAD_L - PAD_R);
   const innerH = H - PAD_T - PAD_B;
 
   const maxCount = data.length ? Math.max(...data.map((d) => d.count), 1) : 1;
@@ -337,7 +339,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const tooltipLeft: number = (() => {
     if (!hover) return 0;
     const rightPos = hover.x + TOOLTIP_GAP;
-    if (rightPos + TOOLTIP_W <= svgWidth - PAD_R) return rightPos;
+    if (rightPos + TOOLTIP_W <= widthPx - PAD_R) return rightPos;
     return hover.x - TOOLTIP_GAP - TOOLTIP_W;
   })();
 
@@ -370,7 +372,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   }, [hover, hoverPt, tooltipLeft, tooltipTop]);
 
   return (
-    <div ref={chartWrapRef} className="relative select-none" style={{ height: H }}>
+    <div ref={chartWrapRef} className="relative w-full min-w-0 select-none" style={{ height: H }}>
       <svg
         ref={svgRef}
         width="100%"
@@ -392,7 +394,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
           return (
             <g key={tick}>
               <line
-                x1={PAD_L} y1={y} x2={svgWidth - PAD_R} y2={y}
+                x1={PAD_L} y1={y} x2={widthPx - PAD_R} y2={y}
                 stroke="var(--color-border-subtle)"
                 strokeWidth="1"
                 strokeDasharray={tick === 0 ? undefined : '4 4'}
@@ -863,9 +865,7 @@ export default function DashboardPage() {
                   <div className="mt-auto min-h-[240px] flex-1 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
                 </div>
               ) : (
-                <div
-                  className="dashboard-card rounded-xl px-6 pt-5 pb-4"
-                >
+                <div className="dashboard-card w-full min-w-0 rounded-xl px-6 pt-5 pb-4">
                   <div className="mb-1 min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
                       Ticket Volume
@@ -879,7 +879,7 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 min-h-[240px]">
+                  <div className="mt-4 min-h-[240px] w-full min-w-0">
                     {volume.length === 0 ? (
                       <div className="flex h-[240px] items-center justify-center text-sm text-[var(--color-text-muted)]">
                         No ticket data yet.

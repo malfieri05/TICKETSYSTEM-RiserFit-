@@ -10,7 +10,7 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, elevated, className, id, style, ...props }, ref) => {
+  ({ label, error, elevated, className, id, style, readOnly, ...props }, ref) => {
     return (
       <div className="flex flex-col gap-1.5">
         {label && (
@@ -21,6 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={id}
+          readOnly={readOnly}
           className={cn(
             elevated
               ? cn(
@@ -36,6 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
                   'outline-none transition-[border-color,box-shadow,background-color] duration-[var(--duration-fast)] ease-out',
                   'focus-visible:border-[var(--color-accent)]',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
+                  readOnly && 'cursor-default opacity-[0.92]',
                   error && 'border-red-500 focus-visible:border-red-500',
                 ),
             className,

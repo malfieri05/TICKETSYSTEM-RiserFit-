@@ -26,6 +26,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
+import { TICKETS_PANEL_QUERY_PARAM } from '@/lib/tickets-deep-link';
 
 const PAGE_SIZE = 20;
 
@@ -66,17 +67,21 @@ export default function TicketsPage() {
     }
   }, [searchParams]);
 
-  const syncUrl = useCallback((nextFilters: TicketFilters, nextSearch: string) => {
-    const params = new URLSearchParams();
-    for (const key of FILTER_KEYS) {
-      const v = nextFilters[key];
-      if (v) params.set(key, v as string);
-    }
-    if (nextSearch) params.set('search', nextSearch);
-    const qs = params.toString();
-    const url = qs ? `${pathname}?${qs}` : pathname;
-    router.replace(url, { scroll: false });
-  }, [pathname, router]);
+  const syncUrl = useCallback(
+    (nextFilters: TicketFilters, nextSearch: string, panelTicketId: string | null) => {
+      const params = new URLSearchParams();
+      for (const key of FILTER_KEYS) {
+        const v = nextFilters[key];
+        if (v) params.set(key, v as string);
+      }
+      if (nextSearch) params.set('search', nextSearch);
+      if (panelTicketId) params.set(TICKETS_PANEL_QUERY_PARAM, panelTicketId);
+      const qs = params.toString();
+      const url = qs ? `${pathname}?${qs}` : pathname;
+      router.replace(url, { scroll: false });
+    },
+    [pathname, router],
+  );
 
   const updateFilter = (key: keyof TicketFilters, value: string) => {
     setFilters((f) => ({ ...f, [key]: value || undefined, page: 1 }));
@@ -85,7 +90,7 @@ export default function TicketsPage() {
   const clearAllFilters = () => {
     setFilters({ page: 1, limit: PAGE_SIZE });
     setSearch('');
-    syncUrl({ page: 1, limit: PAGE_SIZE }, '');
+    syncUrl({ page: 1, limit: PAGE_SIZE }, '', selectedId);
   };
 
   // Reset page when debounced search changes; sync URL after state update (never call router.* inside setState).
@@ -96,14 +101,21 @@ export default function TicketsPage() {
       next = f.search !== debouncedSearch ? { ...f, page: 1 } : f;
       return next;
     });
-    syncUrl(next, debouncedSearch);
-  }, [debouncedSearch, syncUrl]);
+    syncUrl(next, debouncedSearch, selectedId);
+  }, [debouncedSearch, syncUrl, selectedId]);
 
   useEffect(() => {
     if (hasInitializedFromUrl.current) {
-      syncUrl(filters, debouncedSearch);
+      syncUrl(filters, debouncedSearch, selectedId);
     }
-  }, [filters, syncUrl]); // debouncedSearch handled above; filters covers all other filter changes
+  }, [filters, debouncedSearch, selectedId, syncUrl]);
+
+  /** Deep link / vendor dispatch: open drawer when `?panel=` is present (URL → state). */
+  const panelFromUrl = searchParams.get(TICKETS_PANEL_QUERY_PARAM) ?? '';
+  useEffect(() => {
+    if (!panelFromUrl) return;
+    setSelectedId(panelFromUrl);
+  }, [panelFromUrl]);
 
   const { data: taxonomyData } = useQuery({
     queryKey: ['ticket-taxonomy'],
@@ -551,6 +563,7 @@ export default function TicketsPage() {
         onClose={handleClose}
         feedTicketIds={feedTicketIds}
         onNavigateTicket={setSelectedId}
+        noBackdrop
       />
     </div>
   );

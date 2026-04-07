@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useLayoutEffect,
+  useCallback,
+  type CSSProperties,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 export interface MarketOption {
   id: string;
@@ -31,7 +42,26 @@ export function MarketSearchSelect({
 }: MarketSearchSelectProps) {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!isOpen || !triggerRef.current) return;
+    const r = getZoomedRect(triggerRef.current);
+    const vp = getZoomedViewport();
+    const gap = 4;
+    const maxH = Math.min(280, Math.max(120, vp.height - r.bottom - gap - 12));
+    setMenuStyle({
+      position: 'fixed',
+      top: r.bottom + gap,
+      left: r.left,
+      width: r.width,
+      maxHeight: maxH,
+      zIndex: TOOLTIP_PORTAL_Z_INDEX,
+    });
+  }, [isOpen]);
 
   const selectedMarket = useMemo(() => markets.find((m) => m.id === value) ?? null, [markets, value]);
   const displayText = selectedMarket ? selectedMarket.name : 'All states';
@@ -42,11 +72,23 @@ export function MarketSearchSelect({
     return markets.filter((m) => (m.name ?? '').toLowerCase().includes(q));
   }, [markets, query]);
 
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setIsOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -80,6 +122,7 @@ export function MarketSearchSelect({
         </label>
       )}
       <div
+        ref={triggerRef}
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -87,7 +130,7 @@ export function MarketSearchSelect({
         onKeyDown={handleKeyDown}
         onClick={() => setIsOpen((o) => !o)}
         className={cn(
-          'flex items-center rounded-lg border-2 border-solid text-sm transition-[border-color] duration-[var(--duration-fast)] ease-out min-w-[160px] cursor-pointer',
+          'relative flex items-center rounded-lg border-2 border-solid text-sm transition-[border-color] duration-[var(--duration-fast)] ease-out min-w-[160px] cursor-pointer',
           isOpen ? 'border-[var(--color-accent)]' : 'border-[var(--color-border-default)]',
           'focus-visible:border-[var(--color-accent)]',
         )}
@@ -112,59 +155,64 @@ export function MarketSearchSelect({
         <ChevronDown className="absolute right-3 h-4 w-4 pointer-events-none" style={{ color: 'var(--color-text-muted)' }} />
       </div>
 
-      {isOpen && (
-        <div
-          className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border py-1"
-          style={{
-            background: 'var(--color-bg-surface-raised)',
-            borderColor: 'var(--color-border-default)',
-            boxShadow: 'var(--shadow-raised)',
-          }}
-        >
-          <div className="px-2 pb-1 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type to filter states…"
-              className="w-full px-2 py-1.5 text-sm rounded border-2 border-solid border-[var(--color-border-default)] outline-none transition-[border-color] duration-[var(--duration-fast)] ease-out focus:border-[var(--color-accent)]"
-              style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
-              autoFocus
-              autoComplete="off"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          <ul className="max-h-52 overflow-y-auto py-1" role="listbox">
-            <li
-              role="option"
-              aria-selected={value === ''}
-              className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
-              style={{ color: 'var(--color-text-primary)' }}
-              onClick={() => handleSelect('')}
-            >
-              All states
-            </li>
-            {filteredMarkets.length === 0 ? (
-              <li className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                No matching states
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="flex flex-col overflow-hidden rounded-lg border py-1"
+            style={{
+              ...menuStyle,
+              background: 'var(--color-bg-surface-raised)',
+              borderColor: 'var(--color-border-default)',
+              boxShadow: 'var(--shadow-raised)',
+            }}
+          >
+            <div className="shrink-0 px-2 pb-1 border-b" style={{ borderColor: 'var(--color-border-subtle)' }}>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Type to filter states…"
+                className="w-full px-2 py-1.5 text-sm rounded border-2 border-solid border-[var(--color-border-default)] outline-none transition-[border-color] duration-[var(--duration-fast)] ease-out focus:border-[var(--color-accent)]"
+                style={{ background: 'var(--color-bg-surface)', color: 'var(--color-text-primary)' }}
+                autoFocus
+                autoComplete="off"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            <ul className="min-h-0 flex-1 overflow-y-auto py-1" role="listbox">
+              <li
+                role="option"
+                aria-selected={value === ''}
+                className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
+                style={{ color: 'var(--color-text-primary)' }}
+                onClick={() => handleSelect('')}
+              >
+                All states
               </li>
-            ) : (
-              filteredMarkets.map((m) => (
-                <li
-                  key={m.id}
-                  role="option"
-                  aria-selected={value === m.id}
-                  className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
-                  style={{ color: 'var(--color-text-primary)' }}
-                  onClick={() => handleSelect(m.id)}
-                >
-                  {m.name}
+              {filteredMarkets.length === 0 ? (
+                <li className="px-3 py-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                  No matching states
                 </li>
-              ))
-            )}
-          </ul>
-        </div>
-      )}
+              ) : (
+                filteredMarkets.map((m) => (
+                  <li
+                    key={m.id}
+                    role="option"
+                    aria-selected={value === m.id}
+                    className="mx-1 rounded-md px-3 py-2 cursor-pointer text-sm transition-colors duration-[var(--duration-fast)] hover:bg-[var(--color-row-selected)]"
+                    style={{ color: 'var(--color-text-primary)' }}
+                    onClick={() => handleSelect(m.id)}
+                  >
+                    {m.name}
+                  </li>
+                ))
+              )}
+            </ul>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

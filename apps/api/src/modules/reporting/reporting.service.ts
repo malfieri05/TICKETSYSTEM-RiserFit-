@@ -388,19 +388,59 @@ export class ReportingService {
   // ── Dispatch: open maintenance only (Stage 13) ─────────────────────────────
   async getDispatchByStudio(filters: DispatchFiltersDto) {
     const where = this.buildOpenMaintenanceWhere(filters);
-    const rows = await this.prisma.ticket.groupBy({
-      by: ['studioId'],
+    const ticketRows = await this.prisma.ticket.findMany({
       where,
-      _count: { _all: true },
-      orderBy: { _count: { studioId: 'desc' } },
+      select: {
+        id: true,
+        title: true,
+        studioId: true,
+        maintenanceCategory: { select: { name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
     });
+
+    const ticketsByStudio = new Map<
+      string | null,
+      { id: string; title: string; maintenanceCategoryName: string }[]
+    >();
+    const categoryNamesByStudio = new Map<string | null, Set<string>>();
+
+    for (const t of ticketRows) {
+      const sid = t.studioId;
+      const catLabel = t.maintenanceCategory?.name ?? 'Uncategorized';
+      const list = ticketsByStudio.get(sid) ?? [];
+      list.push({
+        id: t.id,
+        title: t.title,
+        maintenanceCategoryName: catLabel,
+      });
+      ticketsByStudio.set(sid, list);
+      const set = categoryNamesByStudio.get(sid) ?? new Set<string>();
+      set.add(catLabel);
+      categoryNamesByStudio.set(sid, set);
+    }
+
+    const rows = [...ticketsByStudio.entries()]
+      .map(([studioId, openTickets]) => ({
+        studioId,
+        count: openTickets.length,
+        openTickets: [...openTickets].sort((a, b) => {
+          const c = a.maintenanceCategoryName.localeCompare(b.maintenanceCategoryName);
+          if (c !== 0) return c;
+          return a.title.localeCompare(b.title);
+        }),
+      }))
+      .sort((a, b) => b.count - a.count);
+
     const studioIds = rows
       .map((r) => r.studioId)
       .filter((id): id is string => id !== null);
-    const studios = await this.prisma.studio.findMany({
-      where: { id: { in: studioIds } },
-      select: { id: true, name: true, marketId: true },
-    });
+    const studios = studioIds.length
+      ? await this.prisma.studio.findMany({
+          where: { id: { in: studioIds } },
+          select: { id: true, name: true, marketId: true },
+        })
+      : [];
     const markets = studioIds.length
       ? await this.prisma.market.findMany({
           where: {
@@ -418,13 +458,18 @@ export class ReportingService {
         { name: s.name, marketName: marketMap[s.marketId ?? ''] ?? '' },
       ]),
     );
+
     return rows.map((r) => ({
       studioId: r.studioId,
       studioName: r.studioId
         ? (studioMap[r.studioId]?.name ?? 'Unknown')
         : 'No Studio',
       marketName: r.studioId ? (studioMap[r.studioId]?.marketName ?? '') : '',
-      count: r._count._all,
+      count: r.count,
+      categoryNames: [...(categoryNamesByStudio.get(r.studioId) ?? new Set())].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+      openTickets: r.openTickets,
     }));
   }
 

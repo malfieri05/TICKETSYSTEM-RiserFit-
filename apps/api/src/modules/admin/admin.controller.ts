@@ -14,6 +14,7 @@ import {
   UpdateMarketDto,
   CreateStudioDto,
   UpdateStudioDto,
+  UpsertStudioProfileDto,
 } from './dto/admin.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
@@ -101,6 +102,21 @@ export class AdminController {
       );
     }
     return this.adminService.createStudio(dto);
+  }
+
+  @Patch('studios/:id/profile')
+  upsertStudioProfile(
+    @Param('id') id: string,
+    @Body() dto: UpsertStudioProfileDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const decision = this.policy.evaluate(ADMIN_TAXONOMY_MANAGE, user, null);
+    if (!decision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to modify studios',
+      );
+    }
+    return this.adminService.upsertStudioProfile(id, dto);
   }
 
   @Patch('studios/:id')

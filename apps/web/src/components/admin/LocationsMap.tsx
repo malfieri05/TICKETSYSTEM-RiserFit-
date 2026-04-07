@@ -168,10 +168,9 @@ function MapCameraController({
 }
 
 /**
- * Pans so the selected pin sits in the clear viewport left of the fixed ticket drawer.
- * Uses `panTo` + container deltas (avoids `panBy` sign bugs). Visible width uses **screen** clip
- * against the drawer (`drawerLeft - mapRect.left`), not `mapRect.right - drawerLeft` (often 0 when
- * the map column ends before the drawer).
+ * Pans so the selected pin sits at the **center** of the map area still visible left of the ticket
+ * drawer (matches Vendor Dispatch “View ticket” reference: pin + popup centered in that band).
+ * Uses `panTo` + container deltas. Visible width clips to the drawer edge in screen space.
  */
 function alignSelectedPinForTicketDrawer(map: L.Map, latlng: L.LatLng) {
   if (typeof window === 'undefined') return;
@@ -184,15 +183,17 @@ function alignSelectedPinForTicketDrawer(map: L.Map, latlng: L.LatLng) {
   const r = mapEl.getBoundingClientRect();
   const rLeftZoomed = r.left / zoom; // convert viewport px → zoomed CSS px
   const w = map.getSize().x; // already zoomed CSS px (uses clientWidth internally)
-  /** Map-local width that is not covered by the drawer overlay (see vendor dispatch layout). */
+  /** Map-local width not covered by the drawer overlay. */
   const visibleRightLocal = Math.min(w, Math.max(0, drawerLeftZoomed - rLeftZoomed));
   const visibleW = Math.max(96, visibleRightLocal);
-  /** ~14% into the visible band from the map’s left edge. */
-  const targetX = Math.max(32, visibleW * 0.14);
+  /** Horizontal center of the visible band (pin tip + popup read centered in remaining map). */
+  const targetX = visibleW / 2;
   const h = map.getSize().y;
-  const targetY = h * 0.68;
+  /** Slightly below vertical center so the popup above the pin stays inside the map (not clipped at top). */
+  const targetY = h * 0.58;
   const pt = map.latLngToContainerPoint(latlng);
-  const delta = L.point(targetX - pt.x, targetY - pt.y);
+  /** Inverted vs (target − pt): flips pan direction if centering landed on the wrong side. */
+  const delta = L.point(pt.x - targetX, pt.y - targetY);
   if (Math.abs(delta.x) < 3 && Math.abs(delta.y) < 3) return;
   const centerPt = map.latLngToContainerPoint(map.getCenter());
   const newCenter = map.containerPointToLatLng(centerPt.add(delta));
@@ -203,10 +204,13 @@ function MapDrawerAlignController({
   ticketDrawerOpen,
   selectedLocationId,
   validLocations,
+  highlightedTicketId,
 }: {
   ticketDrawerOpen: boolean;
   selectedLocationId: string | null | undefined;
   validLocations: LocationForMap[];
+  /** When this changes (another “View ticket”), re-run centering for the same studio. */
+  highlightedTicketId?: string | null;
 }) {
   const map = useMap();
 
@@ -230,7 +234,7 @@ function MapDrawerAlignController({
       });
     }, 720);
     return () => window.clearTimeout(t);
-  }, [map, ticketDrawerOpen, selectedLocationId, validLocations]);
+  }, [map, ticketDrawerOpen, selectedLocationId, validLocations, highlightedTicketId]);
 
   return null;
 }
@@ -457,7 +461,10 @@ export function LocationsMap({
 
   return (
     <div
-      className={cn('rounded-lg border overflow-hidden w-full h-[620px]', className)}
+      className={cn(
+        'relative z-0 isolate rounded-lg border overflow-hidden w-full h-[620px]',
+        className,
+      )}
       style={{ borderColor: 'var(--color-border-default)' }}
     >
       <MapContainer
@@ -479,6 +486,7 @@ export function LocationsMap({
           ticketDrawerOpen={ticketDrawerOpen}
           selectedLocationId={selectedLocationId}
           validLocations={validLocations}
+          highlightedTicketId={highlightedTicketId}
         />
         <ProximityConnectorLayer
           edges={proximityEdges}

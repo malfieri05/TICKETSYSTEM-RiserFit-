@@ -94,6 +94,28 @@ export class UsersController {
     return this.usersService.listStudioScopes(id);
   }
 
+  // POST /api/users/:id/studio-scopes/grant-all — default + scopes = every studio
+  @Roles(Role.ADMIN)
+  @Post(':id/studio-scopes/grant-all')
+  @HttpCode(HttpStatus.OK)
+  grantAllStudioScopes(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.usersService.grantAllStudioScopes(id, user);
+  }
+
+  // DELETE /api/users/:id/studio-scopes/all — remove all additional scopes only
+  @Roles(Role.ADMIN)
+  @Delete(':id/studio-scopes/all')
+  @HttpCode(HttpStatus.OK)
+  removeAllStudioScopes(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.usersService.removeAllStudioScopes(id, user);
+  }
+
   // POST /api/users/:id/studio-scopes — grant a studio scope override
   @Roles(Role.ADMIN)
   @Post(':id/studio-scopes')

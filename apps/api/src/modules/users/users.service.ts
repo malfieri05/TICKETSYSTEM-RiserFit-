@@ -273,6 +273,94 @@ export class UsersService {
     return this.listStudioScopes(targetUserId);
   }
 
+  /**
+   * Removes every additional studio scope row (does not change users.studioId).
+   * Use after changing default when the user previously had “all locations”.
+   */
+  async removeAllStudioScopes(targetUserId: string, requestingUser: RequestUser) {
+    if (requestingUser.role !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Only admins can revoke studio scope overrides',
+      );
+    }
+
+    await this.assertUserExists(targetUserId);
+
+    await this.prisma.userStudioScope.deleteMany({
+      where: { userId: targetUserId },
+    });
+
+    this.userCache.invalidate(targetUserId);
+
+    return this.listStudioScopes(targetUserId);
+  }
+
+  /**
+   * Sets default studio to the first studio (by name) and grants additional scopes
+   * for every other studio so the user can see all locations.
+   */
+  async grantAllStudioScopes(targetUserId: string, requestingUser: RequestUser) {
+    if (requestingUser.role !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'Only admins can grant studio scope overrides',
+      );
+    }
+
+    await this.assertUserExists(targetUserId);
+
+    const studios = await this.prisma.studio.findMany({
+      select: { id: true },
+      orderBy: { name: 'asc' },
+    });
+
+    if (studios.length === 0) {
+      throw new BadRequestException('There are no studios to grant.');
+    }
+
+    const defaultStudioId = studios[0].id;
+    const additionalIds = studios.slice(1).map((s) => s.id);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: targetUserId },
+        data: { studioId: defaultStudioId },
+      }),
+      this.prisma.userStudioScope.deleteMany({
+        where: { userId: targetUserId },
+      }),
+      ...(additionalIds.length > 0
+        ? [
+            this.prisma.userStudioScope.createMany({
+              data: additionalIds.map((studioId) => ({
+                userId: targetUserId,
+                studioId,
+                grantedBy: requestingUser.id,
+              })),
+              skipDuplicates: true,
+            }),
+          ]
+        : []),
+    ]);
+
+    this.userCache.invalidate(targetUserId);
+
+    const updated = await this.prisma.user.findUniqueOrThrow({
+      where: { id: targetUserId },
+      select: {
+        id: true,
+        studioId: true,
+        studio: { select: { id: true, name: true } },
+      },
+    });
+
+    return {
+      id: updated.id,
+      studioId: updated.studioId,
+      studio: updated.studio,
+      scopes: await this.listStudioScopes(targetUserId),
+    };
+  }
+
   // ─── SET DEFAULT STUDIO (Stage 23) ───────────────────────────────────────────
 
   async setDefaultStudio(

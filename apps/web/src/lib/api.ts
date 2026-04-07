@@ -439,7 +439,14 @@ export const reportingApi = {
 
   // Dispatch: open maintenance only (Stage 13, ADMIN only)
   dispatchByStudio: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
-    api.get<{ studioId: string | null; studioName: string; marketName: string; count: number }[]>('/reporting/dispatch/by-studio', { params }),
+    api.get<{
+      studioId: string | null;
+      studioName: string;
+      marketName: string;
+      count: number;
+      categoryNames: string[];
+      openTickets: { id: string; title: string; maintenanceCategoryName: string }[];
+    }[]>('/reporting/dispatch/by-studio', { params }),
   dispatchByCategory: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
     api.get<{ maintenanceCategoryId: string | null; categoryName: string; count: number }[]>('/reporting/dispatch/by-category', { params }),
   dispatchByMarket: (params?: { studioId?: string; marketId?: string; maintenanceCategoryId?: string; createdAfter?: string; createdBefore?: string; priority?: string }) =>
@@ -1022,6 +1029,38 @@ export const locationsApi = {
     api.get<import('@/types').LocationProfileResponse>(`/locations/${studioId}/profile`),
 };
 
+/** PATCH /admin/studios/:id/profile — partial body; matches API UpsertStudioProfileDto */
+export type StudioProfilePatch = Partial<{
+  district: string;
+  status: string;
+  maturity: string;
+  studioSize: number | null;
+  priceTier: number | null;
+  openType: string;
+  studioOpenDate: string | null;
+  rfSoftOpenDate: string | null;
+  dm: string;
+  gm: string;
+  agm: string;
+  edc: string;
+  li: string;
+  studioEmail: string;
+  gmEmail: string;
+  gmTeams: string;
+  liEmail: string;
+  studioCode: string;
+  netsuiteName: string;
+  ikismetName: string;
+  crName: string;
+  crId: string;
+  paycomCode: string;
+}>;
+
+export const adminStudiosApi = {
+  patchStudioProfile: (studioId: string, body: StudioProfilePatch) =>
+    api.patch(`/admin/studios/${studioId}/profile`, body),
+};
+
 export const usersApi = {
   list: () => api.get<import('@/types').User[]>('/users'),
   get: (id: string) => api.get<import('@/types').User>(`/users/${id}`),
@@ -1038,4 +1077,15 @@ export const usersApi = {
     api.post<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes`, { studioId }),
   removeStudioScope: (userId: string, studioId: string) =>
     api.delete<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes/${studioId}`),
+  /** Default studio = first by name; additional scopes = all other studios. */
+  grantAllStudioScopes: (userId: string) =>
+    api.post<{
+      id: string;
+      studioId: string | null;
+      studio: { id: string; name: string } | null;
+      scopes: import('@/types').StudioScopeItem[];
+    }>(`/users/${userId}/studio-scopes/grant-all`),
+  /** Clears additional scopes only (does not change default studio). */
+  removeAllStudioScopes: (userId: string) =>
+    api.delete<import('@/types').StudioScopeItem[]>(`/users/${userId}/studio-scopes/all`),
 };

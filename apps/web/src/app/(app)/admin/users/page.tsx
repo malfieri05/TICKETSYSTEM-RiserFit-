@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, useMemo } from 'react';
-import { MapPin, X, Plus } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Bot, MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { InfoPopover } from '@/components/ui/InfoPopover';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { MultiComboBox } from '@/components/ui/MultiComboBox';
 import { EditPencilIcon } from '@/components/ui/EditPencilIcon';
@@ -16,6 +17,11 @@ import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import type { UserRole, Department, User } from '@/types';
 
 const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
+
+/** Select value for “every studio” in Manage locations (not a real studio id). */
+const DEFAULT_LOCATION_ALL_VALUE = '__ALL__';
+/** Visible label (native options ignore most CSS; typography in the string carries the emphasis). */
+const DEFAULT_LOCATION_ALL_LABEL = '────────────  All locations  ────────────';
 
 // Backend enum: HR | OPERATIONS | MARKETING. Display labels for dropdown.
 const DEPARTMENT_OPTIONS: { value: Department; label: string }[] = [
@@ -42,6 +48,66 @@ function roleDisplayLabel(role: string, departments: Department[] | null): strin
 function visibilityLocationCount(u: User): number {
   const ids: string[] = [...(u.studioId ? [u.studioId] : []), ...(u.scopeStudioIds ?? [])];
   return new Set(ids).size;
+}
+
+/** Canonical email shown for the bundled AI agent row (display only; backend may use per-department inboxes). */
+const AI_AGENT_DISPLAY_EMAIL = 'ai-agent@internal.demo';
+
+/**
+ * Min height for the Role column content block on the pinned AI row.
+ * Table cells often ignore CSS min-height; an inner flex box reliably matches real rows
+ * (muted role label + h-9 control row ± status line).
+ */
+const AI_AGENT_ROLE_CELL_MIN_INNER_CLASS = 'min-h-[4.75rem]';
+
+/** Seeded department AI identities (e.g. ai-hr@internal.demo) — shown as one “AI Agent Account” row. */
+function isAiDepartmentAgentUser(u: User): boolean {
+  const email = (u.email ?? '').toLowerCase();
+  if (!email.endsWith('@internal.demo')) return false;
+  const local = email.split('@')[0] ?? '';
+  return /^ai-[a-z0-9-]+$/.test(local);
+}
+
+function userMatchesTableFilters(
+  u: User,
+  qRaw: string,
+  roleFilter: string,
+  departmentFilter: string,
+): boolean {
+  if (roleFilter && u.role !== roleFilter) return false;
+  if (roleFilter === 'DEPARTMENT_USER' && departmentFilter) {
+    if (!(u.departments ?? []).includes(departmentFilter as Department)) return false;
+  }
+  const q = qRaw.trim().toLowerCase();
+  if (!q) return true;
+  if (
+    isAiDepartmentAgentUser(u) &&
+    (q === 'ai' ||
+      q.includes('agent') ||
+      q.includes('robot') ||
+      q.includes('automat') ||
+      q.includes('internal.demo') ||
+      q.includes('universal') ||
+      q.includes('knowing') ||
+      AI_AGENT_DISPLAY_EMAIL.toLowerCase().includes(q))
+  ) {
+    return true;
+  }
+  const name = (u.displayName ?? '').toLowerCase();
+  const email = (u.email ?? '').toLowerCase();
+  const roleLabel = roleDisplayLabel(u.role, u.departments ?? null).toLowerCase();
+  const defaultLocation = (u.studio?.name ?? '').toLowerCase();
+  const deptLabels = (u.departments ?? [])
+    .map((d) => DEPARTMENT_OPTIONS.find((o) => o.value === d)?.label ?? d)
+    .join(' ')
+    .toLowerCase();
+  return (
+    name.includes(q) ||
+    email.includes(q) ||
+    roleLabel.includes(q) ||
+    defaultLocation.includes(q) ||
+    deptLabels.includes(q)
+  );
 }
 
 export default function AdminUsersPage() {
@@ -150,9 +216,13 @@ export default function AdminUsersPage() {
       };
       if (inviteRole === 'DEPARTMENT_USER') body.departments = inviteDepartments;
       if (inviteRole === 'STUDIO_USER') {
-        body.defaultStudioId = inviteDefaultStudioId;
-        const extra = inviteExtraStudioIds.filter((id) => id && id !== inviteDefaultStudioId);
-        if (extra.length) body.additionalStudioIds = extra;
+        if (inviteDefaultStudioId === DEFAULT_LOCATION_ALL_VALUE) {
+          body.defaultStudioId = DEFAULT_LOCATION_ALL_VALUE;
+        } else {
+          body.defaultStudioId = inviteDefaultStudioId;
+          const extra = inviteExtraStudioIds.filter((id) => id && id !== inviteDefaultStudioId);
+          if (extra.length) body.additionalStudioIds = extra;
+        }
       }
       await adminApi.invitations.create(body);
       setAddUserModalOpen(false);
@@ -183,30 +253,25 @@ export default function AdminUsersPage() {
     }
   };
 
-  const filteredUsers = useMemo(() => {
-    let list = users;
-    if (roleFilter) {
-      list = list.filter((u) => u.role === roleFilter);
-    }
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter((u) => {
-        const name = (u.displayName ?? '').toLowerCase();
-        const email = (u.email ?? '').toLowerCase();
-        const roleLabel = roleDisplayLabel(u.role, u.departments ?? null).toLowerCase();
-        const defaultLocation = (u.studio?.name ?? '').toLowerCase();
-        const deptLabels = (u.departments ?? [])
-          .map((d) => DEPARTMENT_OPTIONS.find((o) => o.value === d)?.label ?? d)
-          .join(' ')
-          .toLowerCase();
-        return name.includes(q) || email.includes(q) || roleLabel.includes(q) || defaultLocation.includes(q) || deptLabels.includes(q);
-      });
-    }
-    if (roleFilter === 'DEPARTMENT_USER' && departmentFilter) {
-      list = list.filter((u) => (u.departments ?? []).includes(departmentFilter as Department));
-    }
-    return list;
-  }, [users, searchQuery, roleFilter, departmentFilter]);
+  const aiAgentUsers = useMemo(() => users.filter(isAiDepartmentAgentUser), [users]);
+  const nonAiUsers = useMemo(() => users.filter((u) => !isAiDepartmentAgentUser(u)), [users]);
+
+  const filteredUsers = useMemo(
+    () => nonAiUsers.filter((u) => userMatchesTableFilters(u, searchQuery, roleFilter, departmentFilter)),
+    [nonAiUsers, searchQuery, roleFilter, departmentFilter],
+  );
+
+  const aiAgentRowVisible = useMemo(
+    () =>
+      aiAgentUsers.length > 0 &&
+      aiAgentUsers.some((u) => userMatchesTableFilters(u, searchQuery, roleFilter, departmentFilter)),
+    [aiAgentUsers, searchQuery, roleFilter, departmentFilter],
+  );
+
+  const aiAgentAllActive = aiAgentUsers.length > 0 && aiAgentUsers.every((u) => u.isActive);
+
+  /** Row count for header: real people + one slot for bundled AI agents. */
+  const usersListDisplayTotal = nonAiUsers.length + (aiAgentUsers.length > 0 ? 1 : 0);
 
   const handleSave = async (userId: string) => {
     const role = roleDrafts[userId];
@@ -245,7 +310,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title={isLoading ? 'Users' : `Users (${users.length})`} />
+      <Header title={isLoading ? 'Users' : `Users (${usersListDisplayTotal})`} />
       {addUserModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -330,12 +395,17 @@ export default function AdminUsersPage() {
                     onChange={(e) => {
                       const v = e.target.value;
                       setInviteDefaultStudioId(v);
-                      setInviteExtraStudioIds((prev) => prev.filter((id) => id !== v));
+                      if (v === DEFAULT_LOCATION_ALL_VALUE) {
+                        setInviteExtraStudioIds([]);
+                      } else {
+                        setInviteExtraStudioIds((prev) => prev.filter((id) => id !== v));
+                      }
                     }}
                     className="w-full"
                     disabled={inviteSubmitting}
                   >
                     <option value="">Default location…</option>
+                    <option value={DEFAULT_LOCATION_ALL_VALUE}>{DEFAULT_LOCATION_ALL_LABEL}</option>
                     {inviteStudios.map((s) => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
@@ -343,12 +413,19 @@ export default function AdminUsersPage() {
                   <MultiComboBox
                     id="invite-extra-studios"
                     options={inviteStudios
-                      .filter((s) => s.id !== inviteDefaultStudioId)
+                      .filter(
+                        (s) =>
+                          inviteDefaultStudioId &&
+                          inviteDefaultStudioId !== DEFAULT_LOCATION_ALL_VALUE &&
+                          s.id !== inviteDefaultStudioId,
+                      )
                       .map((s) => ({ value: s.id, label: s.name }))}
                     value={inviteExtraStudioIds}
                     onChange={(next) => setInviteExtraStudioIds(next)}
                     placeholder="Additional locations (optional)"
-                    disabled={inviteSubmitting}
+                    disabled={
+                      inviteSubmitting || inviteDefaultStudioId === DEFAULT_LOCATION_ALL_VALUE
+                    }
                     className="w-full"
                   />
                 </>
@@ -500,12 +577,18 @@ export default function AdminUsersPage() {
             <div className="flex justify-center py-12">
               <div className="animate-spin h-6 w-6 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
             </div>
-          ) : filteredUsers.length === 0 && users.length > 0 ? (
+          ) : filteredUsers.length === 0 && users.length > 0 && !aiAgentRowVisible ? (
             <div className="px-4 py-8 text-center text-sm" style={{ color: 'var(--color-text-muted)' }}>
               No users match your search.
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table
+              className={cn(
+                'w-full text-sm',
+                // When a row is tall (Role editor), center single-line cells vertically.
+                '[&_tbody>tr>td]:align-middle',
+              )}
+            >
               <thead>
                 <tr style={{ borderBottom: `1px solid ${POLISH_THEME.listBorder}`, background: POLISH_THEME.tableHeaderBg }}>
                   <th className={POLISH_CLASS.adminTableHeader} style={{ color: POLISH_THEME.theadText }}>Name</th>
@@ -517,6 +600,85 @@ export default function AdminUsersPage() {
                 </tr>
               </thead>
               <tbody>
+                {aiAgentRowVisible && (
+                  <tr
+                    key="__ai_agent_account__"
+                    className="transition-colors hover:bg-[rgba(52,120,196,0.12)]"
+                    style={{
+                      background: 'rgba(52, 120, 196, 0.09)',
+                      borderBottom: `1px solid ${POLISH_THEME.rowBorder}`,
+                    }}
+                  >
+                    <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      <span className="inline-flex items-center gap-2">
+                        <Bot className="h-4 w-4 shrink-0 text-[var(--color-accent)]" aria-hidden />
+                        AI Agent Account
+                      </span>
+                    </td>
+                    <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>
+                      {AI_AGENT_DISPLAY_EMAIL}
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                      <div className={cn('flex items-center', AI_AGENT_ROLE_CELL_MIN_INNER_CLASS)}>
+                        Universal
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-accent)' }}>
+                        All knowing
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span
+                        className="inline-flex px-2 py-0.5 rounded text-xs font-medium"
+                        style={
+                          aiAgentAllActive
+                            ? { background: 'rgba(34,197,94,0.12)', color: POLISH_THEME.success }
+                            : { background: 'var(--color-bg-surface)', color: 'var(--color-text-muted)' }
+                        }
+                      >
+                        {aiAgentAllActive ? 'Active' : 'Mixed'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 align-middle text-center">
+                      <div className="flex justify-center">
+                        <InfoPopover
+                          ariaLabel="About AI Agent Account?"
+                          direction="down"
+                          trigger="letterISolidAccent"
+                          panelWidth={530}
+                          variant="center"
+                          footerLogoSrc="/favicon.png"
+                          centerScale={1.7}
+                          centerFooterExtraGapPx={40}
+                        >
+                          <p className="pr-9 font-semibold mb-4" style={{ color: 'var(--color-accent)' }}>
+                            AI Agent Account?
+                          </p>
+                          <ul className="mb-5 list-disc space-y-4 pl-7" style={{ color: 'var(--color-text-secondary)' }}>
+                            <li>
+                              This is an AI Account that has the ability to be configured to handle any
+                              &apos;digital action&apos; ticket subtasks.
+                            </li>
+                            <li>
+                              Once configured by the developer, Admin can assign any qualified subtasks to the AI
+                              Agent Account to be automatically completed.
+                            </li>
+                          </ul>
+                          <p className="mb-4 font-medium" style={{ color: 'var(--color-text-primary)' }}>
+                            How do I assign tasks to it?
+                          </p>
+                          <ul className="list-disc space-y-4 pl-7" style={{ color: 'var(--color-text-secondary)' }}>
+                            <li>
+                              When adding a subtask to a workflow template, simply select the &apos;AI Agent
+                              Account&apos; as the &apos;assigned user&apos; for that subtask.
+                            </li>
+                          </ul>
+                        </InfoPopover>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {filteredUsers.map((u, i) => {
                   const draftRole = roleDrafts[u.id] ?? u.role;
                   const draftDepartments = departmentDrafts[u.id] ?? [];
@@ -528,7 +690,10 @@ export default function AdminUsersPage() {
                   <tr
                     key={u.id}
                     className={POLISH_CLASS.adminRow}
-                    style={{ borderTop: i > 0 ? `1px solid ${POLISH_THEME.rowBorder}` : undefined }}
+                    style={{
+                      borderTop:
+                        aiAgentRowVisible || i > 0 ? `1px solid ${POLISH_THEME.rowBorder}` : undefined,
+                    }}
                   >
                     <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{u.displayName}</td>
                     <td className="px-4 py-3" style={{ color: 'var(--color-text-muted)' }}>{u.email}</td>
@@ -767,6 +932,41 @@ function ManageLocationsModal({
       onSuccess();
     },
   });
+
+  const grantAllStudioScopesMut = useMutation({
+    mutationFn: () => usersApi.grantAllStudioScopes(user!.id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['users', user?.id, 'studio-scopes'] });
+      onSuccess();
+    },
+  });
+
+  /** After “all studios”, picking one default should drop extras so visibility matches that single home. */
+  const narrowToDefaultStudioMut = useMutation({
+    mutationFn: async (studioId: string) => {
+      await usersApi.setDefaultStudio(user!.id, studioId);
+      await usersApi.removeAllStudioScopes(user!.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['users', user?.id, 'studio-scopes'] });
+      onSuccess();
+    },
+  });
+
+  /** From “all studios”, None should clear default and additional scopes. */
+  const clearDefaultFromAllMut = useMutation({
+    mutationFn: async () => {
+      await usersApi.setDefaultStudio(user!.id, null);
+      await usersApi.removeAllStudioScopes(user!.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['users', user?.id, 'studio-scopes'] });
+      onSuccess();
+    },
+  });
   const addScopeMut = useMutation({
     mutationFn: (studioId: string) => usersApi.addStudioScope(user!.id, studioId),
     onSuccess: () => {
@@ -784,10 +984,50 @@ function ManageLocationsModal({
     },
   });
 
+  const visibleStudioIds = useMemo(() => {
+    const s = new Set<string>();
+    if (user?.studioId) s.add(user.studioId);
+    scopes.forEach((row) => s.add(row.studioId));
+    return s;
+  }, [user?.studioId, scopes]);
+
+  const hasAllStudios =
+    studios.length > 0 && studios.every((st) => visibleStudioIds.has(st.id));
+  const defaultLocationSelectValue = hasAllStudios
+    ? DEFAULT_LOCATION_ALL_VALUE
+    : (user?.studioId ?? '');
+
+  const locationSelectBusy =
+    setDefaultStudioMut.isPending ||
+    grantAllStudioScopesMut.isPending ||
+    narrowToDefaultStudioMut.isPending ||
+    clearDefaultFromAllMut.isPending;
+
+  const onDefaultLocationChange = useCallback(
+    (value: string) => {
+      if (value === DEFAULT_LOCATION_ALL_VALUE) {
+        grantAllStudioScopesMut.mutate();
+        return;
+      }
+      if (value === '') {
+        if (hasAllStudios) clearDefaultFromAllMut.mutate();
+        else setDefaultStudioMut.mutate(null);
+        return;
+      }
+      if (hasAllStudios) narrowToDefaultStudioMut.mutate(value);
+      else setDefaultStudioMut.mutate(value);
+    },
+    [
+      hasAllStudios,
+      grantAllStudioScopesMut,
+      clearDefaultFromAllMut,
+      narrowToDefaultStudioMut,
+      setDefaultStudioMut,
+    ],
+  );
+
   if (!user) return null;
 
-  const defaultStudioId = user.studioId ?? '';
-  const scopeStudioIds = new Set(scopes.map((s) => s.studioId));
   const alreadyAdded = new Set([user.studioId].filter(Boolean));
   scopes.forEach((s) => alreadyAdded.add(s.studioId));
   const studiosToAdd = studios.filter((s) => !alreadyAdded.has(s.id));
@@ -823,14 +1063,17 @@ function ManageLocationsModal({
               Default location
             </label>
             <Select
-              value={defaultStudioId}
-              onChange={(e) => setDefaultStudioMut.mutate(e.target.value || null)}
-              disabled={setDefaultStudioMut.isPending}
+              value={defaultLocationSelectValue}
+              onChange={(e) => onDefaultLocationChange(e.target.value)}
+              disabled={locationSelectBusy}
               className="w-full"
             >
               <option value="">None</option>
+              <option value={DEFAULT_LOCATION_ALL_VALUE}>{DEFAULT_LOCATION_ALL_LABEL}</option>
               {studios.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
               ))}
             </Select>
           </div>

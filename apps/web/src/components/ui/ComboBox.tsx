@@ -1,8 +1,19 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useLayoutEffect,
+  useCallback,
+  type CSSProperties,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { TOOLTIP_PORTAL_Z_INDEX } from '@/lib/tooltip-layer';
+import { getZoomedRect, getZoomedViewport } from '@/lib/zoom';
 
 export interface ComboBoxOption {
   value: string;
@@ -48,9 +59,27 @@ export function ComboBox({
   const [isOpen, setIsOpen] = useState(false);
   const [filter, setFilter] = useState('');
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+
+  const updateMenuPosition = useCallback(() => {
+    if (!isOpen || !triggerRef.current) return;
+    const r = getZoomedRect(triggerRef.current);
+    const vp = getZoomedViewport();
+    const gap = 4;
+    const maxH = Math.min(240, Math.max(96, vp.height - r.bottom - gap - 12));
+    setMenuStyle({
+      position: 'fixed',
+      top: r.bottom + gap,
+      left: r.left,
+      width: r.width,
+      maxHeight: maxH,
+      zIndex: TOOLTIP_PORTAL_Z_INDEX,
+    });
+  }, [isOpen]);
 
   const selectedOption = useMemo(
     () => options.find((o) => o.value === value) ?? null,
@@ -86,11 +115,23 @@ export function ComboBox({
     setFilter('');
   };
 
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
+
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        close();
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t)) return;
+      if (listRef.current?.contains(t)) return;
+      close();
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -106,6 +147,7 @@ export function ComboBox({
     const onScroll = (e: Event) => {
       const target = e.target;
       if (target instanceof Node && containerRef.current?.contains(target)) return;
+      if (target instanceof Node && listRef.current?.contains(target)) return;
       setIsOpen(false);
       setFilter('');
     };
@@ -162,6 +204,7 @@ export function ComboBox({
         </label>
       )}
       <div
+        ref={triggerRef}
         className={cn(
           'flex items-center rounded-lg border-2 border-solid border-[var(--color-border-default)] text-sm min-h-[38px]',
           'transition-[border-color,box-shadow] duration-[var(--duration-fast)] ease-out',
@@ -193,6 +236,7 @@ export function ComboBox({
           <>
             <input
               ref={inputRef}
+              id={id}
               type="text"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -211,51 +255,60 @@ export function ComboBox({
         )}
       </div>
 
-      {isOpen && (
-        <ul
-          ref={listRef}
-          id={id ? `${id}-listbox` : undefined}
-          role="listbox"
-          className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border py-1"
-          style={{
-            background: 'var(--color-bg-surface-raised)',
-            borderColor: 'var(--color-border-default)',
-            boxShadow: 'var(--shadow-raised)',
-          }}
-        >
-          {listItems.length === 0 ? (
-            <li className="px-3 py-3 text-sm" style={{ color: 'var(--color-text-muted)' }} role="option">
-              No matches
-            </li>
-          ) : (
-            listItems.map((opt, i) => (
-              <li
-                key={`${i}-${opt.value === '' ? 'empty' : opt.value}`}
-                data-index={i}
-                role="option"
-                aria-selected={value === opt.value}
-                className={cn(
-                  'mx-1 rounded-md px-3 py-2 cursor-pointer text-sm truncate transition-colors duration-[var(--duration-fast)]',
-                  value === opt.value && 'font-medium',
-                  highlightIndex === i
-                    ? 'bg-[var(--color-row-selected)]'
-                    : 'hover:bg-[var(--color-row-selected)]',
-                )}
-                style={{
-                  color: value === opt.value ? 'var(--color-accent)' : (opt.value === '' ? 'var(--color-text-muted)' : 'var(--color-text-primary)'),
-                }}
-                onMouseEnter={() => setHighlightIndex(i)}
-                onClick={() => {
-                  onChange(opt.value);
-                  close();
-                }}
-              >
-                {opt.label}
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <ul
+            ref={listRef}
+            id={id ? `${id}-listbox` : undefined}
+            role="listbox"
+            className="overflow-y-auto rounded-lg border py-1"
+            style={{
+              ...menuStyle,
+              background: 'var(--color-bg-surface-raised)',
+              borderColor: 'var(--color-border-default)',
+              boxShadow: 'var(--shadow-raised)',
+            }}
+          >
+            {listItems.length === 0 ? (
+              <li className="px-3 py-3 text-sm" style={{ color: 'var(--color-text-muted)' }} role="option">
+                No matches
               </li>
-            ))
-          )}
-        </ul>
-      )}
+            ) : (
+              listItems.map((opt, i) => (
+                <li
+                  key={`${i}-${opt.value === '' ? 'empty' : opt.value}`}
+                  data-index={i}
+                  role="option"
+                  aria-selected={value === opt.value}
+                  className={cn(
+                    'mx-1 rounded-md px-3 py-2 cursor-pointer text-sm truncate transition-colors duration-[var(--duration-fast)]',
+                    value === opt.value && 'font-medium',
+                    highlightIndex === i
+                      ? 'bg-[var(--color-row-selected)]'
+                      : 'hover:bg-[var(--color-row-selected)]',
+                  )}
+                  style={{
+                    color:
+                      value === opt.value
+                        ? 'var(--color-accent)'
+                        : opt.value === ''
+                          ? 'var(--color-text-muted)'
+                          : 'var(--color-text-primary)',
+                  }}
+                  onMouseEnter={() => setHighlightIndex(i)}
+                  onClick={() => {
+                    onChange(opt.value);
+                    close();
+                  }}
+                >
+                  {opt.label}
+                </li>
+              ))
+            )}
+          </ul>,
+          document.body,
+        )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
     </div>

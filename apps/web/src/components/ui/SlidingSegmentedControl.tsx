@@ -7,8 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { measureThumbInsideContainer } from '@/lib/measure-thumb-in-container';
 import { POLISH_THEME } from '@/lib/polish';
-import { getDocumentZoom } from '@/lib/zoom';
 
 export type SlidingSegmentOption = { value: string; label: string };
 
@@ -26,6 +26,10 @@ type Props = {
 const BUBBLE_TRANSITION =
   'left 280ms cubic-bezier(0.4, 0, 0.2, 1), top 280ms cubic-bezier(0.4, 0, 0.2, 1), width 280ms cubic-bezier(0.4, 0, 0.2, 1), height 280ms cubic-bezier(0.4, 0, 0.2, 1)';
 
+const EMPTY_BUBBLE = { left: 0, top: 0, width: 0, height: 0 };
+
+const RAF_RETRY_MAX = 24;
+
 export function SlidingSegmentedControl({
   options,
   value,
@@ -36,7 +40,8 @@ export function SlidingSegmentedControl({
 }: Props) {
   const navRef = useRef<HTMLElement>(null);
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const [bubble, setBubble] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  const rafAttempt = useRef(0);
+  const [bubble, setBubble] = useState(EMPTY_BUBBLE);
 
   const selectedIndex =
     value == null ? -1 : options.findIndex((o) => o.value === value);
@@ -44,40 +49,71 @@ export function SlidingSegmentedControl({
   const updateBubble = useCallback(() => {
     const nav = navRef.current;
     if (!nav || selectedIndex < 0) {
-      setBubble({ left: 0, top: 0, width: 0, height: 0 });
+      rafAttempt.current = 0;
+      setBubble(EMPTY_BUBBLE);
       return;
     }
     const btn = btnRefs.current[selectedIndex];
-    if (!btn) return;
-    const zoom = getDocumentZoom();
-    const n = nav.getBoundingClientRect();
-    const b = btn.getBoundingClientRect();
-    // getBoundingClientRect() returns viewport px; divide by zoom to get zoomed CSS px
-    // which is what position:absolute inside the zoomed html actually uses.
-    setBubble({
-      left: (b.left - n.left) / zoom + nav.scrollLeft,
-      top:  (b.top  - n.top)  / zoom + nav.scrollTop,
-      width:  b.width  / zoom,
-      height: b.height / zoom,
-    });
+    if (!btn) {
+      if (rafAttempt.current < RAF_RETRY_MAX) {
+        rafAttempt.current += 1;
+        requestAnimationFrame(() => updateBubble());
+      } else {
+        rafAttempt.current = 0;
+        setBubble(EMPTY_BUBBLE);
+      }
+      return;
+    }
+    rafAttempt.current = 0;
+    const m = measureThumbInsideContainer(nav, btn);
+    if (!m || m.width <= 0 || m.height <= 0) {
+      setBubble(EMPTY_BUBBLE);
+      return;
+    }
+    setBubble(m);
   }, [selectedIndex]);
+
+  /** Primitive: effect skips when values unchanged even if `options` is a new array reference. */
+  const optionValuesKey = options.map((o) => o.value).join('|');
 
   useLayoutEffect(() => {
     updateBubble();
-  }, [updateBubble, value, options]);
+
+    const nav = navRef.current;
+    const onWinResize = () => requestAnimationFrame(updateBubble);
+
+    if (!nav) {
+      window.addEventListener('resize', onWinResize);
+      return () => window.removeEventListener('resize', onWinResize);
+    }
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', onWinResize);
+      return () => window.removeEventListener('resize', onWinResize);
+    }
+
+    const ro = new ResizeObserver(() => requestAnimationFrame(updateBubble));
+    ro.observe(nav);
+    for (const el of btnRefs.current) {
+      if (el) ro.observe(el);
+    }
+    window.addEventListener('resize', onWinResize);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', onWinResize);
+    };
+  }, [updateBubble, value, optionValuesKey]);
 
   useEffect(() => {
-    const nav = navRef.current;
-    if (nav && typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(() => {
-        requestAnimationFrame(() => updateBubble());
-      });
-      ro.observe(nav);
-      return () => ro.disconnect();
-    }
-    window.addEventListener('resize', updateBubble);
-    return () => window.removeEventListener('resize', updateBubble);
-  }, [updateBubble]);
+    if (typeof document === 'undefined' || !document.fonts?.ready) return;
+    let cancelled = false;
+    document.fonts.ready.then(() => {
+      if (!cancelled) requestAnimationFrame(() => updateBubble());
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [updateBubble, optionValuesKey]);
 
   const pad = size === 'sm' ? 'px-2.5 py-1' : 'px-3 py-1.5';
   const textClass =
@@ -120,7 +156,7 @@ export function SlidingSegmentedControl({
               btnRefs.current[i] = el;
             }}
             onClick={() => onChange(opt.value)}
-            className={`focus-ring relative z-10 ${pad} rounded-[var(--radius-md)] ${textClass} font-medium transition-colors duration-150 whitespace-nowrap ${
+            className={`focus-ring relative z-10 shrink-0 ${pad} rounded-[var(--radius-md)] ${textClass} font-medium transition-colors duration-150 whitespace-nowrap ${
               active
                 ? ''
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-surface-raised)]'
