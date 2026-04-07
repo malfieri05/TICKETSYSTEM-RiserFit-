@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { WorkflowAnalyticsService } from './workflow-analytics.service';
@@ -23,5 +23,10 @@ export class WorkflowAnalyticsController {
   @Get('bottlenecks')
   getBottlenecks() {
     return this.workflowAnalyticsService.getBottlenecks();
+  }
+
+  @Get('subtask-timing')
+  getSubtaskTiming(@Query('templateId') templateId: string) {
+    return this.workflowAnalyticsService.getSubtaskTimingByTemplate(templateId);
   }
 }

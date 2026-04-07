@@ -666,6 +666,22 @@ export interface WorkflowBottlenecksResponse {
   longestSubtasks: { subtaskTemplateId: string; title: string; avgDurationHours: number }[];
 }
 
+export interface WorkflowSubtaskTimingRow {
+  subtaskTemplateId: string;
+  title: string;
+  sortOrder: number;
+  departmentName: string;
+  assignedUserName: string | null;
+  avgDurationHours: number | null;
+  completedCount: number;
+}
+
+export interface WorkflowSubtaskTimingResponse {
+  templateId: string;
+  templateName: string | null;
+  subtasks: WorkflowSubtaskTimingRow[];
+}
+
 export const workflowAnalyticsApi = {
   getTemplates: () =>
     api.get<WorkflowTemplateAnalyticsRow[]>('/admin/workflow-analytics/templates'),
@@ -673,6 +689,10 @@ export const workflowAnalyticsApi = {
     api.get<WorkflowDepartmentMetricsRow[]>('/admin/workflow-analytics/departments'),
   getBottlenecks: () =>
     api.get<WorkflowBottlenecksResponse>('/admin/workflow-analytics/bottlenecks'),
+  getSubtaskTiming: (templateId: string) =>
+    api.get<WorkflowSubtaskTimingResponse>(`/admin/workflow-analytics/subtask-timing`, {
+      params: { templateId },
+    }),
 };
 
 // ─── Admin ─────────────────────────────────────────────────────────────────

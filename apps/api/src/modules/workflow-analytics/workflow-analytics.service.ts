@@ -184,6 +184,76 @@ export class WorkflowAnalyticsService {
     return result;
   }
 
+  async getSubtaskTimingByTemplate(templateId: string): Promise<{
+    templateId: string;
+    templateName: string | null;
+    subtasks: {
+      subtaskTemplateId: string;
+      title: string;
+      sortOrder: number;
+      departmentName: string;
+      assignedUserName: string | null;
+      avgDurationHours: number | null;
+      completedCount: number;
+    }[];
+  }> {
+    const template = await this.prisma.subtaskWorkflowTemplate.findUnique({
+      where: { id: templateId },
+      select: {
+        id: true,
+        name: true,
+        subtaskTemplates: {
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            sortOrder: true,
+            department: { select: { name: true } },
+            assignedUser: { select: { name: true } },
+            liveSubtasks: {
+              where: {
+                status: { in: ['DONE', 'SKIPPED'] },
+                completedAt: { not: null },
+              },
+              select: {
+                createdAt: true,
+                completedAt: true,
+                availableAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!template) {
+      return { templateId, templateName: null, subtasks: [] };
+    }
+
+    const subtasks = template.subtaskTemplates.map((st) => {
+      const durations = st.liveSubtasks
+        .filter((s) => s.completedAt != null)
+        .map((s) => {
+          const start = s.availableAt ?? s.createdAt;
+          return (s.completedAt!.getTime() - start.getTime()) / MS_PER_HOUR;
+        });
+
+      return {
+        subtaskTemplateId: st.id,
+        title: st.title,
+        sortOrder: st.sortOrder,
+        departmentName: st.department.name,
+        assignedUserName: st.assignedUser?.name ?? null,
+        avgDurationHours: durations.length
+          ? durations.reduce((a, b) => a + b, 0) / durations.length
+          : null,
+        completedCount: durations.length,
+      };
+    });
+
+    return { templateId: template.id, templateName: template.name, subtasks };
+  }
+
   async getBottlenecks(): Promise<{
     longestSubtasks: {
       subtaskTemplateId: string;
