@@ -9,8 +9,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 const THEME_STORAGE_KEY = 'theme';
 
-/** Stage 31: Run before hydration to prevent theme flash. Sets html[data-theme] from localStorage; default dark. */
-const themeInitScript = `(function(){var k="${THEME_STORAGE_KEY}";var s=typeof localStorage!="undefined"?localStorage.getItem(k):null;var t=(s==="light"||s==="dark")?s:"dark";document.documentElement.setAttribute("data-theme",t);})();`;
+/** Stage 31: Run before hydration to prevent theme flash. Sets html[data-theme] from localStorage; default light for new users. */
+const themeInitScript = `(function(){var k="${THEME_STORAGE_KEY}";var s=typeof localStorage!="undefined"?localStorage.getItem(k):null;var t=(s==="light"||s==="dark")?s:"light";document.documentElement.setAttribute("data-theme",t);})();`;
 
 export const metadata: Metadata = {
   title: 'Riser Fitness',
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`} data-theme="dark" suppressHydrationWarning>
+    <html lang="en" className={`${inter.variable} h-full`} data-theme="light" suppressHydrationWarning>
       <body className="h-full antialiased">
         <Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <QueryProvider>

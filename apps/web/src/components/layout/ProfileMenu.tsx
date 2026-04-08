@@ -30,7 +30,7 @@ export function ProfileMenu() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [coords, setCoords] = useState({ top: 0, right: 0 });
 
