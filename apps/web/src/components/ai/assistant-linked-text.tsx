@@ -149,25 +149,34 @@ export function AssistantLinkedText({
       continue;
     }
 
-    let studioHit: StudioLinkTarget | null = null;
+    const studioMatches: StudioLinkTarget[] = [];
     for (const s of studios) {
       const n = s.name.length;
       if (pos + n > text.length) continue;
       const seg = text.slice(pos, pos + n);
       if (seg.toLowerCase() !== s.name.toLowerCase()) continue;
       if (!isWordBoundary(before) || !isWordBoundary(text[pos + n])) continue;
-      studioHit = s;
-      break;
+      studioMatches.push(s);
     }
-    if (studioHit) {
+    if (studioMatches.length > 0) {
+      const maxLen = Math.max(...studioMatches.map((m) => m.name.length));
+      const longest = studioMatches.filter((m) => m.name.length === maxLen);
+      const uniqueIds = new Set(longest.map((m) => m.id));
+      if (uniqueIds.size === 1) {
+        const studioHit = longest[0];
+        flushBuf();
+        const raw = text.slice(pos, pos + studioHit.name.length);
+        parts.push(
+          <Link key={`st-${partKey++}`} href={`/locations/${studioHit.id}`} className={linkClass}>
+            {raw}
+          </Link>,
+        );
+        pos += studioHit.name.length;
+        continue;
+      }
       flushBuf();
-      const raw = text.slice(pos, pos + studioHit.name.length);
-      parts.push(
-        <Link key={`st-${partKey++}`} href={`/locations/${studioHit.id}`} className={linkClass}>
-          {raw}
-        </Link>,
-      );
-      pos += studioHit.name.length;
+      parts.push(text.slice(pos, pos + maxLen));
+      pos += maxLen;
       continue;
     }
 

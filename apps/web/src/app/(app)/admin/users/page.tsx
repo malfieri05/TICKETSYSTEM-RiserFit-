@@ -6,7 +6,7 @@ import { Bot, MapPin, X, Plus } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Select, Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { InfoPopover } from '@/components/ui/InfoPopover';
+import { InfoExplainerModal } from '@/components/ui/InfoExplainer';
 import { ComboBox } from '@/components/ui/ComboBox';
 import { MultiComboBox } from '@/components/ui/MultiComboBox';
 import { EditPencilIcon } from '@/components/ui/EditPencilIcon';
@@ -165,6 +165,8 @@ export default function AdminUsersPage() {
   const [inviteExtraStudioIds, setInviteExtraStudioIds] = useState<string[]>([]);
   const [inviteSubmitError, setInviteSubmitError] = useState('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  const [aiAgentInfoOpen, setAiAgentInfoOpen] = useState(false);
+  const closeAiAgentInfo = useCallback(() => setAiAgentInfoOpen(false), []);
 
   const { data: inviteListData, isLoading: invitesLoading } = useQuery({
     queryKey: ['admin', 'invitations', 'PENDING'],
@@ -311,6 +313,31 @@ export default function AdminUsersPage() {
   return (
     <div className="flex h-full min-h-0 w-full flex-col" style={{ background: 'var(--color-bg-page)' }}>
       <Header title={isLoading ? 'Users' : `Users (${usersListDisplayTotal})`} />
+      <InfoExplainerModal
+        open={aiAgentInfoOpen}
+        onClose={closeAiAgentInfo}
+        titleId="ai-agent-about-title"
+        title={<>AI Agent Account?</>}
+        footerLogoSrc="/favicon.png"
+      >
+        <ul className="list-disc space-y-2 pl-4">
+          <li>
+            This is an AI Account that has the ability to be configured to handle any &apos;digital action&apos; ticket
+            subtasks.
+          </li>
+          <li>
+            Once configured by the developer, Admin can assign any qualified subtasks to the AI Agent Account to be
+            automatically completed.
+          </li>
+        </ul>
+        <p className="font-semibold">How do I assign tasks to it?</p>
+        <ul className="list-disc space-y-2 pl-4">
+          <li>
+            When adding a subtask to a workflow template, simply select the &apos;AI Agent Account&apos; as the
+            &apos;assigned user&apos; for that subtask.
+          </li>
+        </ul>
+      </InfoExplainerModal>
       {addUserModalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -642,39 +669,23 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 align-middle text-center">
                       <div className="flex justify-center">
-                        <InfoPopover
-                          ariaLabel="About AI Agent Account?"
-                          direction="down"
-                          trigger="letterISolidAccent"
-                          panelWidth={530}
-                          variant="center"
-                          footerLogoSrc="/favicon.png"
-                          centerScale={1.7}
-                          centerFooterExtraGapPx={40}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAiAgentInfoOpen(true);
+                          }}
+                          aria-label="About AI Agent Account?"
+                          aria-expanded={aiAgentInfoOpen}
+                          className={cn(
+                            'focus-ring inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-[var(--color-accent)] text-[9px] font-semibold leading-none text-[var(--color-accent)] transition-colors',
+                            'bg-white shadow-sm hover:bg-[color-mix(in_srgb,var(--color-accent)_12%,#ffffff)]',
+                            aiAgentInfoOpen &&
+                              'outline outline-2 outline-offset-2 outline-[var(--color-accent)]',
+                          )}
                         >
-                          <p className="pr-9 font-semibold mb-4" style={{ color: 'var(--color-accent)' }}>
-                            AI Agent Account?
-                          </p>
-                          <ul className="mb-5 list-disc space-y-4 pl-7" style={{ color: 'var(--color-text-secondary)' }}>
-                            <li>
-                              This is an AI Account that has the ability to be configured to handle any
-                              &apos;digital action&apos; ticket subtasks.
-                            </li>
-                            <li>
-                              Once configured by the developer, Admin can assign any qualified subtasks to the AI
-                              Agent Account to be automatically completed.
-                            </li>
-                          </ul>
-                          <p className="mb-4 font-medium" style={{ color: 'var(--color-text-primary)' }}>
-                            How do I assign tasks to it?
-                          </p>
-                          <ul className="list-disc space-y-4 pl-7" style={{ color: 'var(--color-text-secondary)' }}>
-                            <li>
-                              When adding a subtask to a workflow template, simply select the &apos;AI Agent
-                              Account&apos; as the &apos;assigned user&apos; for that subtask.
-                            </li>
-                          </ul>
-                        </InfoPopover>
+                          <span aria-hidden>i</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -689,10 +700,20 @@ export default function AdminUsersPage() {
                   return (
                   <tr
                     key={u.id}
-                    className={POLISH_CLASS.adminRow}
+                    className={cn(
+                      POLISH_CLASS.adminRow,
+                      isEditable && 'transition-[background-color,box-shadow] duration-200 ease-out',
+                    )}
+                    data-editing={isEditable ? 'true' : undefined}
                     style={{
                       borderTop:
                         aiAgentRowVisible || i > 0 ? `1px solid ${POLISH_THEME.rowBorder}` : undefined,
+                      ...(isEditable
+                        ? {
+                            background: POLISH_THEME.adminStudioListSelectedBg,
+                            boxShadow: 'inset 3px 0 0 var(--color-accent)',
+                          }
+                        : {}),
                     }}
                   >
                     <td className="px-4 py-3 font-medium" style={{ color: 'var(--color-text-primary)' }}>{u.displayName}</td>
@@ -711,11 +732,19 @@ export default function AdminUsersPage() {
                             <button
                               type="button"
                               className={cn(
-                                'relative h-9 w-9 shrink-0 rounded-full border-2 border-blue-600',
-                                'flex items-center justify-center bg-[var(--color-bg-surface)]',
-                                'hover:bg-blue-50/90 dark:hover:bg-blue-950/40 transition-colors duration-200',
+                                'focus-ring relative h-8 w-8 shrink-0 rounded-full border-0',
+                                'flex items-center justify-center bg-transparent',
+                                'transition-[box-shadow,background-color] duration-200',
                                 'disabled:opacity-50 disabled:pointer-events-none',
+                                isEditable
+                                  ? 'hover:bg-red-50/90 dark:hover:bg-red-950/35'
+                                  : 'hover:bg-blue-50/90 dark:hover:bg-blue-950/40',
                               )}
+                              style={{
+                                boxShadow: isEditable
+                                  ? '0 0 0 2px var(--color-danger)'
+                                  : '0 0 0 2px #2563eb',
+                              }}
                               aria-label={isEditable ? 'Cancel editing' : 'Edit user permissions'}
                               disabled={isSaving}
                               onClick={() => {
@@ -746,7 +775,11 @@ export default function AdminUsersPage() {
                                 )}
                                 aria-hidden={!isEditable}
                               >
-                                <X className="h-4 w-4 text-blue-600" strokeWidth={2.5} />
+                                <X
+                                  className="h-4 w-4"
+                                  strokeWidth={2.5}
+                                  style={{ color: 'var(--color-danger)' }}
+                                />
                               </span>
                             </button>
                           </InstantTooltip>

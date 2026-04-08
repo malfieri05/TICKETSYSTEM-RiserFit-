@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -35,18 +35,26 @@ function NotificationStreamInit() {
  */
 function AppShell({ children }: { children: React.ReactNode }) {
   const { collapsed } = useSidebarCollapse();
+  const sidebarOffsetPx = collapsed ? SIDEBAR_COLLAPSED_WIDTH_PX : SIDEBAR_EXPANDED_WIDTH_PX;
   return (
-    <div className="flex h-full overflow-hidden">
+    <div
+      className="flex h-full overflow-hidden"
+      style={
+        {
+          ['--app-sidebar-offset' as string]: `${sidebarOffsetPx}px`,
+        } as CSSProperties
+      }
+    >
       <NotificationStreamInit />
       <Sidebar />
       <main
         className={cn(
-          'min-w-0 flex-1 overflow-y-auto',
+          'min-w-0 flex-1 overflow-y-auto overscroll-y-contain',
           /* duration/easing match SIDEBAR_RAIL_TRANSITION_* in SidebarCollapseContext */
           'transition-[margin-left] duration-[700ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none',
         )}
         style={{
-          marginLeft: collapsed ? SIDEBAR_COLLAPSED_WIDTH_PX : SIDEBAR_EXPANDED_WIDTH_PX,
+          marginLeft: sidebarOffsetPx,
           background: 'var(--color-bg-page)',
         }}
       >

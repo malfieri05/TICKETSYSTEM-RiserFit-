@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { LeaseRuleSetStatus } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
+import { PolicyService } from '../../policy/policy.service';
+import { TICKET_VIEW } from '../../policy/capabilities/capability-keys';
 import type { RequestUser } from '../auth/strategies/jwt.strategy';
 import type {
   LocationProfileResponseDto,
@@ -15,9 +17,25 @@ const PRIVILEGED_ROLES = ['ADMIN', 'DEPARTMENT_USER'];
 
 @Injectable()
 export class LocationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private policy: PolicyService,
+  ) {}
 
   async getProfile(studioId: string, user: RequestUser): Promise<LocationProfileResponseDto> {
+    return this.loadProfile(studioId, user, true);
+  }
+
+  /**
+   * Loads a studio location profile. When `tryTicketIdAlias` is true, if `routeId` is not a studio
+   * but is a ticket id the user may view, resolves that ticket's studio (avoids dead links from
+   * mistaken /locations/:cuid where cuid was a ticket id).
+   */
+  private async loadProfile(
+    routeId: string,
+    user: RequestUser,
+    tryTicketIdAlias: boolean,
+  ): Promise<LocationProfileResponseDto> {
     const toDateOnly = (d: Date | null | undefined): string | null => {
       if (!d) return null;
       // DateTime stored in UTC; normalize to date-only string to avoid timezone drift.
@@ -25,7 +43,7 @@ export class LocationsService {
     };
 
     const studio = await this.prisma.studio.findUnique({
-      where: { id: studioId },
+      where: { id: routeId },
       select: {
         id: true,
         name: true,
@@ -40,11 +58,35 @@ export class LocationsService {
     });
 
     if (!studio) {
-      throw new NotFoundException(`Studio ${studioId} not found`);
+      if (tryTicketIdAlias) {
+        const ticket = await this.prisma.ticket.findUnique({
+          where: { id: routeId },
+          select: {
+            id: true,
+            requesterId: true,
+            ownerId: true,
+            studioId: true,
+            department: { select: { code: true } },
+            owner: {
+              select: {
+                teamId: true,
+                team: { select: { name: true } },
+              },
+            },
+          },
+        });
+        if (ticket?.studioId) {
+          const decision = this.policy.evaluate(TICKET_VIEW, user, ticket);
+          if (decision.allowed) {
+            return this.loadProfile(ticket.studioId, user, false);
+          }
+        }
+      }
+      throw new NotFoundException(`Studio ${routeId} not found`);
     }
 
     const publishedLeaseIq = await this.prisma.leaseRuleSet.findFirst({
-      where: { studioId, status: LeaseRuleSetStatus.PUBLISHED },
+      where: { studioId: studio.id, status: LeaseRuleSetStatus.PUBLISHED },
       select: { id: true },
     });
     const hasPublishedLeaseIqRuleset = !!publishedLeaseIq;

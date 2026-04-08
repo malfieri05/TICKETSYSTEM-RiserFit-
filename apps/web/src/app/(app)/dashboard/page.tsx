@@ -89,50 +89,53 @@ function StatCard({
     sky:    { background: 'var(--stat-icon-sky-bg)',    color: 'var(--stat-icon-sky-fg)'    },
   }[color];
 
-  const headerRow = (
-    <>
-      <div
-        className="rounded-xl p-2.5 sm:p-3 shrink-0 self-start"
-        style={iconStyle}
-      >
-        <Icon className="h-5 w-5 lg:h-6 lg:w-6" />
-      </div>
-      <p className="flex-1 min-w-0 text-[0.7rem] lg:text-xs text-[var(--color-text-secondary)] font-bold uppercase tracking-[0.1em] leading-snug sm:leading-tight pt-0.5 break-words">
-        {label}
-      </p>
-    </>
-  );
+  const titleClassName =
+    'w-full text-center text-[0.6875rem] font-bold uppercase leading-snug tracking-[0.12em] text-[var(--color-text-secondary)] sm:text-xs sm:tracking-[0.14em] lg:text-[0.8125rem]';
 
-  const headerFlexClass =
-    'flex w-full min-w-0 shrink-0 items-start gap-2 sm:gap-3 md:gap-4';
+  const titleBlock = headerTooltip ? (
+    <InstantTooltip
+      content={headerTooltip}
+      align="center"
+      maxWidth="min(18rem, calc(100vw - 2rem))"
+      tooltipId={tipId}
+      className="block w-full min-w-0 shrink-0"
+    >
+      <button
+        type="button"
+        className={cn(
+          titleClassName,
+          'block w-full cursor-help border-0 bg-transparent p-0 font-inherit text-center outline-none',
+          'focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]',
+        )}
+      >
+        {label}
+      </button>
+    </InstantTooltip>
+  ) : (
+    <p className={titleClassName}>{label}</p>
+  );
 
   return (
     <div
       className={cn(
-        'dashboard-card flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl p-4 sm:p-5 lg:p-6',
+        '@container/stat dashboard-card flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl p-4 sm:p-5 lg:p-6',
         className,
       )}
     >
-      {headerTooltip ? (
-        <InstantTooltip
-          content={headerTooltip}
-          align="left"
-          maxWidth="min(18rem, calc(100vw - 2rem))"
-          tooltipId={tipId}
-          className="block w-full min-w-0 shrink-0"
+      <div className="min-w-0 shrink-0 pb-3">{titleBlock}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center gap-2 pb-1 sm:gap-2.5">
+        <div
+          className="rounded-xl p-2.5 sm:p-3 shrink-0"
+          style={iconStyle}
         >
-          <div
-            className={`${headerFlexClass} cursor-help outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]`}
-            tabIndex={0}
-          >
-            {headerRow}
-          </div>
-        </InstantTooltip>
-      ) : (
-        <div className={headerFlexClass}>{headerRow}</div>
-      )}
-      <div className="flex min-h-0 min-w-0 items-center pt-3 pb-1">
-        <p className="min-w-0 max-w-full text-2xl font-bold tabular-nums text-[var(--color-text-primary)] sm:text-3xl lg:text-4xl break-words">
+          <Icon className="h-5 w-5 lg:h-6 lg:w-6" aria-hidden />
+        </div>
+        <p
+          className="shrink-0 whitespace-nowrap font-bold tabular-nums leading-none text-[var(--color-text-primary)]"
+          style={{
+            fontSize: 'clamp(1.125rem, calc(0.55rem + 11cqi), 2.375rem)',
+          }}
+        >
           {value}
         </p>
       </div>
@@ -231,6 +234,9 @@ function formatDashboardRangeCaption(from: string, to: string): string {
 const TOOLTIP_W = 136; // px — used for left/right side placement
 const TOOLTIP_GAP = 14; // px gap between vertical rule and tooltip edge
 
+/** Fixed plot height only — ResizeObserver measures width, never height (avoids flex/grid stretch feedback). Sized to sit flush with the KPI column on xl. */
+const DASHBOARD_VOLUME_CHART_H = 240;
+
 function VolumeLineChart({ data }: { data: { date: string; count: number; closed: number }[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
@@ -239,7 +245,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const [svgWidth, setSvgWidth] = useState(0);
   const [tipFixed, setTipFixed] = useState({ left: 0, top: 0 });
 
-  /** Measure the wrapper (not the SVG): `width="100%"` SVGs can report a stale width while the path still uses old `svgWidth`. */
+  /** Measure wrapper width only — chart height stays fixed so flex/grid never stretches the SVG to absurd sizes. */
   useLayoutEffect(() => {
     const el = chartWrapRef.current;
     if (!el) return;
@@ -251,11 +257,11 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
     return () => ro.disconnect();
   }, []);
 
-  const PAD_L = 52;
-  const PAD_R = 28;
-  const PAD_T = 20;
-  const PAD_B = 44;
-  const H = 240;
+  const PAD_L = 48;
+  const PAD_R = 10;
+  const PAD_T = 14;
+  const PAD_B = 36;
+  const H = DASHBOARD_VOLUME_CHART_H;
   const widthPx = Math.max(svgWidth, PAD_L + PAD_R + 1);
   const innerW = Math.max(1, widthPx - PAD_L - PAD_R);
   const innerH = H - PAD_T - PAD_B;
@@ -323,9 +329,13 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
     if (data.length === 0) return;
     const rect = svgRef.current!.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const relX = mouseX - PAD_L;
-    if (relX < 0 || relX > innerW) { setHover(null); return; }
+    const scaleX = rect.width > 0 && widthPx > 0 ? widthPx / rect.width : 1;
+    const mouseXSvg = (e.clientX - rect.left) * scaleX;
+    const relX = mouseXSvg - PAD_L;
+    if (relX < 0 || relX > innerW) {
+      setHover(null);
+      return;
+    }
     const frac = relX / innerW;
     const idx = Math.max(0, Math.min(data.length - 1, Math.round(frac * (data.length - 1))));
     setHover({ idx, x: ptX(idx), y: ptY(data[idx].count) });
@@ -352,10 +362,13 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
     const tip = chartTipRef.current;
     const m = TOOLTIP_VIEWPORT_MARGIN;
     const run = () => {
-      if (!wrap) return;
+      if (!wrap || !svgRef.current) return;
       const wr = wrap.getBoundingClientRect();
-      let left = wr.left + tooltipLeft;
-      let top = wr.top + tooltipTop;
+      const sr = svgRef.current.getBoundingClientRect();
+      const scaleX = widthPx > 0 ? sr.width / widthPx : 1;
+      const scaleY = H > 0 ? sr.height / H : 1;
+      let left = wr.left + tooltipLeft * scaleX;
+      let top = wr.top + tooltipTop * scaleY;
       const w = tip?.getBoundingClientRect().width ?? TOOLTIP_W;
       const h = tip?.getBoundingClientRect().height ?? 80;
       left = Math.max(m, Math.min(window.innerWidth - m - w, left));
@@ -369,7 +382,9 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
       cancelAnimationFrame(raf);
       window.removeEventListener('resize', run);
     };
-  }, [hover, hoverPt, tooltipLeft, tooltipTop]);
+  }, [hover, hoverPt, tooltipLeft, tooltipTop, widthPx]);
+
+  const vbW = Math.max(widthPx, 1);
 
   return (
     <div ref={chartWrapRef} className="relative w-full min-w-0 select-none" style={{ height: H }}>
@@ -377,9 +392,11 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
         ref={svgRef}
         width="100%"
         height={H}
+        viewBox={`0 0 ${vbW} ${H}`}
+        preserveAspectRatio="none"
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHover(null)}
-        style={{ cursor: data.length > 0 ? 'crosshair' : 'default', overflow: 'visible' }}
+        style={{ cursor: data.length > 0 ? 'crosshair' : 'default', overflow: 'visible', display: 'block' }}
       >
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -665,8 +682,8 @@ export default function DashboardPage() {
 
         {rangeValid && (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-start">
-            {/* Left: KPI grid */}
-            <div className="flex min-h-0 w-full flex-col">
+            {/* Left: KPI grid — intrinsic height drives row; right chart uses fixed H (no ResizeObserver→height) */}
+            <div className="flex min-h-0 w-full min-w-0 flex-col">
               {topSectionSkeleton ? (
                 <div className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                   <div
@@ -850,23 +867,26 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Right: ticket volume */}
+            {/* Right: ticket volume — card height = header + chart (fixed H); no h-full flex-1 dead band */}
             <div className="flex min-h-0 w-full min-w-0 flex-col">
               {topSectionSkeleton ? (
                 <div
-                  className="dashboard-card flex min-h-[320px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4"
+                  className="dashboard-card flex min-h-[260px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0"
                   style={{ background: 'var(--color-bg-surface-inset)' }}
                 >
                   <div className="mb-4 h-3 w-28 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
-                  <div className="mb-6 flex flex-wrap items-baseline gap-3">
+                  <div className="mb-6 flex flex-wrap items-baseline gap-3 shrink-0">
                     <div className="h-10 w-24 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
                     <div className="h-5 w-40 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_40%,transparent)]" />
                   </div>
-                  <div className="mt-auto min-h-[240px] flex-1 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
+                  <div
+                    className="w-full shrink-0 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]"
+                    style={{ height: DASHBOARD_VOLUME_CHART_H }}
+                  />
                 </div>
               ) : (
-                <div className="dashboard-card w-full min-w-0 rounded-xl px-6 pt-5 pb-4">
-                  <div className="mb-1 min-w-0">
+                <div className="dashboard-card flex w-full min-w-0 min-h-[260px] flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0">
+                  <div className="mb-1 min-w-0 shrink-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
                       Ticket Volume
                     </p>
@@ -879,9 +899,12 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 min-h-[240px] w-full min-w-0">
+                  <div className="mt-4 w-full min-w-0 shrink-0">
                     {volume.length === 0 ? (
-                      <div className="flex h-[240px] items-center justify-center text-sm text-[var(--color-text-muted)]">
+                      <div
+                        className="flex w-full items-center justify-center text-sm text-[var(--color-text-muted)]"
+                        style={{ height: DASHBOARD_VOLUME_CHART_H }}
+                      >
                         No ticket data yet.
                       </div>
                     ) : (

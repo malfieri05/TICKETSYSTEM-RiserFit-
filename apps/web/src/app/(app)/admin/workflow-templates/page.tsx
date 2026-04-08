@@ -1,23 +1,44 @@
 'use client';
 
+import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus } from 'lucide-react';
-import { workflowTemplatesApi } from '@/lib/api';
+import { Plus, Workflow } from 'lucide-react';
+import { workflowTemplatesApi, workflowAnalyticsApi, type WorkflowTemplateAnalyticsRow } from '@/lib/api';
 import type { WorkflowTemplateListItemDto } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
+import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
 import { cn } from '@/lib/utils';
+import { WorkflowAnalyticsPanel, formatWorkflowAnalyticsHours } from '@/components/admin/WorkflowAnalyticsPanel';
+import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
-function contextLabel(t: WorkflowTemplateListItemDto): string {
-  const parts: string[] = [t.ticketClass?.name ?? 'Ticket'];
-  if (t.supportTopic) parts.push(t.supportTopic.name);
-  else if (t.maintenanceCategory) parts.push(t.maintenanceCategory.name);
-  if (t.name) parts.push(`— ${t.name}`);
-  return parts.join(' · ');
+const tableHeaderBg = POLISH_THEME.feedTheadBg;
+
+/** Fixed-width trio; parent cell uses flex justify-center so it sits in the middle of the flexible metrics column. */
+const metricsGridInnerClass =
+  'grid w-[21rem] max-w-full grid-cols-3 gap-x-6 justify-items-center text-center tabular-nums';
+
+/** Ticket class (bold) | template name — matches analytics “Template” column when present. */
+function TemplateCell({
+  t,
+  analytics: a,
+}: {
+  t: WorkflowTemplateListItemDto;
+  analytics: WorkflowTemplateAnalyticsRow | undefined;
+}) {
+  const ticketClass = t.ticketClass?.name ?? 'Ticket';
+  const topic = a?.templateName?.trim() || t.name?.trim() || '—';
+  return (
+    <span className="block max-w-xl pr-3 leading-snug">
+      <span className="font-semibold text-[var(--color-text-primary)]">{ticketClass}</span>
+      <span className="font-normal text-[var(--color-text-muted)]"> | </span>
+      <span className="font-normal text-[var(--color-text-primary)]">{topic}</span>
+    </span>
+  );
 }
 
 /** Same interaction model as Rovi “Web access” (AiChatPanel); track uses success green when on. */
@@ -78,22 +99,96 @@ function WorkflowTemplateStatusToggle({
 
 export default function AdminWorkflowTemplatesListPage() {
   const router = useRouter();
+  const [workflowTemplatesInfoOpen, setWorkflowTemplatesInfoOpen] = useState(false);
+  const closeWorkflowTemplatesInfo = useCallback(() => setWorkflowTemplatesInfoOpen(false), []);
+  const [pickedTemplateId, setPickedTemplateId] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['workflow-templates'],
     queryFn: () => workflowTemplatesApi.list(),
   });
-  const templates = data?.data ?? [];
+  const templates = useMemo(() => data?.data ?? [], [data?.data]);
+
+  const analyticsQuery = useQuery({
+    queryKey: ['workflow-analytics', 'templates'],
+    queryFn: () => workflowAnalyticsApi.getTemplates().then((r) => r.data),
+  });
+  const analyticsRows = useMemo(
+    () => (analyticsQuery.data ?? []) as WorkflowTemplateAnalyticsRow[],
+    [analyticsQuery.data],
+  );
+  const analyticsById = useMemo(() => {
+    const m = new Map<string, WorkflowTemplateAnalyticsRow>();
+    analyticsRows.forEach((r) => m.set(r.templateId, r));
+    return m;
+  }, [analyticsRows]);
+
+  const selectedTemplateId = useMemo(() => {
+    if (templates.length === 0) return '';
+    if (pickedTemplateId && templates.some((t) => t.id === pickedTemplateId)) return pickedTemplateId;
+    return templates[0].id;
+  }, [templates, pickedTemplateId]);
+
+  const selectedTemplate = useMemo(
+    () => templates.find((t) => t.id === selectedTemplateId) ?? null,
+    [templates, selectedTemplateId],
+  );
+  const selectedAnalytics = selectedTemplateId ? analyticsById.get(selectedTemplateId) : undefined;
+  const subtaskSectionTitle =
+    selectedAnalytics?.templateName?.trim() ||
+    selectedTemplate?.name?.trim() ||
+    selectedTemplate?.id ||
+    '';
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="Workflow Templates" />
+      <Header
+        titleIcon={Workflow}
+        title={
+          <div className="flex min-w-0 items-center gap-2">
+            <h1
+              className="min-w-0 truncate text-base font-semibold"
+              style={{ color: 'var(--color-text-app-header)' }}
+            >
+              Workflow Templates
+            </h1>
+            <HeaderInfoButton
+              onClick={() => setWorkflowTemplatesInfoOpen(true)}
+              ariaLabel="What are Workflow templates? Opens an explanation."
+            />
+          </div>
+        }
+      />
+      <InfoExplainerModal
+        open={workflowTemplatesInfoOpen}
+        onClose={closeWorkflowTemplatesInfo}
+        titleId="workflow-templates-about-title"
+        title={<>What are &apos;Workflow templates&apos;?</>}
+      >
+        <ul className="list-disc space-y-2 pl-4" style={{ color: 'var(--color-text-secondary)' }}>
+          <li>
+            Workflow Templates page is where admin can set the subtask templates and responsible parties per
+            each ticket type.
+          </li>
+          <li>
+            Once a workflow template is created and &apos;active&apos;, then each new ticket created for that
+            category or topic uses that workflow template.
+          </li>
+        </ul>
+      </InfoExplainerModal>
       <div className="w-full p-6">
         <div className="mb-4 flex justify-start">
           <Button size="sm" onClick={() => router.push('/admin/workflow-templates/new')}>
             <Plus className="h-4 w-4" />
-            New workflow template
+            New Workflow Template
           </Button>
         </div>
+        <h2 className="mb-2 text-lg font-semibold text-[var(--color-text-primary)]">Workflow Templates:</h2>
+        {analyticsQuery.error && (
+          <div className="mb-3 rounded-lg border border-red-800 bg-red-900/20 px-4 py-3 text-sm text-red-300">
+            Failed to load workflow analytics. Subtask timing may be unavailable.
+          </div>
+        )}
         <div className="dashboard-card overflow-x-auto rounded-xl" style={panel}>
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -106,55 +201,134 @@ export default function AdminWorkflowTemplatesListPage() {
               <p className="text-xs text-center max-w-sm">Create a template to define subtask workflows for ticket types and categories.</p>
             </div>
           ) : (
-            <table className="w-full min-w-[52rem] table-fixed text-sm">
+            <table className="w-full min-w-[60rem] table-fixed text-sm">
               <colgroup>
+                <col style={{ width: '38%' }} />
                 <col />
-                <col className="w-24" />
-                <col className="w-[9.5rem]" />
-                <col className="w-32" />
+                <col style={{ width: '5rem' }} />
+                <col style={{ width: '9rem' }} />
+                <col style={{ width: '9.5rem' }} />
               </colgroup>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--color-border-default)', background: 'var(--color-bg-content-header)' }}>
-                  <th className="py-3 px-4 text-left font-semibold text-[var(--color-text-primary)]">Context</th>
-                  <th className="whitespace-nowrap py-3 px-4 text-left font-semibold text-[var(--color-text-primary)]">
+                <tr className={POLISH_CLASS.workflowTemplatesTheadRow}>
+                  <th
+                    className="rounded-tl-xl px-4 text-left align-middle font-semibold text-[var(--color-text-primary)]"
+                    style={{ background: tableHeaderBg }}
+                  >
+                    Template
+                  </th>
+                  <th
+                    className="!px-0 !py-0 align-middle font-semibold text-[var(--color-text-primary)]"
+                    style={{ background: tableHeaderBg }}
+                  >
+                    <div className="flex w-full justify-center px-2 py-3">
+                      <div className={metricsGridInnerClass}>
+                        <span className="whitespace-nowrap">Total</span>
+                        <span className="whitespace-nowrap">Active</span>
+                        <span className="whitespace-nowrap">Avg. completion</span>
+                      </div>
+                    </div>
+                  </th>
+                  <th
+                    className="whitespace-nowrap px-2 text-center font-semibold text-[var(--color-text-primary)]"
+                    style={{ background: tableHeaderBg }}
+                  >
                     Subtasks
                   </th>
-                  <th className="py-3 px-4 text-center font-semibold text-[var(--color-text-primary)]">Status</th>
-                  <th className="whitespace-nowrap py-3 px-4 text-right font-semibold text-[var(--color-text-primary)]">
+                  <th
+                    className="px-3 text-center font-semibold text-[var(--color-text-primary)]"
+                    style={{ background: tableHeaderBg }}
+                  >
+                    Status
+                  </th>
+                  <th
+                    className="rounded-tr-xl whitespace-nowrap px-3 text-center font-semibold text-[var(--color-text-primary)]"
+                    style={{ background: tableHeaderBg }}
+                  >
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {templates.map((t) => (
-                  <tr
-                    key={t.id}
-                    className="hover:bg-[var(--color-bg-surface)]"
-                    style={{ borderBottom: '1px solid var(--color-border-default)' }}
-                  >
-                    <td className="py-3 px-4 align-top text-[var(--color-text-primary)]">
-                      <span className="block pr-2">{contextLabel(t)}</span>
-                    </td>
-                    <td className="whitespace-nowrap py-3 px-4 align-top text-[var(--color-text-secondary)]">
-                      {t._count?.subtaskTemplates ?? 0}
-                    </td>
-                    <td className="py-3 px-4 align-middle">
-                      <WorkflowTemplateStatusToggle templateId={t.id} isActive={t.isActive} />
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Link
-                        href={`/admin/workflow-templates/${t.id}`}
-                        className="text-[var(--color-accent)] hover:text-[var(--color-accent)] text-sm font-medium"
+                {templates.map((t) => {
+                  const a = analyticsById.get(t.id);
+                  const isSelected = t.id === selectedTemplateId;
+                  return (
+                    <tr
+                      key={t.id}
+                      tabIndex={0}
+                      aria-selected={isSelected}
+                      aria-label={`${t.name ?? t.id}, show subtask timing`}
+                      onClick={() => setPickedTemplateId(t.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setPickedTemplateId(t.id);
+                        }
+                      }}
+                      className={cn(
+                        'cursor-pointer outline-none transition-[background-color,box-shadow] duration-150',
+                        'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-accent)]',
+                        isSelected
+                          ? 'hover:bg-[rgba(52,120,196,0.16)]'
+                          : 'hover:bg-[var(--color-bg-surface-raised)]',
+                      )}
+                      style={{
+                        borderBottom: '1px solid var(--color-border-default)',
+                        background: isSelected ? POLISH_THEME.adminStudioListSelectedBg : undefined,
+                        boxShadow: isSelected ? 'inset 3px 0 0 var(--color-accent)' : undefined,
+                      }}
+                    >
+                      <td className="px-4 py-3 align-middle">
+                        <TemplateCell t={t} analytics={a} />
+                      </td>
+                      <td className="align-middle px-0 py-3">
+                        <div className="flex w-full justify-center px-2">
+                          <div className={metricsGridInnerClass}>
+                            <span className="whitespace-nowrap text-[var(--color-text-primary)]">
+                              {a ? a.totalExecutions : '—'}
+                            </span>
+                            <span className="whitespace-nowrap text-[var(--color-text-primary)]">
+                              {a ? a.activeExecutions : '—'}
+                            </span>
+                            <span className="whitespace-nowrap text-[var(--color-text-secondary)]">
+                              {a ? formatWorkflowAnalyticsHours(a.avgCompletionTimeHours) : '—'}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-3 text-center align-middle tabular-nums text-[var(--color-text-secondary)]">
+                        {t._count?.subtaskTemplates ?? 0}
+                      </td>
+                      <td className="px-3 py-3 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <WorkflowTemplateStatusToggle templateId={t.id} isActive={t.isActive} />
+                      </td>
+                      <td
+                        className="px-3 py-3 text-center align-middle"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        View / Edit
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                        <Link
+                          href={`/admin/workflow-templates/${t.id}`}
+                          className="inline-flex whitespace-nowrap rounded-md border border-[var(--color-accent)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent)] transition-colors hover:bg-[color-mix(in_srgb,var(--color-accent)_10%,transparent)]"
+                        >
+                          View / Edit
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
         </div>
+
+        {templates.length > 0 && (
+          <WorkflowAnalyticsPanel
+            selectedTemplateId={selectedTemplateId}
+            subtaskSectionTitle={subtaskSectionTitle}
+            analyticsLoading={analyticsQuery.isLoading}
+          />
+        )}
       </div>
     </div>
   );

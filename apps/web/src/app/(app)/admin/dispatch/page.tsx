@@ -151,6 +151,7 @@ export default function DispatchPage() {
   const [workspaceAnchorTicketId, setWorkspaceAnchorTicketId] = useState<string | null>(null);
   const [workspacePanelOpen, setWorkspacePanelOpen] = useState(false);
   const [overviewSelectedStudioId, setOverviewSelectedStudioId] = useState<string | null>(null);
+  const [dispatchMapResetNonce, setDispatchMapResetNonce] = useState(0);
 
   const panelParam = searchParams.get(TICKETS_PANEL_QUERY_PARAM);
   const ticketPanelId =
@@ -374,7 +375,24 @@ export default function DispatchPage() {
             ) : byStudio.length === 0 ? (
               <p className="text-sm text-[var(--color-text-muted)] py-4">No open maintenance tickets</p>
             ) : (
-              <div className="space-y-0.5">
+              <>
+                <div
+                  className="border-b border-[var(--color-border-default)] pb-4 mb-4"
+                >
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      setOverviewSelectedStudioId(null);
+                      setDispatchMapResetNonce((n) => n + 1);
+                    }}
+                  >
+                    Default View
+                  </Button>
+                </div>
+                <div className="space-y-0.5">
                 {byStudio.map((r) => (
                   <DispatchRow
                     key={r.studioId ?? 'none'}
@@ -407,7 +425,8 @@ export default function DispatchPage() {
                     highlightedTicketId={ticketPanelId}
                   />
                 ))}
-              </div>
+                </div>
+              </>
             )}
           </SectionCard>
 
@@ -446,6 +465,7 @@ export default function DispatchPage() {
                 onViewTicket={openTicketPanel}
                 ticketDrawerOpen={!!ticketPanelId}
                 highlightedTicketId={ticketPanelId}
+                resetCameraNonce={dispatchMapResetNonce}
               />
             )}
           </SectionCard>

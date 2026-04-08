@@ -68,11 +68,17 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
       if (!notif.isRead) {
         qc.setQueryData(
           ['notifications', listParams],
-          (prev: Awaited<ReturnType<typeof notificationsApi.list>>['data'] | undefined) => {
-            if (!prev?.data) return prev;
+          (prev: Awaited<ReturnType<typeof notificationsApi.list>> | undefined) => {
+            const body = prev?.data;
+            const rows = body?.data;
+            if (!body || !Array.isArray(rows)) return prev;
             return {
               ...prev,
-              data: prev.data.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)),
+              data: {
+                ...body,
+                data: rows.map((n) => (n.id === notif.id ? { ...n, isRead: true } : n)),
+                unreadCount: Math.max(0, (body.unreadCount ?? 0) - 1),
+              },
             };
           },
         );

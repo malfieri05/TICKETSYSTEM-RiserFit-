@@ -158,7 +158,13 @@ export default function LeaseIQPage() {
     queryFn: () => leaseIqApi.listRulesets(studioId!),
     enabled: !!studioId,
   });
-  const hasPublishedRulesetForStudio = (studioRulesets?.data ?? []).some((r) => r.status === 'PUBLISHED');
+  const publishedRulesetSummary = useMemo(() => {
+    const list = studioRulesets?.data ?? [];
+    const pub = list.find((r) => r.status === 'PUBLISHED');
+    if (!pub) return null;
+    return { ruleCount: pub._count?.rules ?? 0 };
+  }, [studioRulesets?.data]);
+  const hasPublishedRulesetForStudio = publishedRulesetSummary != null;
 
   useEffect(() => {
     if (tab === 'playground' && !hasPublishedRulesetForStudio) {
@@ -274,7 +280,6 @@ export default function LeaseIQPage() {
                       <span
                         className="flex min-w-0 items-baseline gap-1 text-sm font-medium"
                         style={{ color: 'var(--color-text-primary)' }}
-                        title={`${s.name} — ${s.marketName}`}
                       >
                         <span className="min-w-0 truncate">{s.name}</span>
                         <span className="shrink-0">
@@ -284,7 +289,7 @@ export default function LeaseIQPage() {
                           />
                         </span>
                       </span>
-                      <span className="truncate text-xs" style={{ color: 'var(--color-text-muted)' }} title={s.marketName}>
+                      <span className="truncate text-xs" style={{ color: 'var(--color-text-muted)' }}>
                         {s.marketName}
                       </span>
                     </div>
@@ -333,28 +338,69 @@ export default function LeaseIQPage() {
             <div className="p-6">
               {selectedStudio && (
                 <div
-                  className="dashboard-card mb-5 rounded-xl px-4 py-3"
+                  className="dashboard-card mb-5 flex flex-col gap-3 rounded-xl px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
                   style={{
                     background: 'var(--color-bg-surface)',
                     border: '1px solid var(--color-border-default)',
                     boxShadow: 'var(--shadow-panel)',
                   }}
                 >
-                  <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
-                    Selected location
-                  </p>
-                  <h2 className="mt-1 text-lg font-semibold leading-tight">
-                    <Link
-                      href={`/locations/${selectedStudio.id}`}
-                      className="text-[var(--color-accent)] hover:text-[var(--color-accent)] hover:underline"
-                      aria-label={`Open location profile for ${selectedStudio.name}`}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--color-text-muted)' }}>
+                      Selected location
+                    </p>
+                    <h2 className="mt-1 text-lg font-semibold leading-tight">
+                      <Link
+                        href={`/locations/${selectedStudio.id}`}
+                        className="text-[var(--color-accent)] hover:text-[var(--color-accent)] hover:underline"
+                        aria-label={`Open location profile for ${selectedStudio.name}`}
+                      >
+                        {selectedStudio.name}
+                      </Link>
+                    </h2>
+                    <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                      {selectedStudio.marketName}
+                    </p>
+                  </div>
+                  <div
+                    className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-t pt-3 sm:gap-3 sm:border-t-0 sm:pt-0"
+                    style={{ borderColor: 'var(--color-border-default)' }}
+                  >
+                    <span
+                      className="text-lg font-light leading-none"
+                      style={{ color: 'var(--color-text-muted)' }}
+                      aria-hidden
                     >
-                      {selectedStudio.name}
-                    </Link>
-                  </h2>
-                  <p className="mt-0.5 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    {selectedStudio.marketName}
-                  </p>
+                      |
+                    </span>
+                    {publishedRulesetSummary ? (
+                      <>
+                        <FileText
+                          className="h-5 w-5 shrink-0 sm:h-6 sm:w-6"
+                          strokeWidth={2}
+                          style={{ color: 'rgb(20, 83, 45)' }}
+                          aria-hidden
+                        />
+                        <div
+                          className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium sm:px-4 sm:py-2 sm:text-sm"
+                          style={{
+                            background: 'rgba(22, 163, 74, 0.12)',
+                            border: '1px solid rgba(22, 163, 74, 0.35)',
+                            color: 'rgb(20, 83, 45)',
+                          }}
+                        >
+                          <Check className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" strokeWidth={2.5} aria-hidden />
+                          <span className="min-w-0">
+                            Published ruleset has {publishedRulesetSummary.ruleCount} rules
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                        No lease rules created
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
 

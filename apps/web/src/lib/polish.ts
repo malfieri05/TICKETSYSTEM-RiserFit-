@@ -142,6 +142,11 @@ export const POLISH_CLASS = {
     'focus:border-[var(--color-accent)]',
   /** Row hover transition */
   rowTransition: 'transition-colors duration-150 ease-out',
+  /**
+   * Workflow Templates list + Subtask timing: same thead row height (subtask “Avg. Duration” stacks label + sorts).
+   */
+  workflowTemplatesTheadRow:
+    'min-h-[5.125rem] border-b border-[var(--color-border-default)] [&>th]:align-middle [&>th]:py-3',
   /** Admin data table row — hover, transition, non-clickable. Apply alongside admin-table-row CSS class. */
   adminRow: 'admin-table-row transition-colors duration-150 ease-out',
   /** Admin table header: left-aligned, matches tableHeader spec (11px uppercase). */

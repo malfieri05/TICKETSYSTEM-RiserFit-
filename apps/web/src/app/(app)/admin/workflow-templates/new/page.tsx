@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Workflow } from 'lucide-react';
 import { adminApi, workflowTemplatesApi } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
@@ -64,7 +64,7 @@ export default function NewWorkflowTemplatePage() {
   if (taxonomyLoading || !taxonomy) {
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-        <Header title="New workflow template" />
+        <Header title="New workflow template" titleIcon={Workflow} />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
@@ -74,7 +74,7 @@ export default function NewWorkflowTemplatePage() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title="New workflow template" />
+      <Header title="New workflow template" titleIcon={Workflow} />
       <div className="flex-1 p-6 max-w-xl">
         <Button variant="ghost" size="sm" onClick={() => router.back()} className="mb-6">
           <ArrowLeft className="h-4 w-4" />

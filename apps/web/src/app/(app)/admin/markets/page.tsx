@@ -37,6 +37,9 @@ interface NearbyStudio {
 
 const panel = { background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' };
 
+/** Location profile section: accent borders on inputs while that section is being edited (ring avoided — parent uses overflow hidden for collapse). */
+const profileSectionEditInputsClass = '[&_input]:!border-[var(--color-accent)]';
+
 type FlatLocation = Studio & {
   formattedAddress?: string | null;
   latitude?: number | null;
@@ -996,7 +999,10 @@ export default function AdminMarketsPage() {
                                 size="sm"
                                 variant="secondary"
                                 disabled={profileEditingSection != null}
-                                onClick={() => setProfileEditingSection('public')}
+                                onClick={() => {
+                                  setSecOp(true);
+                                  setProfileEditingSection('public');
+                                }}
                               >
                                 Edit
                               </Button>
@@ -1008,6 +1014,7 @@ export default function AdminMarketsPage() {
                           className={cn(
                             'grid gap-3 sm:grid-cols-2',
                             profileEditingSection !== 'public' && 'pointer-events-none',
+                            profileEditingSection === 'public' && profileSectionEditInputsClass,
                           )}
                         >
                           <Input
@@ -1116,7 +1123,10 @@ export default function AdminMarketsPage() {
                                   size="sm"
                                   variant="secondary"
                                   disabled={profileEditingSection != null}
-                                  onClick={() => setProfileEditingSection('ownership')}
+                                  onClick={() => {
+                                    setSecOwn(true);
+                                    setProfileEditingSection('ownership');
+                                  }}
                                 >
                                   Edit
                                 </Button>
@@ -1128,6 +1138,7 @@ export default function AdminMarketsPage() {
                             className={cn(
                               'grid gap-3 sm:grid-cols-2',
                               profileEditingSection !== 'ownership' && 'pointer-events-none',
+                              profileEditingSection === 'ownership' && profileSectionEditInputsClass,
                             )}
                           >
                             <Input
@@ -1212,7 +1223,10 @@ export default function AdminMarketsPage() {
                                   size="sm"
                                   variant="secondary"
                                   disabled={profileEditingSection != null}
-                                  onClick={() => setProfileEditingSection('contact')}
+                                  onClick={() => {
+                                    setSecContact(true);
+                                    setProfileEditingSection('contact');
+                                  }}
                                 >
                                   Edit
                                 </Button>
@@ -1224,6 +1238,7 @@ export default function AdminMarketsPage() {
                             className={cn(
                               'grid gap-3 sm:grid-cols-2',
                               profileEditingSection !== 'contact' && 'pointer-events-none',
+                              profileEditingSection === 'contact' && profileSectionEditInputsClass,
                             )}
                           >
                             <Input
@@ -1303,7 +1318,10 @@ export default function AdminMarketsPage() {
                                   size="sm"
                                   variant="secondary"
                                   disabled={profileEditingSection != null}
-                                  onClick={() => setProfileEditingSection('identifiers')}
+                                  onClick={() => {
+                                    setSecId(true);
+                                    setProfileEditingSection('identifiers');
+                                  }}
                                 >
                                   Edit
                                 </Button>
@@ -1315,6 +1333,7 @@ export default function AdminMarketsPage() {
                             className={cn(
                               'grid gap-3 sm:grid-cols-2',
                               profileEditingSection !== 'identifiers' && 'pointer-events-none',
+                              profileEditingSection === 'identifiers' && profileSectionEditInputsClass,
                             )}
                           >
                             <Input

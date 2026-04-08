@@ -45,6 +45,8 @@ interface LocationsMapProps {
   highlightedTicketId?: string | null;
   /** Merged onto the map container (default height/border are included; override e.g. `h-[480px] border-0`) */
   className?: string;
+  /** Increment (e.g. from a “Default view” control) to fit all markers and undo manual pan/zoom. */
+  resetCameraNonce?: number;
 }
 
 const MARKER_ICON_URL = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
@@ -163,6 +165,32 @@ function MapCameraController({
       map.fitBounds(bounds, { padding: [40, 40] });
     }
   }, [map, selectedLocationId, validLocations, positions, positionsKey]);
+
+  return null;
+}
+
+/** Fits all markers when `resetCameraNonce` increases (skips the initial mount value). */
+function MapFitBoundsOnDemand({
+  resetCameraNonce,
+  positions,
+}: {
+  resetCameraNonce: number;
+  positions: LatLngExpression[];
+}) {
+  const map = useMap();
+  const seenNonceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (seenNonceRef.current === null) {
+      seenNonceRef.current = resetCameraNonce;
+      return;
+    }
+    if (seenNonceRef.current === resetCameraNonce) return;
+    seenNonceRef.current = resetCameraNonce;
+    if (!positions.length) return;
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(positions), { padding: [40, 40] });
+  }, [map, resetCameraNonce, positions]);
 
   return null;
 }
@@ -380,6 +408,7 @@ export function LocationsMap({
   onViewTicket,
   ticketDrawerOpen = false,
   highlightedTicketId = null,
+  resetCameraNonce = 0,
 }: LocationsMapProps) {
   useEffect(() => {
     ensureLeafletIconsConfigured();
@@ -482,6 +511,7 @@ export function LocationsMap({
           validLocations={validLocations}
           positions={positions}
         />
+        <MapFitBoundsOnDemand resetCameraNonce={resetCameraNonce} positions={positions} />
         <MapDrawerAlignController
           ticketDrawerOpen={ticketDrawerOpen}
           selectedLocationId={selectedLocationId}

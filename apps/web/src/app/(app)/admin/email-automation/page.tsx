@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
+import { HeaderInfoButton, InfoExplainerModal } from '@/components/ui/InfoExplainer';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { emailAutomationApi } from '@/lib/api';
@@ -72,10 +73,61 @@ function TabEmptyState({
 export default function EmailAutomationPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabId>('config');
+  const [emailAutomationInfoOpen, setEmailAutomationInfoOpen] = useState(false);
+  const closeEmailAutomationInfo = useCallback(() => setEmailAutomationInfoOpen(false), []);
 
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-bg-root)' }}>
-      <Header title="Email Automation" />
+      <Header
+        title={
+          <div className="flex min-w-0 items-center gap-2">
+            <h1
+              className="min-w-0 truncate text-base font-semibold"
+              style={{ color: 'var(--color-text-app-header)' }}
+            >
+              Email Automation
+            </h1>
+            <HeaderInfoButton
+              onClick={() => setEmailAutomationInfoOpen(true)}
+              ariaLabel="What is Email Automation? Opens an explanation."
+            />
+          </div>
+        }
+      />
+      <InfoExplainerModal
+        open={emailAutomationInfoOpen}
+        onClose={closeEmailAutomationInfo}
+        titleId="email-automation-about-title"
+        title={<>What is Email Automation?</>}
+      >
+        <ul className="list-disc space-y-2 pl-4" style={{ color: 'var(--color-text-secondary)' }}>
+          <li>
+            Email Automation functionality allows the system to scan selected email inboxes for designated &apos;event
+            triggering&apos; emails.
+          </li>
+          <li>
+            Admin can set specific tickets to automatically be created by the system when designated &apos;trigger
+            emails&apos; are received by a connected inbox.
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
+              <li>
+                <span className="not-italic font-normal">EXAMPLE: </span>
+                <em>
+                  Anytime a &apos;delivery confirmation&apos; email is received for an item that requires assembly; the
+                  system will automatically create the set ticket that addresses that need.
+                </em>
+              </li>
+            </ul>
+          </li>
+          <li>The system keeps record of all automated actions it makes in the &apos;Event log.&apos;</li>
+          <li>
+            <span className="not-italic font-normal">NOTE: </span>
+            <em>
+              If the system is ever uncertain on taking an action, it will probe the admin for confirmation before
+              proceeding.
+            </em>
+          </li>
+        </ul>
+      </InfoExplainerModal>
       <main className="p-6 max-w-6xl mx-auto">
         <div className="flex gap-2 border-b mb-6" style={{ borderColor: 'var(--color-border-default)' }}>
           {TABS.map(({ id, label, icon: Icon }) => (

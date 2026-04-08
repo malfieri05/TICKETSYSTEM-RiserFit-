@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, GripVertical, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, GripVertical, ChevronUp, ChevronDown, ChevronRight, Workflow } from 'lucide-react';
 
 /** Wrapper for collapsible section body: animates height via grid for smooth expand/collapse */
 function CollapsibleBody({
@@ -92,7 +92,6 @@ export default function WorkflowTemplateDetailPage() {
   const [confirmDeleteSubtaskId, setConfirmDeleteSubtaskId] = useState<string | null>(null);
   const [confirmRemoveDep, setConfirmRemoveDep] = useState<WorkflowTemplateDependencyDto | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
-  const [graphCollapsed, setGraphCollapsed] = useState(false);
   const [subtasksCollapsed, setSubtasksCollapsed] = useState(false);
   /** Collapsible “Add dependency” block under Add subtask (default collapsed). */
   const [addDepSectionCollapsed, setAddDepSectionCollapsed] = useState(true);
@@ -245,15 +244,31 @@ export default function WorkflowTemplateDetailPage() {
     depSubtaskId !== depDependsOnId &&
     !wouldCycle;
 
-  const contextLabel = template
-    ? [
-        template.ticketClass?.name,
-        template.supportTopic?.name ?? template.maintenanceCategory?.name,
-        template.name,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : '';
+  const ticketClassName = template?.ticketClass?.name?.trim() ?? '';
+  const topicName =
+    (template?.supportTopic?.name ?? template?.maintenanceCategory?.name)?.trim() ?? '';
+
+  const contextLabel =
+    template == null
+      ? ''
+      : (() => {
+          const nm = template.name?.trim() ?? '';
+          let left = '';
+          if (ticketClassName && topicName) left = `${ticketClassName} | ${topicName}`;
+          else if (ticketClassName) left = ticketClassName;
+          else if (topicName) left = topicName;
+          if (!nm) return left;
+          if (!left) return nm;
+          return topicName ? `${left} · ${nm}` : `${left} | ${nm}`;
+        })();
+
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (editingName) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.select();
+    }
+  }, [editingName]);
 
   const startEdit = (s: WorkflowTemplateSubtaskDto) => {
     setEditSubtaskId(s.id);
@@ -313,7 +328,7 @@ export default function WorkflowTemplateDetailPage() {
   if (isLoading || !template) {
     return (
       <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-        <Header title="Workflow template" />
+        <Header title="Workflow template" titleIcon={Workflow} />
         <div className="flex-1 flex items-center justify-center">
           <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
         </div>
@@ -323,19 +338,38 @@ export default function WorkflowTemplateDetailPage() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header title={template.name || contextLabel || 'Workflow template'} />
+      <Header title={template.name || contextLabel || 'Workflow template'} titleIcon={Workflow} />
       <div className="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
         <Button variant="ghost" size="sm" onClick={() => router.push('/admin/workflow-templates')}>
           <ArrowLeft className="h-4 w-4" />
           Back
         </Button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
-          {/* Row 1: context | usage */}
-          <div className="dashboard-card flex flex-col rounded-xl p-4 min-h-[168px] h-full" style={panel}>
+        <div className="space-y-6">
+          <div className="dashboard-card flex flex-col rounded-xl p-4" style={panel}>
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide">Context</p>
-              {!editingName && (
+              {editingName ? (
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => updateTemplateMut.mutate({ name: name.trim() || null })}
+                    loading={updateTemplateMut.isPending}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      setEditingName(false);
+                      setName('');
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -349,23 +383,57 @@ export default function WorkflowTemplateDetailPage() {
                 </Button>
               )}
             </div>
-            <p className="text-sm text-[var(--color-text-primary)] mt-0.5">{contextLabel}</p>
-            {editingName ? (
-              <div className="mt-3 flex gap-2 items-center flex-wrap">
-                <Input
-                  value={name || template.name || ''}
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1 gap-y-2 text-sm text-[var(--color-text-primary)]">
+              {ticketClassName ? (
+                <span className="shrink-0 font-semibold text-[var(--color-text-primary)]">{ticketClassName}</span>
+              ) : null}
+              {ticketClassName && topicName ? (
+                <>
+                  <span className="shrink-0 font-normal text-[var(--color-text-muted)]"> | </span>
+                  <span className="shrink-0 text-[var(--color-text-primary)]">{topicName}</span>
+                </>
+              ) : !ticketClassName && topicName ? (
+                <span className="shrink-0 text-[var(--color-text-primary)]">{topicName}</span>
+              ) : null}
+              {ticketClassName || topicName ? (
+                <span className="shrink-0 font-normal text-[var(--color-text-muted)]" aria-hidden>
+                  {topicName ? ' · ' : ' | '}
+                </span>
+              ) : null}
+              {editingName ? (
+                <input
+                  ref={nameInputRef}
+                  type="text"
+                  value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Template name"
-                  className="max-w-xs"
+                  aria-label="Template name"
+                  className={cn(
+                    'min-h-9 min-w-[min(100%,12rem)] max-w-full flex-1 rounded-[var(--radius-md)] border-2 border-solid border-[var(--color-input-border)] px-2 py-1.5',
+                    'text-sm font-normal text-[var(--color-text-primary)] outline-none transition-[border-color,box-shadow] duration-[var(--duration-fast)]',
+                    'placeholder:text-[var(--color-text-muted)] focus-visible:border-[var(--color-accent)]',
+                  )}
+                  style={{ background: 'var(--color-input-bg)' }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setEditingName(false);
+                      setName('');
+                    }
+                    if (e.key === 'Enter' && !updateTemplateMut.isPending) {
+                      e.preventDefault();
+                      updateTemplateMut.mutate({ name: name.trim() || null });
+                    }
+                  }}
                 />
-                <Button size="sm" onClick={() => updateTemplateMut.mutate({ name: name.trim() || null })} loading={updateTemplateMut.isPending}>
-                  Save
-                </Button>
-                <Button size="sm" variant="secondary" onClick={() => { setEditingName(false); setName(''); }}>
-                  Cancel
-                </Button>
-              </div>
-            ) : null}
+              ) : (
+                <span className="min-w-0 break-words font-medium text-[var(--color-text-primary)]">
+                  {template.name?.trim() ? template.name : (
+                    <span className="font-normal italic text-[var(--color-text-muted)]">No name</span>
+                  )}
+                </span>
+              )}
+            </div>
             <div
               className={cn(
                 'mt-auto pt-3 flex flex-wrap items-center gap-3',
@@ -420,32 +488,7 @@ export default function WorkflowTemplateDetailPage() {
             </div>
           </div>
 
-          <div className="dashboard-card flex flex-col rounded-xl p-4 min-h-[168px] h-full" style={panel}>
-            <h3 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Usage & execution</h3>
-            {stats == null ? (
-              <div className="flex flex-1 items-center justify-center py-6">
-                <div className="animate-spin h-6 w-6 rounded-full border-2 border-[var(--color-accent)] border-t-transparent" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-3 sm:gap-4 text-sm flex-1">
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide">Tickets using template</p>
-                  <p className="text-lg font-semibold text-[var(--color-text-primary)] mt-0.5">{stats.ticketsUsingTemplate}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide">Active executions</p>
-                  <p className="text-lg font-semibold text-amber-400 mt-0.5">{stats.activeExecutions}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)] uppercase tracking-wide">Completed executions</p>
-                  <p className="text-lg font-semibold text-[var(--color-accent)] mt-0.5">{stats.completedExecutions}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Row 2: workflow subtask template | dependency graph */}
-          <div className="dashboard-card flex h-full min-h-0 flex-col rounded-xl p-4" style={panel}>
+          <div className="dashboard-card flex min-h-0 flex-col rounded-xl p-4" style={panel}>
           <div className="flex items-center justify-between gap-2 mb-3">
             <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Workflow Subtask Template:</h3>
             <Button
@@ -656,61 +699,6 @@ export default function WorkflowTemplateDetailPage() {
             </Button>
           </div>
           </CollapsibleBody>
-        </div>
-
-          <div className="dashboard-card flex flex-col rounded-xl p-4 min-h-0 h-full" style={panel}>
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <h3 className="text-sm font-semibold text-[var(--color-text-primary)]">Dependency graph</h3>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="shrink-0 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] inline-flex items-center"
-                onClick={() => setGraphCollapsed((c) => !c)}
-              >
-                {graphCollapsed ? (
-                  <>Expand <ChevronRight className="h-4 w-4 ml-1 shrink-0" /></>
-                ) : (
-                  <>Collapse <ChevronDown className="h-4 w-4 ml-1 shrink-0" /></>
-                )}
-              </Button>
-            </div>
-            <CollapsibleBody collapsed={graphCollapsed}>
-              <p className="text-xs text-[var(--color-text-muted)] mb-3">Nodes = subtask templates. Arrows = “depends on”.</p>
-              <div className="relative min-h-[120px] flex-1">
-                {sortedSubtasks.length === 0 ? (
-                  <p className="text-sm text-[var(--color-text-muted)]">No subtasks yet. Add subtasks in the workflow template to see the graph.</p>
-                ) : (
-                  <>
-                    <div className="flex flex-col gap-2">
-                      {sortedSubtasks.map((s, i) => (
-                        <div
-                          key={s.id}
-                          className="rounded-lg border px-3 py-2 text-sm flex items-center gap-2"
-                          style={{ borderColor: 'var(--color-border-default)', background: 'var(--color-bg-surface-raised)', marginLeft: 0 }}
-                        >
-                          <span className="text-[var(--color-text-muted)] w-6">{i + 1}</span>
-                          <span className="text-[var(--color-text-primary)] font-medium">{s.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {deps.length > 0 && (
-                      <div className="mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-border-default)' }}>
-                        <p className="text-xs text-[var(--color-text-muted)] mb-1">Edges (A depends on B):</p>
-                        <ul className="space-y-0.5 text-xs text-[var(--color-text-secondary)]">
-                          {deps.map((d) => (
-                            <li key={`${d.subtaskTemplateId}-${d.dependsOnSubtaskTemplateId}`}>
-                              <span className="text-[var(--color-accent)]">{idToTitle.get(d.dependsOnSubtaskTemplateId)}</span>
-                              <span className="mx-1">→</span>
-                              <span className="text-[var(--color-text-primary)]">{idToTitle.get(d.subtaskTemplateId)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </CollapsibleBody>
           </div>
         </div>
 

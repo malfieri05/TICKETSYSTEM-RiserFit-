@@ -35,12 +35,24 @@ export type InfoExplainerModalProps = {
   titleId: string;
   title: ReactNode;
   children: ReactNode;
+  /**
+   * Bottom-right footer: show only this image (e.g. favicon) in the framed tile.
+   * When set, omits “Need help? Ask Rovi!” and the Rovi chat control.
+   */
+  footerLogoSrc?: string;
 };
 
 /**
  * Uniform “what is this?” explainer dialog: accent title, faint blue rule, inset accent frame, Rovi mascot.
  */
-export function InfoExplainerModal({ open, onClose, titleId, title, children }: InfoExplainerModalProps) {
+export function InfoExplainerModal({
+  open,
+  onClose,
+  titleId,
+  title,
+  children,
+  footerLogoSrc,
+}: InfoExplainerModalProps) {
   const { openAgentChat } = useAiChatWidget();
 
   useEffect(() => {
@@ -100,30 +112,47 @@ export function InfoExplainerModal({ open, onClose, titleId, title, children }: 
             {children}
           </div>
           <div className="absolute bottom-4 right-4 flex max-w-[calc(100%-2rem)] items-center justify-end gap-2.5">
-            <p
-              className="max-w-[11rem] text-right text-[11px] leading-snug"
-              style={{ color: 'var(--color-text-muted)' }}
-            >
-              Need help? Ask Rovi!
-            </p>
-            <button
-              type="button"
-              onClick={handleOpenRovi}
-              className="focus-ring shrink-0 cursor-pointer rounded-full p-0.5 transition-transform hover:scale-105 active:scale-95"
-              aria-label="Open Rovi chat assistant"
-            >
-              {/* Static mascot from public/ — same pattern as external avatars in ProfileMenu */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/Rovi.png"
-                alt=""
-                width={36}
-                height={36}
-                className="h-9 w-9 object-contain"
-                draggable={false}
-                aria-hidden
-              />
-            </button>
+            {footerLogoSrc ? (
+              <div className="pointer-events-none flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md opacity-90 ring-1 ring-[var(--color-border-default)]/60">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={footerLogoSrc}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 object-contain"
+                  draggable={false}
+                  aria-hidden
+                />
+              </div>
+            ) : (
+              <>
+                <p
+                  className="max-w-[11rem] text-right text-[11px] leading-snug"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  Need help? Ask Rovi!
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenRovi}
+                  className="focus-ring shrink-0 cursor-pointer rounded-full p-0.5 transition-transform hover:scale-105 active:scale-95"
+                  aria-label="Open Rovi chat assistant"
+                >
+                  {/* Static mascot from public/ — same pattern as external avatars in ProfileMenu */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/Rovi.png"
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="h-9 w-9 object-contain"
+                    draggable={false}
+                    aria-hidden
+                  />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </div>

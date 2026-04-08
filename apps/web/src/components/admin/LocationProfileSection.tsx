@@ -31,7 +31,7 @@ export function LocationProfileSection({
         className="flex w-full items-stretch border-b"
         style={{
           borderColor: POLISH_THEME.listBorder,
-          background: POLISH_THEME.tableHeaderBg,
+          background: POLISH_THEME.feedTheadBg,
         }}
       >
         <button

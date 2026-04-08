@@ -3,12 +3,13 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { isAxiosError } from 'axios';
 import {
   ArrowLeft, MapPin, Building2, Users, Phone,
   FileText, Ticket, Tag, AlertTriangle, ChevronDown, Check,
 } from 'lucide-react';
 import { locationsApi, ticketsApi, updateTicketRowInListCaches } from '@/lib/api';
-import type { TicketListItem } from '@/types';
+import type { LocationProfileResponse, TicketListItem } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/Button';
 import {
@@ -56,7 +57,7 @@ function ProfileSection({
         className="w-full flex items-center justify-between gap-3 px-4 py-3 border-b text-left"
         style={{
           borderColor: POLISH_THEME.listBorder,
-          background: POLISH_THEME.tableHeaderBg,
+          background: POLISH_THEME.feedTheadBg,
         }}
       >
         <span className="flex items-center gap-2 min-w-0">
@@ -139,12 +140,14 @@ export default function LocationProfilePage() {
     identifiers: false,
   });
 
-  const { data: profileRes, isLoading: profileLoading, error: profileError } = useQuery({
+  const { data: profile, isLoading: profileLoading, error: profileError } = useQuery<LocationProfileResponse>({
     queryKey: ['location-profile', studioId],
-    queryFn: () => locationsApi.getProfile(studioId),
+    queryFn: async () => {
+      const res = await locationsApi.getProfile(studioId!);
+      return res.data;
+    },
     enabled: !!studioId,
   });
-  const profile = profileRes?.data;
 
   const ticketParams = {
     studioId,
@@ -168,14 +171,17 @@ export default function LocationProfilePage() {
   const ticketsTotal = ticketsRes?.data?.total ?? 0;
   const totalPages = Math.ceil(ticketsTotal / PAGE_SIZE);
   const feedTicketIds = useMemo(() => tickets.map((t) => t.id), [tickets]);
-  const isProfile403 = (profileError as { response?: { status?: number } })?.response?.status === 403;
-  const isTickets403 = (ticketsError as { response?: { status?: number } })?.response?.status === 403;
+  const profileErrStatus = isAxiosError(profileError) ? profileError.response?.status : undefined;
+  const isProfile403 = profileErrStatus === 403;
+  const isProfile404 = profileErrStatus === 404;
+  const isTickets403 = isAxiosError(ticketsError) ? ticketsError.response?.status === 403 : false;
 
   const handleSelect = useCallback((id: string) => {
     setSelectedTicketId((prev) => (prev === id ? null : id));
   }, []);
   const handleCloseDrawer = useCallback(() => setSelectedTicketId(null), []);
 
+  const isStudioUser = user?.role === 'STUDIO_USER';
   const canAddTag = user?.role === 'ADMIN' || user?.role === 'DEPARTMENT_USER';
   const addTagMut = useMutation({
     mutationFn: ({ ticketId, label }: { ticketId: string; label: string }) =>
@@ -231,53 +237,27 @@ export default function LocationProfilePage() {
   const hasContactData = !!restricted?.contact && Object.values(restricted.contact).some((v) => v != null);
   const hasIdentifiersData = !!restricted?.identifiers && Object.values(restricted.identifiers).some((v) => v != null);
 
+  // Normalize URL when API resolved /locations/:id via ticket-id alias (id in bar matches studio).
   useEffect(() => {
-    if (profileRes?.data) {
-      console.log('[LocationProfile] profileRes.data', profileRes.data);
-    }
-  }, [profileRes?.data]);
-
-  useEffect(() => {
-    if (ticketsError) {
-      console.log('[LocationProfile] ticketsError status', (ticketsError as { response?: { status?: number } })?.response?.status);
-    }
-  }, [ticketsError]);
+    const resolvedId = profile?.studio?.id;
+    if (!resolvedId || !studioId || resolvedId === studioId) return;
+    router.replace(`/locations/${resolvedId}`);
+  }, [profile?.studio?.id, studioId, router]);
 
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-      <Header
-        title={
-          <div className="flex min-w-0 items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="shrink-0 border text-[var(--color-accent)] hover:text-[var(--color-accent-hover)]"
-              style={{
-                borderColor: 'var(--color-accent)',
-              }}
-              onClick={() => router.back()}
-              aria-label="Go back"
-            >
-              <ArrowLeft className="h-4 w-4 shrink-0 text-inherit" aria-hidden />
-              Back
-            </Button>
-            <span
-              aria-hidden
-              className="h-5 w-px shrink-0 self-center opacity-80"
-              style={{ background: 'var(--color-accent)' }}
-            />
-            <h1
-              className="min-w-0 truncate text-base font-semibold"
-              style={{ color: 'var(--color-text-app-header)' }}
-            >
-              Location info:
-            </h1>
-          </div>
-        }
-      />
+      <Header title="Location info:" />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 space-y-6">
+        <div className="max-w-6xl mx-auto p-6 space-y-5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(isStudioUser ? '/portal' : '/tickets')}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {isStudioUser ? 'Back to My Tickets' : 'Back to tickets'}
+          </Button>
 
           {/* ── Header / Identity ── */}
           {profileLoading ? (
@@ -348,9 +328,31 @@ export default function LocationProfilePage() {
               <AlertTriangle className="h-5 w-5" />
               <p className="text-sm">You don&apos;t have permission to view this location profile.</p>
             </div>
+          ) : profileError && !isProfile404 && !isProfile403 ? (
+            <div className="flex flex-col gap-2 py-8 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+              <p>Couldn&apos;t load this location. Check your connection and try again.</p>
+              <Button variant="outlineAccent" size="sm" onClick={() => qc.invalidateQueries({ queryKey: ['location-profile', studioId] })}>
+                Retry
+              </Button>
+            </div>
           ) : (
-            <div className="py-8 text-sm" style={{ color: 'var(--color-text-muted)' }}>
-              Location not found.
+            <div className="py-8 text-sm space-y-2" style={{ color: 'var(--color-text-muted)' }}>
+              <p>We couldn&apos;t find a studio for this link.</p>
+              <p className="text-xs">
+                If you opened this from a ticket, the location may have been removed from the ticket, or the link may be out of date.
+                {user?.role === 'ADMIN' && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="underline text-[var(--color-accent)] hover:opacity-90"
+                      onClick={() => router.push('/admin/markets')}
+                    >
+                      Open Locations (admin)
+                    </button>
+                  </>
+                )}
+              </p>
             </div>
           )}
 

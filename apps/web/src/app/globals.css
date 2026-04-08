@@ -369,6 +369,51 @@ body {
   background: var(--color-bg-surface);
 }
 
+/*
+ * Workflow Templates → subtask timing table: department pills.
+ * Use [data-theme] so light/dark match the app toggle (Tailwind `dark:` follows prefers-color-scheme only).
+ */
+[data-theme="light"] .workflow-dept-capsule--hr {
+  background-color: #fef08a;
+  color: #422006;
+  border-color: #a16207;
+}
+[data-theme="dark"] .workflow-dept-capsule--hr {
+  background-color: rgba(234, 179, 8, 0.2);
+  color: #fef9c3;
+  border-color: rgba(234, 179, 8, 0.55);
+}
+[data-theme="light"] .workflow-dept-capsule--operations {
+  background-color: #e9d5ff;
+  color: #4c1d95;
+  border-color: #7e22ce;
+}
+[data-theme="dark"] .workflow-dept-capsule--operations {
+  background-color: rgba(168, 85, 247, 0.2);
+  color: #f3e8ff;
+  border-color: rgba(192, 132, 252, 0.55);
+}
+[data-theme="light"] .workflow-dept-capsule--marketing {
+  background-color: #bae6fd;
+  color: #0c4a6e;
+  border-color: #0284c7;
+}
+[data-theme="dark"] .workflow-dept-capsule--marketing {
+  background-color: rgba(56, 189, 248, 0.2);
+  color: #e0f2fe;
+  border-color: rgba(56, 189, 248, 0.55);
+}
+[data-theme="light"] .workflow-dept-capsule--retail {
+  background-color: #1e40af;
+  color: #ffffff;
+  border-color: #1e3a8a;
+}
+[data-theme="dark"] .workflow-dept-capsule--retail {
+  background-color: #2563eb;
+  color: #ffffff;
+  border-color: rgba(96, 165, 250, 0.45);
+}
+
 .surface-card {
   background: var(--color-bg-surface-raised);
   border: 1px solid var(--color-border-default);

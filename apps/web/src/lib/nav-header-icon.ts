@@ -2,7 +2,6 @@ import type { LucideIcon } from 'lucide-react';
 import type { ReadonlyURLSearchParams } from 'next/navigation';
 import {
   Activity,
-  BarChart2,
   Bell,
   BookMarked,
   BookOpen,
@@ -15,8 +14,9 @@ import {
   Mail,
   MapPin,
   Plus,
-  Settings,
+  User,
   Truck,
+  Workflow,
 } from 'lucide-react';
 
 /**
@@ -42,11 +42,10 @@ export function getNavHeaderIcon(
   if (pathname.startsWith('/admin/email-automation')) return Mail;
   if (pathname.startsWith('/admin/dispatch')) return Truck;
   if (pathname.startsWith('/admin/lease-iq')) return BookMarked;
-  if (pathname.startsWith('/admin/workflow-templates')) return LayoutDashboard;
-  if (pathname.startsWith('/admin/workflow-analytics')) return BarChart2;
+  if (pathname.startsWith('/admin/workflow-templates')) return Workflow;
   if (pathname.startsWith('/admin/markets')) return MapPin;
   if (pathname.startsWith('/admin/knowledge-base')) return BookOpen;
-  if (pathname.startsWith('/admin/users')) return Settings;
+  if (pathname.startsWith('/admin/users')) return User;
   if (pathname.startsWith('/admin/system-monitoring')) return Activity;
 
   // —— Tickets ————————————————————————————————————————————————

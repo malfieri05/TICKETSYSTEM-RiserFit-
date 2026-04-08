@@ -14,8 +14,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   LayoutDashboard,
   Bell,
-  Settings,
-  BarChart2,
   BookOpen,
   Home,
   Plus,
@@ -29,6 +27,8 @@ import {
   Bot,
   Truck,
   MapPin,
+  User,
+  Workflow,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotificationCount } from '@/hooks/useNotifications';
@@ -94,18 +94,12 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
     ],
   },
   {
-    label: 'Workflows:',
-    items: [
-      { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: LayoutDashboard },
-      { href: '/admin/workflow-analytics', label: 'Workflow Analytics', icon: BarChart2 },
-    ],
-  },
-  {
     label: 'Configuration:',
     items: [
+      { href: '/admin/workflow-templates', label: 'Workflow Templates', icon: Workflow },
       { href: '/admin/markets', label: 'Locations', icon: MapPin },
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
-      { href: '/admin/users', label: 'Users', icon: Settings },
+      { href: '/admin/users', label: 'Users', icon: User },
       { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },
     ],
   },

@@ -430,7 +430,12 @@ export class ReportingService {
           return a.title.localeCompare(b.title);
         }),
       }))
-      .sort((a, b) => b.count - a.count);
+      .sort((a, b) => {
+        const aNoStudio = a.studioId == null;
+        const bNoStudio = b.studioId == null;
+        if (aNoStudio !== bNoStudio) return aNoStudio ? 1 : -1;
+        return b.count - a.count;
+      });
 
     const studioIds = rows
       .map((r) => r.studioId)

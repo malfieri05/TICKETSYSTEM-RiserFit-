@@ -4,7 +4,6 @@
  */
 export const APP_HELP_STATIC_PATHS: readonly string[] = [
   '/admin/workflow-templates/new',
-  '/admin/workflow-analytics',
   '/admin/email-automation',
   '/admin/system-monitoring',
   '/admin/knowledge-base',
