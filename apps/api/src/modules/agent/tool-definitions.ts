@@ -344,13 +344,14 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'knowledge_search',
       description:
-        'Search the knowledge base (company policies, handbook PDFs, pasted docs, and the in-app Platform user guide). Use for: (1) company rules, HR, retail/operations, procedures; (2) HOW TO USE THIS APPLICATION — where to click, which URL path to open (/tickets/new, /admin/dispatch, workflow templates, dispatch groups, reporting, inbox, portal vs tickets, Assistant vs Handbook). Prefer this over guessing navigation.',
+        'Hybrid (vector + keyword) search over the knowledge base. ALWAYS call this FIRST for any "how do I / where is / what is / can I / how does X work" question about using Rovi (this ticketing app), before answering. Also call it for company policy, HR, handbook, and retail-operations questions. The index contains: (a) the Rovi product help corpus ("Rovi Help — …" articles with the canonical URL path for every feature like /tickets/new, /admin/dispatch, /admin/workflow-templates, /admin/lease-iq, /inbox, /portal, /dashboard), (b) the company handbook, and (c) other uploaded policy docs. Do not guess navigation. Do not default to "ask your manager" before searching. Pass the user\'s literal question as the query — the retriever handles synonyms like "LeaseIQ" vs "Lease IQ".',
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: 'The question or search query',
+            description:
+              "The user's question, verbatim when possible. The retriever will tokenize and expand it.",
           },
           limit: {
             type: 'number',

@@ -565,6 +565,31 @@ body {
     linear-gradient(135deg, transparent 38%, rgba(129, 140, 248, 0.09) 100%);
 }
 
+/*
+ * Full-page AI Assistant (conversation): same blue/violet language as .rovi-chatbox-bg,
+ * scaled up with extra radial wash so the gradient reads clearly edge-to-edge.
+ */
+.assistant-conversation-fullpage-bg {
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+[data-theme="light"] .assistant-conversation-fullpage-bg {
+  background-color: var(--color-bg-page);
+  background-image:
+    radial-gradient(ellipse 130% 95% at 50% -5%, rgba(40, 104, 184, 0.16) 0%, transparent 52%),
+    radial-gradient(ellipse 90% 70% at 100% 100%, rgba(99, 102, 241, 0.1) 0%, transparent 58%),
+    linear-gradient(135deg, rgba(40, 104, 184, 0.13) 0%, transparent 50%),
+    linear-gradient(135deg, transparent 38%, rgba(99, 102, 241, 0.09) 100%);
+}
+[data-theme="dark"] .assistant-conversation-fullpage-bg {
+  background-color: var(--color-bg-page);
+  background-image:
+    radial-gradient(ellipse 120% 85% at 50% 0%, rgba(52, 120, 196, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 85% 65% at 100% 100%, rgba(129, 140, 248, 0.16) 0%, transparent 55%),
+    linear-gradient(135deg, rgba(52, 120, 196, 0.22) 0%, transparent 48%),
+    linear-gradient(135deg, transparent 34%, rgba(129, 140, 248, 0.12) 100%);
+}
+
 /* Rovi chat: header + footer read as raised chrome over the message strip */
 .rovi-chatbox-header,
 .rovi-chatbox-footer {
@@ -607,6 +632,57 @@ body {
   z-index: 0;
 }
 
+/* Full-page AI Assistant: Rovi header + composer — dashboard-card shadow + hover lift */
+.rovi-chatbox-floating-card-header,
+.rovi-chatbox-floating-card-footer {
+  border-radius: var(--radius-lg, 0.75rem);
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  position: relative;
+  z-index: 2;
+  box-shadow: var(--shadow-dashboard-card);
+  transition: box-shadow 220ms ease-out, transform 220ms ease-out;
+}
+.rovi-chatbox-floating-card-header:hover,
+.rovi-chatbox-floating-card-footer:hover {
+  box-shadow: var(--shadow-dashboard-card-hover);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rovi-chatbox-floating-card-header,
+  .rovi-chatbox-floating-card-footer {
+    transition: box-shadow 220ms ease-out;
+  }
+  .rovi-chatbox-floating-card-header:hover,
+  .rovi-chatbox-floating-card-footer:hover {
+    transform: none;
+  }
+}
+
+/* Rovi chat message bubbles — same depth + hover lift as dashboard / floating header cards */
+.rovi-chat-bubble-assistant-elevated,
+.rovi-chat-bubble-user-elevated {
+  box-shadow: var(--shadow-dashboard-card);
+  transition: box-shadow 220ms ease-out, transform 220ms ease-out;
+}
+.rovi-chat-bubble-assistant-elevated:hover,
+.rovi-chat-bubble-user-elevated:hover {
+  box-shadow: var(--shadow-dashboard-card-hover);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rovi-chat-bubble-assistant-elevated,
+  .rovi-chat-bubble-user-elevated {
+    transition: box-shadow 220ms ease-out;
+  }
+  .rovi-chat-bubble-assistant-elevated:hover,
+  .rovi-chat-bubble-user-elevated:hover {
+    transform: none;
+  }
+}
+
 .filter-elevated-shadow {
   box-shadow: var(--shadow-filter-elevated);
 }
@@ -619,4 +695,28 @@ input.date-filter-empty::-webkit-datetime-edit-fields-wrapper {
 input.date-filter-empty:focus::-webkit-datetime-edit,
 input.date-filter-empty:focus::-webkit-datetime-edit-fields-wrapper {
   color: inherit;
+}
+
+/* AI Assistant: conversation column enters after welcome → chat (full-page layout). */
+@keyframes assistant-chat-column-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.assistant-chat-column-mount {
+  animation: assistant-chat-column-enter 0.35s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-chat-column-mount {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

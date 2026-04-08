@@ -37,3 +37,23 @@ export class IngestTextDto {
   @IsNotEmpty()
   content: string;
 }
+
+// ── Riser policy sync (optional body overrides env) ─────────────────────────
+
+export class RiserSyncDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  baseUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  apiKey?: string;
+
+  /** Comma-separated Riser policy IDs (same as RISER_POLICY_IDS env). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  policyIds?: string;
+}

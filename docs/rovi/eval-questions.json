@@ -1,0 +1,346 @@
+{
+  "$schema": "./eval-questions.schema.json",
+  "description": "Rovi product Q&A evaluation set. Run against /assistant (or knowledge_search directly) after ingesting docs/rovi/articles. Each question has expected slugs (which product_help article MUST appear in the top retrieved chunks) and expected routes (which in-app paths the answer MUST mention). The role hint lets us also check that admin-only answers are not shown to studio users.",
+  "version": 1,
+  "updated": "2026-04-08",
+  "questions": [
+    {
+      "id": "create-001",
+      "question": "How do I create a new maintenance ticket?",
+      "role": "ANY",
+      "expected_slugs": ["tickets-create"],
+      "expected_routes": ["/tickets/new"],
+      "must_not_contain": []
+    },
+    {
+      "id": "create-002",
+      "question": "Where is the New Ticket form?",
+      "role": "ANY",
+      "expected_slugs": ["tickets-create"],
+      "expected_routes": ["/tickets/new"]
+    },
+    {
+      "id": "create-003",
+      "question": "What's the max attachment size?",
+      "role": "ANY",
+      "expected_slugs": ["attachments"],
+      "expected_routes": [],
+      "must_contain": ["25"]
+    },
+    {
+      "id": "tickets-view-001",
+      "question": "Where is the main ticket list for staff?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["tickets-view"],
+      "expected_routes": ["/tickets"]
+    },
+    {
+      "id": "tickets-view-002",
+      "question": "How do I open a ticket in full screen instead of the drawer?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["tickets-view"],
+      "expected_routes": ["/tickets"]
+    },
+    {
+      "id": "inbox-001",
+      "question": "What is the Actionable inbox?",
+      "role": "ADMIN",
+      "expected_slugs": ["inbox-actionable"],
+      "expected_routes": ["/inbox"]
+    },
+    {
+      "id": "inbox-002",
+      "question": "Where can I see my READY subtasks all in one place?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["inbox-actionable"],
+      "expected_routes": ["/inbox"]
+    },
+    {
+      "id": "portal-001",
+      "question": "Where is my home page as a studio user?",
+      "role": "STUDIO_USER",
+      "expected_slugs": ["portal"],
+      "expected_routes": ["/portal"]
+    },
+    {
+      "id": "portal-002",
+      "question": "Can a studio user edit workflow templates?",
+      "role": "STUDIO_USER",
+      "expected_slugs": ["portal", "admin-workflow-templates"],
+      "expected_routes": [],
+      "must_not_contain": ["open /admin/workflow-templates"]
+    },
+    {
+      "id": "notifications-001",
+      "question": "How do I open notifications?",
+      "role": "ANY",
+      "expected_slugs": ["notifications"],
+      "expected_routes": ["/notifications"]
+    },
+    {
+      "id": "notifications-002",
+      "question": "How do I turn off email notifications for ticket assignments?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["notifications"],
+      "expected_routes": ["/notifications"]
+    },
+    {
+      "id": "dashboard-001",
+      "question": "Where is the KPI dashboard?",
+      "role": "ADMIN",
+      "expected_slugs": ["dashboard"],
+      "expected_routes": ["/dashboard"]
+    },
+    {
+      "id": "dashboard-002",
+      "question": "How do I change the date range on the dashboard?",
+      "role": "ADMIN",
+      "expected_slugs": ["dashboard"],
+      "expected_routes": ["/dashboard"],
+      "must_contain": ["timeframe"]
+    },
+    {
+      "id": "dashboard-003",
+      "question": "What timeframe presets are on the dashboard?",
+      "role": "ADMIN",
+      "expected_slugs": ["dashboard"],
+      "expected_routes": [],
+      "must_contain": ["today", "30d"]
+    },
+    {
+      "id": "assistant-001",
+      "question": "What can Rovi do in the assistant chat?",
+      "role": "ANY",
+      "expected_slugs": ["assistant"],
+      "expected_routes": ["/assistant"]
+    },
+    {
+      "id": "handbook-001",
+      "question": "Where is the company handbook?",
+      "role": "STUDIO_USER",
+      "expected_slugs": ["handbook"],
+      "expected_routes": ["/handbook"]
+    },
+    {
+      "id": "handbook-002",
+      "question": "What's the difference between the Assistant and the Handbook?",
+      "role": "ANY",
+      "expected_slugs": ["assistant", "handbook"],
+      "expected_routes": ["/assistant", "/handbook"]
+    },
+    {
+      "id": "workflow-templates-001",
+      "question": "How do I create a workflow template?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-workflow-templates"],
+      "expected_routes": ["/admin/workflow-templates", "/admin/workflow-templates/new"]
+    },
+    {
+      "id": "workflow-templates-002",
+      "question": "Where is workflow analytics?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-workflow-templates"],
+      "expected_routes": ["/admin/workflow-templates"]
+    },
+    {
+      "id": "workflow-templates-003",
+      "question": "If I edit a template do existing tickets change?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-workflow-templates"],
+      "must_contain": ["future"]
+    },
+    {
+      "id": "dispatch-001",
+      "question": "Where is vendor dispatch?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-dispatch"],
+      "expected_routes": ["/admin/dispatch"]
+    },
+    {
+      "id": "dispatch-002",
+      "question": "How do I batch multiple plumbing tickets into one vendor call?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-dispatch"],
+      "expected_routes": ["/admin/dispatch"]
+    },
+    {
+      "id": "reporting-001",
+      "question": "Where is admin reporting?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-reporting"],
+      "expected_routes": ["/admin/reporting"]
+    },
+    {
+      "id": "reporting-002",
+      "question": "Can I export a CSV of tickets?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-reporting"],
+      "expected_routes": ["/admin/reporting"],
+      "must_contain": ["csv"]
+    },
+    {
+      "id": "markets-001",
+      "question": "Where do I add a new studio?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-markets"],
+      "expected_routes": ["/admin/markets"]
+    },
+    {
+      "id": "markets-002",
+      "question": "How do I find a studio's location profile?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-markets", "locations-profile"],
+      "expected_routes": ["/admin/markets", "/locations"]
+    },
+    {
+      "id": "users-001",
+      "question": "How do I invite a new user?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-users"],
+      "expected_routes": ["/admin/users"]
+    },
+    {
+      "id": "users-002",
+      "question": "How do I give a studio user access to multiple locations?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-users"],
+      "expected_routes": ["/admin/users"]
+    },
+    {
+      "id": "kb-001",
+      "question": "How do I upload a new handbook PDF?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-knowledge-base"],
+      "expected_routes": ["/admin/knowledge-base"]
+    },
+    {
+      "id": "kb-002",
+      "question": "What's the difference between product help and handbook docs?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-knowledge-base"],
+      "expected_routes": []
+    },
+    {
+      "id": "leaseiq-001",
+      "question": "What is LeaseIQ?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-lease-iq"],
+      "expected_routes": ["/admin/lease-iq"]
+    },
+    {
+      "id": "leaseiq-002",
+      "question": "How do I attach a lease PDF to a studio?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-lease-iq"],
+      "expected_routes": ["/admin/lease-iq"]
+    },
+    {
+      "id": "leaseiq-003",
+      "question": "Lease IQ rule sets — what does published mean?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-lease-iq"],
+      "must_contain": ["published"]
+    },
+    {
+      "id": "email-auto-001",
+      "question": "How does email automation work?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-email-automation"],
+      "expected_routes": ["/admin/email-automation"]
+    },
+    {
+      "id": "email-auto-002",
+      "question": "Where is the inbound email review queue?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-email-automation"],
+      "expected_routes": ["/admin/email-automation"]
+    },
+    {
+      "id": "monitoring-001",
+      "question": "Where can I see failed notification jobs?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-system-monitoring"],
+      "expected_routes": ["/admin/system-monitoring"]
+    },
+    {
+      "id": "monitoring-002",
+      "question": "How do I retry a dead-lettered job?",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-system-monitoring"],
+      "expected_routes": ["/admin/system-monitoring"]
+    },
+    {
+      "id": "location-profile-001",
+      "question": "Where is a per-studio profile page?",
+      "role": "ANY",
+      "expected_slugs": ["locations-profile"],
+      "expected_routes": ["/locations"]
+    },
+    {
+      "id": "sla-001",
+      "question": "What is the SLA target for urgent tickets?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["sla"],
+      "must_contain": ["4"]
+    },
+    {
+      "id": "sla-002",
+      "question": "What does the SLA badge color mean?",
+      "role": "DEPARTMENT_USER",
+      "expected_slugs": ["sla"],
+      "must_contain": ["breach"]
+    },
+    {
+      "id": "attachments-001",
+      "question": "Can I drag and drop a photo onto a ticket?",
+      "role": "ANY",
+      "expected_slugs": ["attachments"],
+      "expected_routes": ["/tickets/new"]
+    },
+    {
+      "id": "attachments-002",
+      "question": "Why did my 50 MB PDF fail to upload?",
+      "role": "ANY",
+      "expected_slugs": ["attachments"],
+      "must_contain": ["25"]
+    },
+    {
+      "id": "role-guard-001",
+      "question": "As a studio user, how do I open admin reporting?",
+      "role": "STUDIO_USER",
+      "expected_slugs": ["admin-reporting", "portal"],
+      "expected_routes": [],
+      "must_not_contain": ["/admin/reporting"]
+    },
+    {
+      "id": "role-guard-002",
+      "question": "As a studio user, can I access /admin/dispatch?",
+      "role": "STUDIO_USER",
+      "expected_slugs": ["admin-dispatch"],
+      "expected_routes": [],
+      "must_not_contain": ["open /admin/dispatch"]
+    },
+    {
+      "id": "synonym-001",
+      "question": "LeaseIQ rules",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-lease-iq"],
+      "expected_routes": ["/admin/lease-iq"],
+      "note": "Tests hybrid keyword side: camelCase 'LeaseIQ' must still match 'Lease IQ' content"
+    },
+    {
+      "id": "synonym-002",
+      "question": "rbac visibility",
+      "role": "ADMIN",
+      "expected_slugs": ["admin-users"],
+      "note": "Short-token keyword test — 4-char 'rbac' must not be dropped as noise"
+    },
+    {
+      "id": "synonym-003",
+      "question": "sse notifications",
+      "role": "ADMIN",
+      "expected_slugs": ["notifications"],
+      "note": "3-char 'sse' should still match; notifications article mentions in-app SSE"
+    }
+  ]
+}

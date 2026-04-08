@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { RiserSyncDto } from './dto/ai.dto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/database/prisma.service';
 import { IngestionService } from './ingestion.service';
@@ -59,16 +60,42 @@ export class RiserPolicySyncService {
     return null;
   }
 
-  async syncAllPolicies(initiatorUserId?: string): Promise<{
+  async syncAllPolicies(
+    initiatorUserId?: string,
+    dto?: RiserSyncDto,
+  ): Promise<{
     synced: number;
     skipped: number;
     failed: number;
     details: { id: string; status: 'synced' | 'skipped' | 'failed'; reason?: string }[];
     configMissing?: boolean;
   }> {
-    const baseUrl = this.config.get<string>('RISER_API_BASE_URL')?.trim() || '';
-    const apiKey = this.config.get<string>('RISER_API_KEY')?.trim() || '';
-    const idsEnv = this.config.get<string>('RISER_POLICY_IDS')?.trim() || '';
+    const hasAnyBody =
+      (dto?.baseUrl?.trim() ?? '') !== '' ||
+      (dto?.apiKey?.trim() ?? '') !== '' ||
+      (dto?.policyIds?.trim() ?? '') !== '';
+
+    let baseUrl: string;
+    let apiKey: string;
+    let idsEnv: string;
+
+    if (hasAnyBody) {
+      const b = dto!.baseUrl?.trim() || '';
+      const k = dto!.apiKey?.trim() || '';
+      const ids = dto!.policyIds?.trim() || '';
+      if (!b || !k || !ids) {
+        throw new BadRequestException(
+          'Provide all three fields (API base URL, API key, and policy IDs), or leave them all empty to use RISER_API_BASE_URL, RISER_API_KEY, and RISER_POLICY_IDS from the server environment.',
+        );
+      }
+      baseUrl = b;
+      apiKey = k;
+      idsEnv = ids;
+    } else {
+      baseUrl = this.config.get<string>('RISER_API_BASE_URL')?.trim() || '';
+      apiKey = this.config.get<string>('RISER_API_KEY')?.trim() || '';
+      idsEnv = this.config.get<string>('RISER_POLICY_IDS')?.trim() || '';
+    }
 
     if (!baseUrl || !apiKey || !idsEnv) {
       this.logger.warn(

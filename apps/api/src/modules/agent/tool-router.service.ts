@@ -5,8 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/database/prisma.service';
-import { ConfigService } from '@nestjs/config';
-import { IngestionService } from '../ai/ingestion.service';
+import { HybridRetrievalService } from '../ai/hybrid-retrieval.service';
 import { TicketsService } from '../tickets/tickets.service';
 import { ReportingService } from '../reporting/reporting.service';
 import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
@@ -21,10 +20,6 @@ import {
 import { buildTicketCreatedAtFilter } from './ticket-metrics-where';
 import { FirstResponseService } from '../../common/first-response/first-response.service';
 
-/** Match AiService RAG — agent was using 0.4 and dropped almost all handbook hits. */
-const RAG_DISTANCE_THRESHOLD_DEFAULT = 0.78;
-const RAG_FALLBACK_TOP_K = 8;
-
 interface ToolResult {
   success: boolean;
   data?: unknown;
@@ -37,8 +32,7 @@ export class ToolRouterService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-    private readonly ingestion: IngestionService,
+    private readonly hybridRetrieval: HybridRetrievalService,
     private readonly ticketsService: TicketsService,
     private readonly reportingService: ReportingService,
     private readonly ticketVisibility: TicketVisibilityService,
@@ -854,94 +848,44 @@ export class ToolRouterService {
 
   // ── knowledge_search ────────────────────────────────────────────────────────
 
-  private getRagDistanceThreshold(): number {
-    const v = this.config.get<string>('RAG_DISTANCE_THRESHOLD');
-    const n = v != null ? parseFloat(v) : RAG_DISTANCE_THRESHOLD_DEFAULT;
-    return Number.isFinite(n) ? n : RAG_DISTANCE_THRESHOLD_DEFAULT;
-  }
-
+  /**
+   * Hybrid (vector + keyword) search over the knowledge base.
+   * Replaces the old vector-only path so brittle proper-noun queries
+   * ("LeaseIQ", "RBAC", "SSE") still hit the right product help article
+   * even when embeddings don't rank them first.
+   *
+   * See apps/api/src/modules/ai/hybrid-retrieval.service.ts for details
+   * on the RRF fusion and keyword tokenization.
+   */
   private async knowledgeSearch(args: Record<string, unknown>) {
-    const query = String(args.query);
-    const limit = Math.min(Number(args.limit) || 8, 12);
+    const query = String(args.query ?? '').trim();
+    if (!query) return { chunks: [], note: 'Empty query' };
 
-    let embedding: number[];
+    const limit = Math.min(Math.max(Number(args.limit) || 8, 1), 12);
+
     try {
-      embedding = await this.ingestion.embedOne(query);
-    } catch {
-      return { chunks: [], note: 'Embedding service unavailable' };
-    }
-
-    const embLiteral = `[${embedding.join(',')}]`;
-    const threshold = this.getRagDistanceThreshold();
-
-    const docScope = Prisma.sql`
-        AND (
-          kd."documentType" != 'handbook'
-          OR kd."upstreamProvider" = 'riser'
-          OR (
-            kd."documentType" = 'handbook'
-            AND (kd."upstreamProvider" IS NULL OR kd."upstreamProvider" = '')
-          )
-        )`;
-
-    let chunks = await this.prisma.$queryRaw<
-      Array<{
-        id: string;
-        content: string;
-        document_id: string;
-        document_title: string;
-        page_number: number | null;
-        distance: number;
-      }>
-    >`
-      SELECT dc.id, dc.content, kd.id AS document_id, kd.title AS document_title,
-             dc."pageNumber" AS page_number,
-             dc.embedding <=> ${embLiteral}::vector AS distance
-      FROM "document_chunks" dc
-      JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
-      WHERE kd."isActive" = true
-        AND dc.embedding IS NOT NULL
-        ${docScope}
-        AND dc.embedding <=> ${embLiteral}::vector < ${threshold}
-      ORDER BY distance ASC
-      LIMIT ${limit}
-    `;
-
-    if (chunks.length === 0) {
-      this.logger.debug(
-        `knowledge_search: no chunks under threshold ${threshold}; using nearest-neighbor fallback`,
+      const hits = await this.hybridRetrieval.hybridSearch(
+        query,
+        limit,
+        'general_plus_product',
       );
-      chunks = await this.prisma.$queryRaw<
-        Array<{
-          id: string;
-          content: string;
-          document_id: string;
-          document_title: string;
-          page_number: number | null;
-          distance: number;
-        }>
-      >`
-        SELECT dc.id, dc.content, kd.id AS document_id, kd.title AS document_title,
-               dc."pageNumber" AS page_number,
-               dc.embedding <=> ${embLiteral}::vector AS distance
-        FROM "document_chunks" dc
-        JOIN "knowledge_documents" kd ON kd.id = dc."documentId"
-        WHERE kd."isActive" = true
-          AND dc.embedding IS NOT NULL
-          ${docScope}
-        ORDER BY distance ASC
-        LIMIT ${Math.max(limit, RAG_FALLBACK_TOP_K)}
-      `;
-    }
 
-    return {
-      chunks: chunks.map((c) => ({
-        documentId: c.document_id,
-        title: c.document_title,
-        text: c.content.slice(0, 500),
-        pageNumber: c.page_number,
-      })),
-    };
+      return {
+        chunks: hits.map((h) => ({
+          documentId: h.documentId,
+          title: h.documentTitle,
+          text: h.content.slice(0, 500),
+          pageNumber: h.pageNumber,
+          score: Number(h.score.toFixed(6)),
+          vectorRank: h.vectorRank,
+          keywordRank: h.keywordRank,
+        })),
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`knowledge_search hybrid retrieval failed: ${msg}`);
+      return { chunks: [], error: msg };
+    }
   }
 
   // ── list_categories ─────────────────────────────────────────────────────────

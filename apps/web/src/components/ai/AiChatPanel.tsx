@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, type CSSProperties, type FormEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle } from 'lucide-react';
+import { Bot, X, Send, User, BookOpen, Loader2, AlertCircle, CheckCircle2, XCircle, Maximize2 } from 'lucide-react';
 import { agentApi, adminApi, type AgentActionPlan } from '@/lib/api';
 import { AssistantLinkedText, flattenStudiosFromMarkets } from '@/components/ai/assistant-linked-text';
 import { cn } from '@/lib/utils';
@@ -58,6 +58,12 @@ const ROVI_WELCOME: Message = {
     "Hi! I'm Rovi. I have access to all tickets, knowledge base, and reporting. Ask me anything or ask me to do something — like create a ticket, update status, or assign work.",
 };
 
+/** Web Access UI stays visible but is non-interactive until backend + client API key wiring is ready. */
+const WEB_ACCESS_UI_DISABLED = true;
+
+const WEB_ACCESS_DISABLED_TOOLTIP =
+  "Upon system implementation, the client's chosen API key will connect, allowing 'Web Access' functionality.";
+
 /** Blue→purple gradient border + surface fill; width comes from Tailwind (`border-2` on composer, `border` on assistant bubble) */
 const roviComposerSurfaceBorder: CSSProperties = {
   background:
@@ -71,11 +77,29 @@ export interface AiChatPanelProps {
   className?: string;
   /** Called with the first user message text when the chat first starts */
   onFirstMessage?: (text: string) => void;
-  /** Pre-fill the input and auto-send on mount (used by welcome capsules) */
+  /** When set without `initialConversationId`, this text is sent automatically once on mount (welcome screen handoff). */
   initialMessage?: string;
+  /** Resume an existing server thread (loads history via GET /agent/conversations/:id/messages) */
+  initialConversationId?: string | null;
+  /** Initial Web Access toggle when resuming from URL or widget handoff */
+  initialAllowWebSearch?: boolean;
+  /**
+   * Floating panel only: navigate to full /assistant with the same thread.
+   * Not shown when `fullScreen` is true.
+   */
+  onExpandToAssistant?: (opts: { conversationId: string | null; allowWebSearch: boolean }) => void;
 }
 
-export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, initialMessage }: AiChatPanelProps) {
+export function AiChatPanel({
+  onClose,
+  fullScreen,
+  className,
+  onFirstMessage,
+  initialMessage,
+  initialConversationId = null,
+  initialAllowWebSearch,
+  onExpandToAssistant,
+}: AiChatPanelProps) {
   const qc = useQueryClient();
   const { data: marketsData } = useQuery({
     queryKey: ['markets', 'assistant-chat'],
@@ -84,17 +108,24 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   });
   const studioLinkTargets = useMemo(() => flattenStudiosFromMarkets(marketsData), [marketsData]);
 
-  const [messages, setMessages] = useState<Message[]>([ROVI_WELCOME]);
+  const [messages, setMessages] = useState<Message[]>(() =>
+    initialConversationId ? [] : [ROVI_WELCOME],
+  );
+  const [historyLoading, setHistoryLoading] = useState(!!initialConversationId);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<string | null>(null);
-  const [allowWebSearch, setAllowWebSearch] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(initialConversationId);
+  const [allowWebSearch, setAllowWebSearch] = useState(initialAllowWebSearch ?? false);
   const [webAccessHint, setWebAccessHint] = useState(false);
   const [webHintPlacement, setWebHintPlacement] = useState<{ bottom: number; right: number } | null>(null);
   const webHintAnchorRef = useRef<HTMLDivElement>(null);
   const webHintPopoverRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasSentRef = useRef(!!initialConversationId);
+  /** Prevents duplicate auto-send (e.g. React dev StrictMode double effect). */
+  const initialAutoSendConsumedRef = useRef(false);
+  const submitUserMessageRef = useRef<(text: string) => Promise<void>>(async () => {});
 
   const updateWebHintPlacement = useCallback(() => {
     const anchor = webHintAnchorRef.current;
@@ -148,60 +179,123 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   }, [messages]);
 
   useEffect(() => {
-    if (initialMessage) {
-      setInput(initialMessage);
+    if (WEB_ACCESS_UI_DISABLED) {
+      setAllowWebSearch(false);
+      return;
     }
-  }, [initialMessage]);
+    if (initialAllowWebSearch != null) setAllowWebSearch(initialAllowWebSearch);
+  }, [initialAllowWebSearch]);
 
-  const hasSentRef = useRef(false);
+  useEffect(() => {
+    if (!initialConversationId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await agentApi.getMessages(initialConversationId);
+        const rows = res.data;
+        if (cancelled) return;
+        const mapped: Message[] = rows
+          .filter((r) => r.role === 'user' || r.role === 'assistant')
+          .map((r) => {
+            const toolResultsRaw = r.toolResults;
+            const toolResults = Array.isArray(toolResultsRaw)
+              ? (toolResultsRaw as Message['toolResults'])
+              : undefined;
+            return {
+              id: r.id,
+              role: r.role as 'user' | 'assistant',
+              content: r.content ?? '',
+              mode: (r.mode === 'ASK' || r.mode === 'DO' ? r.mode : undefined) as Message['mode'] | undefined,
+              actionPlan: r.actionPlan ?? undefined,
+              toolResults,
+              messageId: r.id,
+              conversationId: initialConversationId,
+            };
+          });
+        setMessages(mapped.length > 0 ? mapped : [ROVI_WELCOME]);
+        setConversationId(initialConversationId);
+        hasSentRef.current = mapped.some((m) => m.role === 'user');
+      } catch {
+        if (!cancelled) {
+          setMessages([ROVI_WELCOME]);
+          setConversationId(null);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialConversationId]);
+
+  const submitUserMessage = useCallback(
+    async (raw: string) => {
+      const message = raw.trim();
+      if (!message || isLoading || historyLoading) return;
+
+      if (!hasSentRef.current) {
+        hasSentRef.current = true;
+        onFirstMessage?.(message);
+      }
+
+      const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: message };
+      const loadingMsg: Message = { id: `l-${Date.now()}`, role: 'assistant', content: '', isLoading: true };
+
+      setMessages((prev) => [...prev, userMsg, loadingMsg]);
+      setInput('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      setIsLoading(true);
+
+      try {
+        const res = await agentApi.chat(
+          message,
+          conversationId ?? undefined,
+          WEB_ACCESS_UI_DISABLED ? false : allowWebSearch,
+        );
+        const data = res.data;
+        if (!conversationId) setConversationId(data.conversationId);
+
+        const assistantMsg: Message = {
+          id: data.messageId,
+          role: 'assistant',
+          content: data.content,
+          mode: data.mode,
+          sources: data.sources,
+          actionPlan: data.actionPlan,
+          toolResults: data.toolResults,
+          conversationId: data.conversationId,
+          messageId: data.messageId,
+        };
+
+        setMessages((prev) => prev.map((m) => (m.isLoading ? assistantMsg : m)));
+      } catch {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.isLoading
+              ? { id: `err-${Date.now()}`, role: 'assistant', content: 'Something went wrong. Please try again.', isError: true }
+              : m,
+          ),
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [allowWebSearch, conversationId, historyLoading, isLoading, onFirstMessage],
+  );
+
+  submitUserMessageRef.current = submitUserMessage;
+
+  useEffect(() => {
+    if (!initialMessage?.trim() || initialConversationId || initialAutoSendConsumedRef.current) return;
+    initialAutoSendConsumedRef.current = true;
+    const text = initialMessage.trim();
+    void submitUserMessageRef.current(text);
+  }, [initialMessage, initialConversationId]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    const message = input.trim();
-    if (!message || isLoading) return;
-
-    if (!hasSentRef.current) {
-      hasSentRef.current = true;
-      onFirstMessage?.(message);
-    }
-
-    const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: message };
-    const loadingMsg: Message = { id: `l-${Date.now()}`, role: 'assistant', content: '', isLoading: true };
-
-    setMessages((prev) => [...prev, userMsg, loadingMsg]);
-    setInput('');
-    if (textareaRef.current) textareaRef.current.style.height = 'auto';
-    setIsLoading(true);
-
-    try {
-      const res = await agentApi.chat(message, conversationId ?? undefined, allowWebSearch);
-      const data = res.data;
-      if (!conversationId) setConversationId(data.conversationId);
-
-      const assistantMsg: Message = {
-        id: data.messageId,
-        role: 'assistant',
-        content: data.content,
-        mode: data.mode,
-        sources: data.sources,
-        actionPlan: data.actionPlan,
-        toolResults: data.toolResults,
-        conversationId: data.conversationId,
-        messageId: data.messageId,
-      };
-
-      setMessages((prev) => prev.map((m) => (m.isLoading ? assistantMsg : m)));
-    } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.isLoading
-            ? { id: `err-${Date.now()}`, role: 'assistant', content: 'Something went wrong. Please try again.', isError: true }
-            : m,
-        ),
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    await submitUserMessage(input);
   };
 
   const handleConfirm = async (msg: Message) => {
@@ -257,7 +351,7 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as unknown as FormEvent);
+      void submitUserMessage(input);
     }
   };
 
@@ -270,6 +364,15 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
   const startNewConversation = () => {
     setConversationId(null);
     setMessages([ROVI_WELCOME]);
+    hasSentRef.current = false;
+    initialAutoSendConsumedRef.current = false;
+  };
+
+  const expandToAssistant = () => {
+    onExpandToAssistant?.({
+      conversationId,
+      allowWebSearch: WEB_ACCESS_UI_DISABLED ? false : allowWebSearch,
+    });
   };
 
   const webAccessHintPortal =
@@ -330,14 +433,20 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
     <>
     <div
       className={cn(
-        'rovi-chatbox-bg flex flex-col overflow-hidden',
-        fullScreen ? 'flex-1 min-h-0' : 'h-full',
+        'flex flex-col',
+        /* fullScreen: no overflow-hidden — it clips header/footer hover shadows into hard rectangular edges */
+        fullScreen ? 'min-h-0 flex-1 gap-3 overflow-visible bg-transparent' : 'h-full overflow-hidden rovi-chatbox-bg',
         className,
       )}
       style={{ border: fullScreen ? 'none' : '1px solid var(--color-border-default)' }}
     >
-      {/* Header */}
-      <div className="rovi-chatbox-header flex shrink-0 items-center justify-between px-4 py-3">
+      {/* Header — floating card on full-page assistant; chrome strip in floating widget */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center justify-between px-4 py-3',
+          fullScreen ? 'rovi-chatbox-floating-card-header' : 'rovi-chatbox-header',
+        )}
+      >
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)]">
             <Bot className="h-4 w-4 text-white" />
@@ -353,14 +462,29 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
             className="text-[10px] px-2 py-1 rounded-lg transition-colors font-medium hover:text-[var(--color-text-primary)]"
             style={{ color: 'var(--color-text-muted)', background: 'var(--color-bg-surface)', border: '1px solid var(--color-border-default)' }}
             title="New conversation"
+            type="button"
           >
             New
           </button>
+          {!fullScreen && onExpandToAssistant && (
+            <button
+              type="button"
+              onClick={expandToAssistant}
+              className="p-1 rounded-lg transition-colors hover:text-[var(--color-text-primary)]"
+              style={{ color: 'var(--color-text-muted)' }}
+              title="Open full assistant"
+              aria-label="Open full assistant"
+            >
+              <Maximize2 className="h-5 w-5" />
+            </button>
+          )}
           {onClose && (
             <button
+              type="button"
               onClick={onClose}
               className="p-1 rounded-lg transition-colors hover:text-[var(--color-text-primary)]"
               style={{ color: 'var(--color-text-muted)' }}
+              aria-label="Close"
             >
               <X className="h-5 w-5" />
             </button>
@@ -370,7 +494,13 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
 
       {/* Messages */}
       <div className="rovi-chatbox-messages flex-1 min-h-0 space-y-4 overflow-y-auto bg-transparent p-4">
-        {messages.map((msg) => (
+        {historyLoading ? (
+          <div className="flex h-full min-h-[8rem] flex-col items-center justify-center gap-2 text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>Loading conversation…</span>
+          </div>
+        ) : null}
+        {!historyLoading && messages.map((msg) => (
           <div key={msg.id} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : '')}>
             <div
               className={cn(
@@ -386,8 +516,15 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
                 className={cn(
                   'rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed',
                   msg.role === 'user'
-                    ? 'bg-[var(--color-accent)] text-white rounded-tr-sm'
-                    : cn('rounded-tl-sm', !msg.isError && 'border border-transparent'),
+                    ? cn(
+                        'bg-[var(--color-accent)] text-white rounded-tr-sm',
+                        !msg.isLoading && !msg.isError && 'rovi-chat-bubble-user-elevated',
+                      )
+                    : cn(
+                        'rounded-tl-sm',
+                        !msg.isError && 'border border-transparent',
+                        !msg.isLoading && !msg.isError && 'rovi-chat-bubble-assistant-elevated',
+                      ),
                 )}
                 style={
                   msg.role !== 'user'
@@ -478,43 +615,81 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
         <div ref={bottomRef} />
       </div>
 
-      {/* Input area */}
-      <div className="rovi-chatbox-footer shrink-0 space-y-2.5 p-3.5">
+      {/* Input area — floating card on full-page assistant */}
+      <div
+        className={cn(
+          'shrink-0 space-y-2.5 p-3.5',
+          fullScreen ? 'rovi-chatbox-floating-card-footer' : 'rovi-chatbox-footer',
+        )}
+      >
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAllowWebSearch((v) => !v)}
-              className="focus-ring shrink-0 rounded-full p-0.5 transition-opacity hover:opacity-90"
-              aria-pressed={allowWebSearch}
-              aria-label="Toggle web access"
+            <div
+              className={cn(
+                'group relative flex shrink-0 items-center gap-2',
+                WEB_ACCESS_UI_DISABLED && 'cursor-not-allowed',
+              )}
             >
-              <div
-                className={cn(
-                  'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150',
-                  allowWebSearch
-                    ? 'bg-[var(--color-accent)]'
-                    : 'border border-[var(--color-border-default)] bg-[var(--color-bg-surface-inset)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
-                )}
-              >
-                <span
-                  className={cn(
-                    'absolute top-[2px] left-[2px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-150',
-                    allowWebSearch ? 'translate-x-[11px]' : 'translate-x-0',
-                  )}
+              {WEB_ACCESS_UI_DISABLED ? (
+                <div
+                  className="pointer-events-none absolute bottom-full left-0 z-20 mb-1.5 w-max max-w-[min(20rem,calc(100vw-2rem))] rounded-lg border px-3 py-2 text-left text-[10px] leading-snug opacity-0 shadow-md transition-opacity duration-200 motion-reduce:transition-none group-hover:opacity-100"
                   style={{
-                    boxShadow: '0 0 0 1px color-mix(in srgb, var(--color-text-primary) 14%, transparent)',
+                    background: 'var(--color-bg-surface-raised)',
+                    borderColor: 'var(--color-border-default)',
+                    color: 'var(--color-text-primary)',
                   }}
-                />
-              </div>
-            </button>
-            <div className="flex items-center gap-1">
+                  role="tooltip"
+                >
+                  {WEB_ACCESS_DISABLED_TOOLTIP}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                disabled={WEB_ACCESS_UI_DISABLED}
+                onClick={() => {
+                  if (WEB_ACCESS_UI_DISABLED) return;
+                  setAllowWebSearch((v) => !v);
+                }}
+                className={cn(
+                  'focus-ring shrink-0 rounded-full p-0.5 transition-opacity',
+                  WEB_ACCESS_UI_DISABLED
+                    ? 'cursor-not-allowed opacity-60'
+                    : 'hover:opacity-90',
+                )}
+                aria-pressed={WEB_ACCESS_UI_DISABLED ? false : allowWebSearch}
+                aria-label="Toggle web access"
+                aria-disabled={WEB_ACCESS_UI_DISABLED}
+              >
+                <div
+                  className={cn(
+                    'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150',
+                    !WEB_ACCESS_UI_DISABLED && allowWebSearch
+                      ? 'bg-[var(--color-accent)]'
+                      : 'border border-[var(--color-border-default)] bg-[var(--color-bg-surface-inset)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.08)]',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-[2px] left-[2px] h-3 w-3 rounded-full bg-white shadow-sm transition-transform duration-150',
+                      !WEB_ACCESS_UI_DISABLED && allowWebSearch
+                        ? 'translate-x-[11px]'
+                        : 'translate-x-0',
+                    )}
+                    style={{
+                      boxShadow:
+                        '0 0 0 1px color-mix(in srgb, var(--color-text-primary) 14%, transparent)',
+                    }}
+                  />
+                </div>
+              </button>
               <span
                 className="inline-flex h-4 select-none items-center text-[10px] font-medium leading-none"
                 style={{ color: 'var(--color-text-secondary)' }}
               >
                 Web Access
               </span>
+            </div>
+            <div className="flex items-center gap-1">
               <div ref={webHintAnchorRef} className="flex shrink-0 items-center">
                 <button
                   type="button"
@@ -555,11 +730,11 @@ export function AiChatPanel({ onClose, fullScreen, className, onFirstMessage, in
               color: 'var(--color-text-primary)',
               ...roviComposerSurfaceBorder,
             }}
-            disabled={isLoading}
+            disabled={isLoading || historyLoading}
           />
           <button
             type="submit"
-            disabled={!input.trim() || isLoading}
+            disabled={!input.trim() || isLoading || historyLoading}
             className="shrink-0 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-accent)] text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

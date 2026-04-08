@@ -531,15 +531,19 @@ export const aiApi = {
   /** Permanently delete a document and its chunks */
   deleteDocument: (id: string) => api.delete(`/ai/documents/${id}`),
 
-  /** Sync Riser policies into the knowledge base (admin). */
-  syncRiserPolicies: () =>
+  /** Sync Riser policies into the knowledge base (admin). Empty body uses RISER_* env vars. */
+  syncRiserPolicies: (body?: {
+    baseUrl?: string;
+    apiKey?: string;
+    policyIds?: string;
+  }) =>
     api.post<{
       synced: number;
       skipped: number;
       failed: number;
       details: { id: string; status: string; reason?: string }[];
       configMissing?: boolean;
-    }>('/ai/riser/sync', {}),
+    }>('/ai/riser/sync', body ?? {}),
 };
 
 // ─── AI Agent (tool calling) ────────────────────────────────────────────────

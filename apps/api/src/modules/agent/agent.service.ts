@@ -97,7 +97,7 @@ function aggregateKnowledgeSources(
   });
 }
 
-const SYSTEM_PROMPT = `You are an AI assistant for an internal ticketing system used by ~500 employees.
+const SYSTEM_PROMPT = `You are Rovi, the AI assistant for an internal ticketing system used by ~500 employees.
 
 MODES:
 - ASK: Answer questions about tickets, users, studios, markets, metrics, company knowledge, and how to use this application (navigation, screens, roles).
@@ -111,16 +111,28 @@ CONFIRMATION FLOW (CRITICAL):
 - You MUST NOT ask the user to type "yes", "confirm", or similar in free text.
 - The UI will show Confirm/Cancel buttons automatically. Do NOT add phrases like "Click Confirm to proceed" or "Click Cancel to stop" in your summary — the buttons are self-explanatory.
 
+PRODUCT Q&A (how to use Rovi) — NON-NEGOTIABLE:
+- For ANY question of the form "how do I …", "where is …", "where do I …", "what is …", "what does … do", "can I …", or "how does Rovi handle …": you MUST call knowledge_search FIRST, before composing an answer.
+- Do NOT guess navigation paths. Do NOT invent screens or URLs. Only quote paths that appear in the retrieved chunks.
+- Do NOT default to "ask your manager", "contact IT", or "submit a ticket" before you have called knowledge_search. Those are fallbacks for AFTER retrieval returns nothing useful, not a substitute for searching.
+- If retrieval returns nothing relevant: say plainly "the help docs don't cover that yet" and suggest asking an admin or filing a request to the team that owns the feature. Never fabricate a workaround.
+- ALWAYS cite the source article title in your answer for product Q&A (e.g. "from Rovi Help — Workflow templates (admin)").
+
+GROUNDING:
+- When you have retrieved chunks, every concrete step or path in your answer must come from them. If a step isn't in the retrieved context, don't include it.
+- Prefer steps and paths from "Rovi Help — …" articles over any other source for product Q&A.
+
+ROLE AWARENESS:
+- Whenever the correct answer depends on the user's role (studio vs department vs admin) — especially for admin-only screens like /admin/workflow-templates, /admin/dispatch, /admin/reporting, /admin/lease-iq, /admin/email-automation, /admin/system-monitoring, /admin/knowledge-base, /admin/markets, /admin/users, and /inbox — call get_current_user_context FIRST, then tailor the steps. Never tell a user to open an admin URL if their role is not ADMIN; instead, say "that screen is admin only" and point them at something they can use.
+
 RULES:
 1. Use tools to get data before answering questions. Don't guess.
 2. For actions: always include the appropriate tool calls. Let the UI handle confirmation.
 3. Be concise. Use bullet points. No fluff.
 4. When citing knowledge base results, mention the source title.
 5. If you can't do something due to permissions, explain why.
-6. Never fabricate ticket IDs, user IDs, or data.
-7. If asked about something not in your scope, say so and suggest they contact their manager or team. Never suggest submitting a ticket.
-8. For "how do I…", "where do I…", or "how does the system work" (using the app, not company HR policy): call knowledge_search first. The knowledge base includes a Platform user guide with real URL paths. Ground answers in retrieved chunks; if nothing matches, say the guide does not cover it and suggest an admin or manager.
-9. When the answer depends on whether the user is a studio user, department user, or admin (e.g. Admin-only screens), call get_current_user_context first, then tailor steps. Never tell a user to open an admin URL if their role is not ADMIN.
+6. Never fabricate ticket IDs, user IDs, data, paths, or features.
+7. If asked about something not in your scope, say so. Never suggest submitting a ticket.
 
 TOOL USAGE:
 - "How many [urgent/high/medium/low] tickets?" → ALWAYS use get_ticket_metrics with group_by: "priority". Optionally pass priority: ["URGENT"] (or HIGH, etc.) to filter. Then answer with the number(s) from the returned counts.
@@ -130,7 +142,7 @@ TOOL USAGE:
 - "Most new hires / new users by studio?" → use query_user_rollups with group_by: "studio" and the right date_preset or created_after/created_before. Tell the user these are account signups (User.createdAt), not HR hire dates, if the tool disclaimer applies.
 - To look up specific tickets: use search_tickets or get_ticket.
 - Handbook, policy, retail tips, HR, procedures, or "what does the company say about…": use knowledge_search first.
-- How to use the ticketing app (create a maintenance ticket, workflow templates, dispatch groups, reporting, inbox, portal vs /tickets, Assistant vs Handbook): use knowledge_search first. Include concrete paths from the retrieved guide (e.g. /tickets/new, /admin/dispatch) when they appear in the context.
+- Product Q&A — how to use Rovi (creating a maintenance ticket, workflow templates, vendor dispatch, reporting, inbox, portal vs /tickets, Assistant vs Handbook, Lease IQ, email automation, attachments, SLAs, notifications): use knowledge_search FIRST. Ground every step in the retrieved Rovi Help chunks and include the literal paths they quote (e.g. /tickets/new, /admin/dispatch, /admin/workflow-templates).
 - Create/modify tickets: use the appropriate mutation tool.
 - Find categories or assignees: use list_categories or list_users.
 
@@ -138,6 +150,16 @@ FORMAT:
 - Keep responses under 300 words unless the user explicitly asks for detail.
 - Use plain text only in the chat UI: do NOT use markdown (no **bold**, no # headings, no \`code\` fences). Use simple line breaks; use hyphen bullets like "- Item" without asterisks around words.
 - When you mention an in-app URL, write it as a plain path starting with / so the UI can link it (example: open /admin/workflow-templates).`;
+
+/** Appended to the system prompt only for the post-tool OpenAI turn (executeToolCalls follow-up). */
+const TOOL_FOLLOW_UP_DIRECTIVE = `
+
+TOOL RESULTS (this turn only): Tool outputs are already in the messages above — the lookups are finished.
+- Answer with the actual data from those JSON results: ticket titles, statuses, counts, names, or knowledge excerpts.
+- Do not say you will retrieve, check, or look something up "now". Do not stop after a plan — summarize what the tools returned.
+- If every tool result contains an "error" field, explain the failure plainly.
+- If search_tickets returned zero tickets or an empty list, say no matching tickets were found for this user’s visibility.
+- Plain text only; keep it under 300 words.`;
 
 @Injectable()
 export class AgentService {
@@ -264,11 +286,12 @@ export class AgentService {
 
     // Fallback: if somehow still no tool calls
     if (!assistantMessage.tool_calls?.length) {
+      const text = this.resolveModelReply(assistantMessage.content, []);
       const saved = await this.prisma.agentMessage.create({
         data: {
           conversationId: convo.id,
           role: 'assistant',
-          content: assistantMessage.content,
+          content: text,
           mode: 'ASK',
           tokenCount: completion.usage?.total_tokens,
         },
@@ -278,7 +301,7 @@ export class AgentService {
         conversationId: convo.id,
         messageId: saved.id,
         mode: 'ASK',
-        content: assistantMessage.content ?? '',
+        content: text,
       };
     }
 
@@ -474,7 +497,7 @@ export class AgentService {
     const followUp = await this.openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: SYSTEM_PROMPT + TOOL_FOLLOW_UP_DIRECTIVE },
         ...history
           .filter((h) => h.content)
           .map((h) => ({
@@ -499,8 +522,14 @@ export class AgentService {
       max_tokens: MAX_OUTPUT_TOKENS,
     });
 
-    const finalContent =
-      followUp.choices[0]?.message?.content ?? this.summarizeResults(results);
+    const followMsg = followUp.choices[0]?.message;
+    if (followMsg?.tool_calls?.length) {
+      this.logger.warn(
+        `Agent follow-up returned ${followMsg.tool_calls.length} extra tool call(s); not executed in this request.`,
+      );
+    }
+
+    const finalContent = this.resolveModelReply(followMsg?.content, results);
     const mode = (toolCalls as ToolCallWithFunction[]).some((tc) =>
       MUTATION_TOOLS.has(tc.function.name),
     )
@@ -631,22 +660,147 @@ export class AgentService {
     return 'LOW';
   }
 
-  private summarizeResults(
+  /** Non-empty model text, else structured tool summary, else a safe user-facing fallback. */
+  private resolveModelReply(
+    raw: string | null | undefined,
     results: Array<{ tool: string; result: unknown }>,
   ): string {
-    return results
-      .map((r) => {
-        const d = r.result as any;
-        if (r.tool === 'create_ticket')
-          return `Created ticket "${d?.title}" (${d?.ticket_id?.slice(0, 8)})`;
-        if (r.tool === 'update_ticket_status')
-          return `Updated status: ${d?.old_status} → ${d?.new_status}`;
-        if (r.tool === 'assign_ticket') return `Assigned to ${d?.assigned_to}`;
-        if (r.tool === 'add_ticket_comment') return `Added comment on ticket`;
-        if (r.tool === 'create_subtask') return `Created subtask "${d?.title}"`;
-        return `Executed ${r.tool}`;
-      })
-      .join('. ');
+    const trimmed = typeof raw === 'string' ? raw.trim() : '';
+    if (trimmed.length > 0) return trimmed;
+    const fb = this.summarizeResults(results).trim();
+    if (fb.length > 0) return fb;
+    return (
+      'I ran the tools for your question but did not get a usable reply back. ' +
+      'Please try again, or open /tickets to review items in your queue.'
+    );
+  }
+
+  private toolResultHasError(result: unknown): result is { error: string } {
+    return (
+      result !== null &&
+      typeof result === 'object' &&
+      'error' in result &&
+      typeof (result as { error?: unknown }).error === 'string' &&
+      (result as { error: string }).error.length > 0
+    );
+  }
+
+  private summarizeResults(results: Array<{ tool: string; result: unknown }>): string {
+    const parts: string[] = [];
+    for (const r of results) {
+      const line = this.summarizeOneToolResult(r.tool, r.result);
+      if (line) parts.push(line);
+    }
+    return parts.join('\n\n');
+  }
+
+  private summarizeOneToolResult(tool: string, result: unknown): string {
+    if (this.toolResultHasError(result)) {
+      return `${tool} failed: ${result.error}`;
+    }
+    const d = result as Record<string, unknown>;
+
+    switch (tool) {
+      case 'search_tickets': {
+        const tickets = Array.isArray(d.tickets) ? d.tickets : [];
+        const n = tickets.length;
+        if (n === 0) {
+          return 'No tickets matched that search in your visible scope.';
+        }
+        const lines = tickets.slice(0, 10).map((t) => {
+          const row = t as Record<string, unknown>;
+          const title = String(row.title ?? 'Untitled');
+          const st = String(row.status ?? '');
+          const idShort = String(row.id ?? '').slice(0, 8);
+          return `- ${title} — status ${st}${idShort ? ` (id ${idShort}…)` : ''}`;
+        });
+        const more =
+          n > 10
+            ? `\n… and ${n - 10} more (ask a narrower question if you need a specific ticket).`
+            : '';
+        return `Here are the ${n} most recent matching ticket(s):\n${lines.join('\n')}${more}`;
+      }
+      case 'get_ticket': {
+        const title = String(d.title ?? 'Ticket');
+        const st = String(d.status ?? '');
+        const pr = String(d.priority ?? '');
+        return `Ticket: ${title}\n- Status: ${st}\n- Priority: ${pr}`;
+      }
+      case 'get_ticket_metrics': {
+        const counts = Array.isArray(d.counts) ? d.counts : [];
+        if (counts.length === 0) {
+          return 'Ticket metrics: no rows returned for this filter (or none in your scope).';
+        }
+        const lines = counts.slice(0, 15).map((c) => {
+          const row = c as { group?: unknown; count?: unknown };
+          return `- ${String(row.group ?? '')}: ${String(row.count ?? 0)}`;
+        });
+        return `Ticket counts:\n${lines.join('\n')}`;
+      }
+      case 'knowledge_search': {
+        const chunks = Array.isArray(d.chunks) ? d.chunks : [];
+        if (chunks.length === 0) {
+          return d.note
+            ? `Knowledge search: ${String(d.note)}`
+            : 'Knowledge search returned no matching documents.';
+        }
+        const titles = chunks
+          .slice(0, 5)
+          .map((ch) => String((ch as { title?: unknown }).title ?? 'Untitled'));
+        return `Found ${chunks.length} knowledge excerpt(s). Sources include: ${titles.join('; ')}. Ask a follow-up if you want a specific passage summarized.`;
+      }
+      case 'get_current_user_context': {
+        const role = String(d.role ?? 'unknown');
+        const studio = d.studio as { name?: string } | null | undefined;
+        const market = d.market as { name?: string } | null | undefined;
+        const bits = [`Your role: ${role}`];
+        if (studio?.name) bits.push(`Studio: ${studio.name}`);
+        if (market?.name) bits.push(`Market: ${market.name}`);
+        return bits.join('. ') + '.';
+      }
+      case 'list_users': {
+        const users = Array.isArray(d.users) ? d.users : [];
+        if (users.length === 0) return 'No users returned for that filter.';
+        const names = users
+          .slice(0, 12)
+          .map((u) => String((u as { name?: unknown }).name ?? ''))
+          .filter(Boolean);
+        return `Found ${users.length} user(s): ${names.join(', ')}${users.length > 12 ? ' …' : ''}`;
+      }
+      case 'list_categories': {
+        const cats = Array.isArray(d.categories) ? d.categories : [];
+        if (cats.length === 0) return 'No active categories found.';
+        const names = cats
+          .slice(0, 20)
+          .map((c) => String((c as { name?: unknown }).name ?? ''))
+          .filter(Boolean);
+        return `Categories (${cats.length}): ${names.join(', ')}`;
+      }
+      case 'query_user_rollups': {
+        const counts = Array.isArray(d.counts) ? d.counts : [];
+        const disclaimer = String(d.disclaimer ?? '');
+        if (counts.length === 0) {
+          return 'User rollups: no rows for this filter.';
+        }
+        const lines = counts.slice(0, 12).map((c) => {
+          const row = c as { group?: unknown; count?: unknown };
+          return `- ${String(row.group ?? '')}: ${String(row.count ?? 0)}`;
+        });
+        return `User counts:\n${lines.join('\n')}${disclaimer ? `\n(${disclaimer})` : ''}`;
+      }
+      case 'create_ticket':
+        return `Created ticket "${String((d as { title?: unknown }).title ?? '')}" (${String((d as { ticket_id?: unknown }).ticket_id ?? '').slice(0, 8)}…)`;
+      case 'update_ticket_status':
+        return `Updated status: ${String((d as { old_status?: unknown }).old_status)} → ${String((d as { new_status?: unknown }).new_status)}`;
+      case 'assign_ticket':
+        return `Assigned to ${String((d as { assigned_to?: unknown }).assigned_to)}`;
+      case 'add_ticket_comment':
+        return 'Added comment on ticket';
+      case 'create_subtask':
+        return `Created subtask "${String((d as { title?: unknown }).title ?? '')}"`;
+      default:
+        return `Completed ${tool.replace(/_/g, ' ')}.`;
+    }
   }
 
   private buildHistoryMessages(

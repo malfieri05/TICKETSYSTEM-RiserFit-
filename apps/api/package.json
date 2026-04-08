@@ -9,6 +9,7 @@
     "postinstall": "prisma generate",
     "dev": "npm run start:dev",
     "ingest:platform-guide": "ts-node --transpile-only -r dotenv/config scripts/ingest-platform-user-guide.ts",
+    "ingest:product-help": "ts-node --transpile-only -r dotenv/config scripts/ingest-product-help.ts",
     "seed:locations": "ts-node prisma/seed-locations.ts",
     "import:studio-profiles": "ts-node --transpile-only prisma/import-studio-profiles.ts",
     "cleanup:studios": "ts-node prisma/cleanup-legacy-studios.ts",

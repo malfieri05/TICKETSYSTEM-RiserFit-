@@ -100,7 +100,7 @@ export class IngestionService {
       s3Key?: string;
       mimeType?: string;
       sizeBytes?: number;
-      documentType?: 'general' | 'handbook';
+      documentType?: 'general' | 'handbook' | 'product_help';
     } = {},
   ): Promise<{ documentId: string; chunksCreated: number }> {
     // Create the parent document record
@@ -232,7 +232,7 @@ export class IngestionService {
     documentId: string,
     title: string,
     content: string,
-    opts: { documentType?: 'general' | 'handbook' } = {},
+    opts: { documentType?: 'general' | 'handbook' | 'product_help' } = {},
   ): Promise<void> {
     const doc = await this.prisma.knowledgeDocument.findUnique({
       where: { id: documentId },

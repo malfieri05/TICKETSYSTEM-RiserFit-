@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { measureThumbInsideContainer } from '@/lib/measure-thumb-in-container';
 import { POLISH_THEME } from '@/lib/polish';
+import { cn } from '@/lib/utils';
 
 export type SlidingSegmentOption = { value: string; label: string };
 
@@ -122,7 +123,10 @@ export function SlidingSegmentedControl({
   return (
     <nav
       ref={navRef}
-      className={`relative flex flex-wrap gap-1 rounded-lg py-1 px-1 ${className ?? ''}`}
+      className={cn(
+        'relative flex w-fit max-w-full flex-wrap gap-1 rounded-lg py-1 px-1',
+        className,
+      )}
       style={{
         background: 'var(--color-bg-surface)',
         border: '1px solid var(--color-border-default)',

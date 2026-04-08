@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { Suspense, useCallback, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Send } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { AiChatPanel } from '@/components/ai/AiChatPanel';
@@ -39,11 +40,16 @@ function RoviAskCapsuleIcon() {
   );
 }
 
-export default function AssistantPage() {
+function AssistantPageInner() {
+  const searchParams = useSearchParams();
+  const convoId = searchParams.get('c');
+  const webPref = searchParams.get('web') === '1';
+
   const { user } = useAuth();
   const firstName = user?.displayName?.split(' ')[0] ?? user?.email?.split('@')[0] ?? 'there';
 
-  const [hasChatStarted, setHasChatStarted] = useState(false);
+  /** Jump straight to chat when resuming a thread (?c=) or handoff with Web Access (?web=1). */
+  const [hasChatStarted, setHasChatStarted] = useState(() => !!convoId || webPref);
   const [welcomeInput, setWelcomeInput] = useState('');
   const [initialMessage, setInitialMessage] = useState<string | undefined>(undefined);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,19 +88,31 @@ export default function AssistantPage() {
   };
 
   const onFirstMessage = useCallback(() => {
-    // already transitioned — this fires from AiChatPanel after chat starts
+    setInitialMessage(undefined);
   }, []);
 
   if (hasChatStarted) {
     return (
-      <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
+      <div className="flex h-full min-h-0 flex-col">
         <Header title="AI Assistant" />
-        <div className="flex-1 flex flex-col min-h-0 pb-[10vh]">
-          <AiChatPanel
-            fullScreen
-            onFirstMessage={onFirstMessage}
-            initialMessage={initialMessage}
-          />
+        {/* Full-bleed Rovi gradient; narrow column is only for floating cards inside AiChatPanel */}
+        <div className="assistant-conversation-fullpage-bg flex min-h-0 flex-1 flex-col pb-[10vh]">
+          {/* ~8% wider on each side vs 52rem → 52 × 1.16 ≈ 60.25rem; cap on small viewports */}
+          <div className="assistant-chat-column-mount mx-auto flex h-full min-h-0 w-full max-w-[min(96vw,60.25rem)] flex-1 flex-col px-4 pt-3 sm:px-6 sm:pt-4">
+            <AiChatPanel
+              fullScreen
+              onFirstMessage={onFirstMessage}
+              initialMessage={convoId ? undefined : initialMessage}
+              initialConversationId={convoId}
+              initialAllowWebSearch={webPref}
+            />
+            <p
+              className="mt-3 shrink-0 pb-1 text-center text-xs"
+              style={{ color: 'var(--color-text-muted)' }}
+            >
+              Rovi can make mistakes. Review important responses.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -129,12 +147,14 @@ export default function AssistantPage() {
           </p>
         </div>
 
-        {/* Quick-prompt capsules — single row; scroll on very narrow viewports */}
+        {/* Quick-prompt capsules — single row; scroll on very narrow viewports.
+            No overflow-y-hidden: it clips focus rings to the row height (only left/right curves visible).
+            py-2 keeps ring-2 inside the scrollport without a vertical scrollbar. */}
         <div
-          className="mb-8 w-full max-w-[44rem] overflow-x-auto overflow-y-hidden"
+          className="mb-8 w-full max-w-[44rem] overflow-x-auto py-2"
           style={{ scrollbarWidth: 'thin' }}
         >
-          <div className="flex flex-nowrap items-center justify-center gap-2 min-w-min mx-auto px-1">
+          <div className="mx-auto flex min-w-min flex-nowrap items-center justify-center gap-2 px-1">
             {QUICK_PROMPTS.map((p) => (
               <button
                 key={p.label}
@@ -208,5 +228,24 @@ export default function AssistantPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AssistantPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          className="flex h-full min-h-[50vh] items-center justify-center"
+          style={{ background: 'var(--color-bg-page)' }}
+        >
+          <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            Loading…
+          </span>
+        </div>
+      }
+    >
+      <AssistantPageInner />
+    </Suspense>
   );
 }

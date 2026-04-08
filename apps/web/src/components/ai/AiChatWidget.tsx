@@ -9,7 +9,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Bot, X } from 'lucide-react';
 import { AiChatPanel } from '@/components/ai/AiChatPanel';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,7 @@ export function useAiChatWidget(): AiChatWidgetContextValue {
  */
 export function AiChatWidgetProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -42,6 +43,18 @@ export function AiChatWidgetProvider({ children }: { children: ReactNode }) {
 
   const openAgentChat = useCallback(() => setOpen(true), []);
   const closeAgentChat = useCallback(() => setOpen(false), []);
+
+  const expandToAssistant = useCallback(
+    (opts: { conversationId: string | null; allowWebSearch: boolean }) => {
+      const q = new URLSearchParams();
+      if (opts.conversationId) q.set('c', opts.conversationId);
+      if (opts.allowWebSearch) q.set('web', '1');
+      const qs = q.toString();
+      router.push(qs ? `/assistant?${qs}` : '/assistant');
+      setOpen(false);
+    },
+    [router],
+  );
 
   const value = useMemo(
     () => ({ openAgentChat, closeAgentChat }),
@@ -55,7 +68,7 @@ export function AiChatWidgetProvider({ children }: { children: ReactNode }) {
         <>
           {open && (
             <div className="fixed bottom-24 right-6 z-50 flex h-[640px] w-[462px] flex-col overflow-hidden rounded-2xl border border-[var(--color-border-default)] bg-transparent shadow-2xl">
-              <AiChatPanel onClose={() => setOpen(false)} />
+              <AiChatPanel onClose={() => setOpen(false)} onExpandToAssistant={expandToAssistant} />
             </div>
           )}
 

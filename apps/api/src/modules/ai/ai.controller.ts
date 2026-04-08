@@ -22,7 +22,12 @@ import { AiService } from './ai.service';
 import { IngestionService } from './ingestion.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { RiserPolicySyncService } from './riser-policy-sync.service';
-import { ChatDto, IngestTextDto, IngestUrlDto } from './dto/ai.dto';
+import {
+  ChatDto,
+  IngestTextDto,
+  IngestUrlDto,
+  RiserSyncDto,
+} from './dto/ai.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { RequestUser } from '../auth/strategies/jwt.strategy';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -98,9 +103,12 @@ export class AiController {
   @Post('riser/sync')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.ACCEPTED)
-  async syncRiserPolicies(@CurrentUser() user: RequestUser) {
+  async syncRiserPolicies(
+    @Body() dto: RiserSyncDto,
+    @CurrentUser() user: RequestUser,
+  ) {
     try {
-      const result = await this.riserSync.syncAllPolicies(user.id);
+      const result = await this.riserSync.syncAllPolicies(user.id, dto);
       return result;
     } catch (err) {
       this.logger.error(

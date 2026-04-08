@@ -20,6 +20,8 @@ import {
   MessageCircle,
   CheckCircle,
   MapPin,
+  CalendarDays,
+  RotateCcw,
 } from 'lucide-react';
 import {
   dashboardApi,
@@ -35,7 +37,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
 
-type Preset = 'today' | 'last7' | 'last30' | 'all';
+type Preset = 'today' | 'last7' | 'last30' | 'last90' | 'all';
 
 /** Lower bound for “All” preset — aligns KPI + breakdowns with same windowed logic as other presets. */
 const ALL_PRESET_FROM = '2000-01-01';
@@ -61,6 +63,7 @@ function rangeForPreset(preset: Preset): { from: string; to: string } {
   const start = new Date(end);
   if (preset === 'last7') start.setDate(start.getDate() - 6);
   else if (preset === 'last30') start.setDate(start.getDate() - 29);
+  else if (preset === 'last90') start.setDate(start.getDate() - 89);
   return { from: ymd(start), to: ymd(end) };
 }
 
@@ -234,8 +237,8 @@ function formatDashboardRangeCaption(from: string, to: string): string {
 const TOOLTIP_W = 136; // px — used for left/right side placement
 const TOOLTIP_GAP = 14; // px gap between vertical rule and tooltip edge
 
-/** Fixed plot height only — ResizeObserver measures width, never height (avoids flex/grid stretch feedback). Sized to sit flush with the KPI column on xl. */
-const DASHBOARD_VOLUME_CHART_H = 240;
+/** Minimum chart height used as skeleton placeholder and initial floor. */
+const DASHBOARD_VOLUME_CHART_MIN_H = 240;
 
 function VolumeLineChart({ data }: { data: { date: string; count: number; closed: number }[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -243,17 +246,21 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const chartTipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
   const [svgWidth, setSvgWidth] = useState(0);
+  const [svgHeight, setSvgHeight] = useState(DASHBOARD_VOLUME_CHART_MIN_H);
   const [tipFixed, setTipFixed] = useState({ left: 0, top: 0 });
 
-  /** Measure wrapper width only — chart height stays fixed so flex/grid never stretches the SVG to absurd sizes. */
+  /** Measure both width and height from the wrapper so the chart fills its flex parent. */
   useLayoutEffect(() => {
     const el = chartWrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => {
-      setSvgWidth(el.getBoundingClientRect().width);
-    });
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setSvgWidth(r.width);
+      if (r.height > 0) setSvgHeight(r.height);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setSvgWidth(el.getBoundingClientRect().width);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -261,7 +268,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const PAD_R = 10;
   const PAD_T = 14;
   const PAD_B = 36;
-  const H = DASHBOARD_VOLUME_CHART_H;
+  const H = svgHeight;
   const widthPx = Math.max(svgWidth, PAD_L + PAD_R + 1);
   const innerW = Math.max(1, widthPx - PAD_L - PAD_R);
   const innerH = H - PAD_T - PAD_B;
@@ -387,7 +394,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const vbW = Math.max(widthPx, 1);
 
   return (
-    <div ref={chartWrapRef} className="relative w-full min-w-0 select-none" style={{ height: H }}>
+    <div ref={chartWrapRef} className="relative w-full min-w-0 select-none h-full">
       <svg
         ref={svgRef}
         width="100%"
@@ -512,16 +519,17 @@ function formatHoursLabel(h: number | null): string {
   return `${(h / 24).toFixed(1)}d`;
 }
 
-const PRESET_SEGMENTS: { key: Preset; label: string }[] = [
-  { key: 'today', label: 'Today' },
-  { key: 'last7', label: 'Last 7 days' },
-  { key: 'last30', label: 'Last 30 days' },
-  { key: 'all', label: 'All' },
+const PRESET_SEGMENTS: { key: Preset; label: string; shortLabel: string }[] = [
+  { key: 'today',   label: 'Today',       shortLabel: 'Today' },
+  { key: 'last7',   label: 'Last 7 days', shortLabel: '7d' },
+  { key: 'last30',  label: 'Last 30 days',shortLabel: '30d' },
+  { key: 'last90',  label: 'Last 90 days',shortLabel: '90d' },
+  { key: 'all',     label: 'All time',    shortLabel: 'All' },
 ];
 
 const KPI_PRESET_OPTIONS = PRESET_SEGMENTS.map((s) => ({
   value: s.key,
-  label: s.label,
+  label: s.shortLabel,
 }));
 
 const AVG_FIRST_RESPONSE_TOOLTIP =
@@ -574,6 +582,13 @@ export default function DashboardPage() {
   }, []);
 
   const rangeValid = Boolean(rangeFrom && rangeTo && rangeFrom <= rangeTo);
+
+  const dayCount = useMemo(() => {
+    if (!rangeFrom || !rangeTo || rangeFrom > rangeTo) return null;
+    const a = new Date(rangeFrom + 'T12:00:00');
+    const b = new Date(rangeTo + 'T12:00:00');
+    return Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1;
+  }, [rangeFrom, rangeTo]);
 
   const skipForStudio = user?.role === 'STUDIO_USER';
 
@@ -681,7 +696,7 @@ export default function DashboardPage() {
         )}
 
         {rangeValid && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-start">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-stretch">
             {/* Left: KPI grid — intrinsic height drives row; right chart uses fixed H (no ResizeObserver→height) */}
             <div className="flex min-h-0 w-full min-w-0 flex-col">
               {topSectionSkeleton ? (
@@ -757,62 +772,126 @@ export default function DashboardPage() {
                   <div
                     className="dashboard-card col-span-full flex min-h-0 min-w-0 w-full shrink-0 flex-col overflow-hidden rounded-xl px-4 py-5 sm:px-6 sm:col-span-2 md:col-span-3 xl:col-span-3 xl:row-start-1"
                   >
-                    {/* Card label */}
-                    <p className="mb-4 shrink-0 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
-                      Timeframe
-                    </p>
-                    {/* Controls — stacked naturally, no forced flex-1 stretch */}
-                    <div className="flex w-full min-w-0 flex-col items-stretch gap-3 sm:items-center">
-                      {/* Preset buttons */}
-                      <SlidingSegmentedControl
-                        options={KPI_PRESET_OPTIONS}
-                        value={manualRange ? null : preset}
-                        onChange={(v) => selectPreset(v as Preset)}
-                        aria-label="Date range preset"
-                        size="sm"
-                        className="w-full max-w-full shrink-0 justify-center sm:w-fit"
-                      />
-                      {/* Custom date range — single row, subordinate to presets */}
-                      <div className="flex min-w-0 shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-2">
-                        <label
-                          htmlFor="kpi-range-from"
-                          className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
-                        >
-                          From
-                        </label>
-                        <DateFilterInput
-                          id="kpi-range-from"
-                          value={rangeFrom}
-                          onChange={onDateFromChange}
-                          hintOffsetClassName="left-2.5"
-                          variant="filter"
-                          className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
-                          style={{
-                            background: 'var(--color-bg-surface-inset)',
-                            color: 'var(--color-text-primary)',
-                            width: '8.5rem',
-                          }}
+                    {/* ── Header row ── */}
+                    <div className="flex items-center justify-between mb-4 shrink-0 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <CalendarDays className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--color-accent)' }} />
+                        <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--color-text-muted)]">
+                          Date Range
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {/* Live pulse */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="relative flex h-1.5 w-1.5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-60" style={{ background: '#22c55e' }} />
+                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: '#22c55e' }} />
+                          </span>
+                          <span className="hidden text-[10px] text-[var(--color-text-muted)] sm:inline">Live</span>
+                        </div>
+                        {/* Reset button — only when manually overridden */}
+                        {manualRange && (
+                          <button
+                            type="button"
+                            title="Reset to preset"
+                            onClick={() => selectPreset(preset)}
+                            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold transition-colors"
+                            style={{
+                              color: 'var(--color-accent)',
+                              background: 'rgba(var(--color-accent-rgb,52,120,196),0.10)',
+                            }}
+                          >
+                            <RotateCcw className="h-2.5 w-2.5" />
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Presets + From/To share one centered column so the pill sits above the date boxes */}
+                    <div className="flex w-full min-w-0 shrink-0 flex-col items-center gap-3.5">
+                      <div className="flex w-full min-w-0 flex-wrap items-center justify-center gap-3">
+                        <SlidingSegmentedControl
+                          options={KPI_PRESET_OPTIONS}
+                          value={manualRange ? null : preset}
+                          onChange={(v) => selectPreset(v as Preset)}
+                          aria-label="Date range preset"
+                          size="sm"
+                          className="shrink-0"
                         />
-                        <span className="text-[var(--color-text-muted)] text-xs select-none">→</span>
-                        <label
-                          htmlFor="kpi-range-to"
-                          className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
-                        >
-                          To
-                        </label>
-                        <DateFilterInput
-                          id="kpi-range-to"
-                          value={rangeTo}
-                          onChange={onDateToChange}
-                          hintOffsetClassName="left-2.5"
-                          variant="filter"
-                          className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
-                          style={{
-                            background: 'var(--color-bg-surface-inset)',
-                            color: 'var(--color-text-primary)',
-                            width: '8.5rem',
-                          }}
-                        />
+                        {manualRange && (
+                          <span
+                            className="rounded-full px-3 py-1 text-xs font-semibold"
+                            style={{
+                              background: 'rgba(var(--color-accent-rgb,52,120,196),0.10)',
+                              color: 'var(--color-accent)',
+                              border: '1px solid rgba(var(--color-accent-rgb,52,120,196),0.25)',
+                            }}
+                          >
+                            Custom
+                          </span>
+                        )}
+                      </div>
+
+                      {/* ── Date range row (same horizontal center as presets) ── */}
+                      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-2">
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <label
+                            htmlFor="kpi-range-from"
+                            className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
+                          >
+                            From
+                          </label>
+                          <DateFilterInput
+                            id="kpi-range-from"
+                            value={rangeFrom}
+                            onChange={onDateFromChange}
+                            hintOffsetClassName="left-2.5"
+                            variant="filter"
+                            className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
+                            style={{
+                              background: manualRange ? 'rgba(var(--color-accent-rgb,52,120,196),0.06)' : 'var(--color-bg-surface-inset)',
+                              border: manualRange ? '1px solid rgba(var(--color-accent-rgb,52,120,196),0.30)' : '1px solid var(--color-border-default)',
+                              color: 'var(--color-text-primary)',
+                              width: '8.5rem',
+                            }}
+                          />
+                        </div>
+                        <span className="shrink-0 select-none text-xs text-[var(--color-text-muted)]">→</span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <label
+                            htmlFor="kpi-range-to"
+                            className="whitespace-nowrap text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--color-text-muted)]"
+                          >
+                            To
+                          </label>
+                          <DateFilterInput
+                            id="kpi-range-to"
+                            value={rangeTo}
+                            onChange={onDateToChange}
+                            hintOffsetClassName="left-2.5"
+                            variant="filter"
+                            className="shrink-0 !rounded-lg px-2.5 py-1.5 text-sm !h-auto min-h-[2.25rem]"
+                            style={{
+                              background: manualRange ? 'rgba(var(--color-accent-rgb,52,120,196),0.06)' : 'var(--color-bg-surface-inset)',
+                              border: manualRange ? '1px solid rgba(var(--color-accent-rgb,52,120,196),0.30)' : '1px solid var(--color-border-default)',
+                              color: 'var(--color-text-primary)',
+                              width: '8.5rem',
+                            }}
+                          />
+                        </div>
+                        {dayCount != null && (
+                          <span
+                            className="shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold tabular-nums"
+                            style={{
+                              background: 'var(--color-bg-surface-inset)',
+                              color: 'var(--color-text-muted)',
+                              border: '1px solid var(--color-border-default)',
+                            }}
+                          >
+                            {dayCount >= 365 ? `${(dayCount / 365).toFixed(1)}y` : `${dayCount}d`}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -867,11 +946,11 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Right: ticket volume — card height = header + chart (fixed H); no h-full flex-1 dead band */}
-            <div className="flex min-h-0 w-full min-w-0 flex-col">
+            {/* Right: ticket volume — stretches to match left column height at xl */}
+            <div className="flex min-h-0 w-full min-w-0 flex-col xl:h-full">
               {topSectionSkeleton ? (
                 <div
-                  className="dashboard-card flex min-h-[260px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0"
+                  className="dashboard-card flex min-h-[260px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0 xl:flex-1"
                   style={{ background: 'var(--color-bg-surface-inset)' }}
                 >
                   <div className="mb-4 h-3 w-28 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
@@ -879,13 +958,10 @@ export default function DashboardPage() {
                     <div className="h-10 w-24 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
                     <div className="h-5 w-40 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_40%,transparent)]" />
                   </div>
-                  <div
-                    className="w-full shrink-0 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]"
-                    style={{ height: DASHBOARD_VOLUME_CHART_H }}
-                  />
+                  <div className="w-full flex-1 min-h-0 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
                 </div>
               ) : (
-                <div className="dashboard-card flex w-full min-w-0 min-h-[260px] flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0">
+                <div className="dashboard-card flex w-full min-w-0 min-h-[260px] flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0 xl:flex-1">
                   <div className="mb-1 min-w-0 shrink-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
                       Ticket Volume
@@ -899,12 +975,9 @@ export default function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 w-full min-w-0 shrink-0">
+                  <div className="mt-4 w-full min-w-0 flex-1 min-h-0">
                     {volume.length === 0 ? (
-                      <div
-                        className="flex w-full items-center justify-center text-sm text-[var(--color-text-muted)]"
-                        style={{ height: DASHBOARD_VOLUME_CHART_H }}
-                      >
+                      <div className="flex h-full w-full items-center justify-center text-sm text-[var(--color-text-muted)]">
                         No ticket data yet.
                       </div>
                     ) : (
