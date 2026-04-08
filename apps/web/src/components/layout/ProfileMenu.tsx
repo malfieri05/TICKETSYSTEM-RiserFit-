@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Sun, Moon, LogOut } from 'lucide-react';
+import Link from 'next/link';
+import { X, Sun, Moon, LogOut, Activity } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { getDisplayNameInitials, profileAccountTypeLabel } from '@/lib/user-display';
@@ -122,7 +123,22 @@ export function ProfileMenu() {
         }}
       >
         <div className="mb-5 grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-start gap-0">
-          <div className="w-10 shrink-0" aria-hidden />
+          {user.role === 'ADMIN' ? (
+            <div className="flex shrink-0 justify-start">
+              <Link
+                href="/admin/system-monitoring"
+                onClick={() => setOpen(false)}
+                className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-btn-ghost-hover-bg)]"
+                style={{ color: 'var(--color-accent)' }}
+                aria-label="System monitoring"
+                title="System monitoring"
+              >
+                <Activity className="h-4 w-4" />
+              </Link>
+            </div>
+          ) : (
+            <div className="w-10 shrink-0" aria-hidden />
+          )}
           <p
             className="min-w-0 px-1 text-center text-sm font-medium break-words"
             style={{ color: 'var(--color-text-secondary)' }}

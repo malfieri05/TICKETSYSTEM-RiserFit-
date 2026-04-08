@@ -88,6 +88,21 @@ const PROXIMITY_LINE_MAX_MILES = 50;
 /** Hide proximity lines until the map is this zoomed in (continental overview is usually below this). */
 const PROXIMITY_MIN_ZOOM = 10;
 
+/**
+ * Leaflet popups use a fixed light (white) canvas. In dark mode, body/text CSS variables stay “dark theme”,
+ * so inherited color and `var(--color-text-primary)` read as pale text on white. Scope light-theme tokens here
+ * (aligned with `[data-theme="light"]` in globals.css).
+ */
+const LEAFLET_POPUP_LIGHT_SURFACE = {
+  color: '#171717',
+  '--color-text-primary': '#171717',
+  '--color-text-secondary': '#475467',
+  '--color-text-muted': '#667085',
+  '--color-accent': '#2868b8',
+  '--color-accent-hover': '#3478c4',
+  '--color-border-default': '#d9e0ea',
+} as React.CSSProperties;
+
 function haversineMiles(
   lat1: number,
   lon1: number,
@@ -374,27 +389,29 @@ function StudioMapMarker({
       }}
     >
       <Popup maxWidth={320}>
-        <LocationLink
-          studioId={loc.id}
-          studioName={loc.name}
-          className="text-sm font-medium"
-        />
-        {loc.formattedAddress && (
-          <div className="text-xs mt-1 text-[var(--color-text-muted)]">{loc.formattedAddress}</div>
-        )}
-        {loc.openTickets != null && loc.openTickets.length > 0 && (
-          <div
-            className="mt-2 max-h-44 overflow-y-auto border-t pt-2 text-left [scrollbar-width:thin]"
-            style={{ borderColor: 'var(--color-border-default)' }}
-          >
-            <ActiveMaintenanceTicketsListBody
-              count={loc.openTickets.length}
-              ticketsWithLinks={loc.openTickets}
-              onViewTicket={onViewTicket}
-              highlightedTicketId={highlightedTicketId}
-            />
-          </div>
-        )}
+        <div style={LEAFLET_POPUP_LIGHT_SURFACE}>
+          <LocationLink
+            studioId={loc.id}
+            studioName={loc.name}
+            className="text-sm font-medium"
+          />
+          {loc.formattedAddress && (
+            <div className="text-xs mt-1 text-[var(--color-text-muted)]">{loc.formattedAddress}</div>
+          )}
+          {loc.openTickets != null && loc.openTickets.length > 0 && (
+            <div
+              className="mt-2 max-h-44 overflow-y-auto border-t pt-2 text-left [scrollbar-width:thin]"
+              style={{ borderColor: 'var(--color-border-default)' }}
+            >
+              <ActiveMaintenanceTicketsListBody
+                count={loc.openTickets.length}
+                ticketsWithLinks={loc.openTickets}
+                onViewTicket={onViewTicket}
+                highlightedTicketId={highlightedTicketId}
+              />
+            </div>
+          )}
+        </div>
       </Popup>
     </Marker>
   );

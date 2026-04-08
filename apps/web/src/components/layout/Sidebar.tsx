@@ -20,7 +20,6 @@ import {
   LayoutGrid,
   BookMarked,
   Inbox,
-  Activity,
   ChevronRight,
   ChevronDown,
   Mail,
@@ -100,7 +99,6 @@ const adminGroups: { label: string; items: { href: string; label: string; icon: 
       { href: '/admin/markets', label: 'Locations', icon: MapPin },
       { href: '/admin/knowledge-base', label: 'Knowledge Base', icon: BookOpen },
       { href: '/admin/users', label: 'Users', icon: User },
-      { href: '/admin/system-monitoring', label: 'System Monitoring', icon: Activity },
     ],
   },
 ];

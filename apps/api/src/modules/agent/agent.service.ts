@@ -41,6 +41,19 @@ export interface AgentResponse {
   }>;
 }
 
+/**
+ * Events emitted by `AgentService.chatStream`. The streaming controller
+ * serializes each event as an SSE `data:` frame so the chat UI can render
+ * tokens as they're produced. Every stream ends with exactly one `done` or
+ * `error` event.
+ */
+export type AgentStreamEvent =
+  | { type: 'start'; conversationId: string }
+  | { type: 'thinking'; phase: 'tools' | 'compose' }
+  | { type: 'delta'; delta: string }
+  | { type: 'done'; payload: AgentResponse }
+  | { type: 'error'; message: string };
+
 /** OpenAI tool call with function payload (narrows union for type safety). */
 type ToolCallWithFunction = {
   id: string;
@@ -151,14 +164,19 @@ FORMAT:
 - Use plain text only in the chat UI: do NOT use markdown (no **bold**, no # headings, no \`code\` fences). Use simple line breaks; use hyphen bullets like "- Item" without asterisks around words.
 - When you mention an in-app URL, write it as a plain path starting with / so the UI can link it (example: open /admin/workflow-templates).`;
 
-/** Appended to the system prompt only for the post-tool OpenAI turn (executeToolCalls follow-up). */
-const TOOL_FOLLOW_UP_DIRECTIVE = `
-
-TOOL RESULTS (this turn only): Tool outputs are already in the messages above — the lookups are finished.
+/**
+ * Sent as a SEPARATE system message AFTER the tool result messages on the
+ * post-tool follow-up call. Kept out of `SYSTEM_PROMPT` deliberately so the
+ * follow-up call's leading `{ role: 'system', content: SYSTEM_PROMPT }` is
+ * BYTE-IDENTICAL to the first call's leading system message — that's what
+ * OpenAI's automatic prompt caching needs to keep the long system prompt in
+ * cache across the two halves of a single agent turn (and across turns).
+ */
+const TOOL_FOLLOW_UP_DIRECTIVE = `TOOL RESULTS (this turn only): Tool outputs are already in the messages above — the lookups are finished.
 - Answer with the actual data from those JSON results: ticket titles, statuses, counts, names, or knowledge excerpts.
 - Do not say you will retrieve, check, or look something up "now". Do not stop after a plan — summarize what the tools returned.
 - If every tool result contains an "error" field, explain the failure plainly.
-- If search_tickets returned zero tickets or an empty list, say no matching tickets were found for this user’s visibility.
+- If search_tickets returned zero tickets or an empty list, say no matching tickets were found for this user's visibility.
 - Plain text only; keep it under 300 words.`;
 
 @Injectable()
@@ -192,35 +210,32 @@ export class AgentService {
     conversationId?: string,
     allowWebSearch?: boolean,
   ): Promise<AgentResponse> {
-    await this.checkQuota(actor);
-
-    // Get or create conversation
-    const convo = conversationId
-      ? await this.prisma.agentConversation.findUniqueOrThrow({
-          where: { id: conversationId },
-        })
-      : await this.prisma.agentConversation.create({
-          data: { userId: actor.id },
-        });
-
-    // Save user message
-    const userMsg = await this.prisma.agentMessage.create({
-      data: { conversationId: convo.id, role: 'user', content: message },
-    });
-
-    // Load history
-    const history = await this.prisma.agentMessage.findMany({
-      where: { conversationId: convo.id },
-      orderBy: { createdAt: 'asc' },
-      take: MAX_HISTORY,
-      select: { role: true, content: true, toolCalls: true, toolResults: true },
-    });
+    // Run independent pre-LLM work in parallel: quota check, conversation
+    // lookup/create, and the deterministic create-ticket fast path. None of
+    // these depend on each other. `checkQuota` still throws (and aborts the
+    // whole Promise.all) if the user is over their daily limit.
+    const [, convo, directPlan] = await Promise.all([
+      this.checkQuota(actor),
+      conversationId
+        ? this.prisma.agentConversation.findUniqueOrThrow({
+            where: { id: conversationId },
+          })
+        : this.prisma.agentConversation.create({
+            data: { userId: actor.id },
+          }),
+      this.tryBuildCreateTicketPlan(message),
+    ]);
 
     // Deterministic fast-path:
     // If the user clearly asks to create a ticket and provided enough details,
     // immediately return a DO ActionPlan with Confirm/Cancel (no extra prompting).
-    const directPlan = await this.tryBuildCreateTicketPlan(message);
     if (directPlan) {
+      // Persist the user message first (the deterministic plan path skips the
+      // OpenAI call entirely, so there's no parallelization opportunity here).
+      await this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      });
+
       const saved = await this.prisma.agentMessage.create({
         data: {
           conversationId: convo.id,
@@ -247,6 +262,10 @@ export class AgentService {
         'so I cannot run automated actions or advanced Q&A right now.\n\n' +
         'You can still manage tickets directly in the UI. Once the API key is added, the agent will be able to search, summarize, and take actions for you.';
 
+      await this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      });
+
       const saved = await this.prisma.agentMessage.create({
         data: {
           conversationId: convo.id,
@@ -264,22 +283,42 @@ export class AgentService {
       };
     }
 
-    // Build messages for OpenAI
+    // Load PRIOR history (without the user message we're about to send) so we
+    // can persist that user message in parallel with the OpenAI call below.
+    const history = await this.prisma.agentMessage.findMany({
+      where: { conversationId: convo.id },
+      orderBy: { createdAt: 'asc' },
+      take: MAX_HISTORY,
+      select: { role: true, content: true, toolCalls: true, toolResults: true },
+    });
+
+    // Build messages for OpenAI. Append the new user message manually since
+    // we haven't persisted it yet (it lands in DB in parallel with the call).
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...this.buildHistoryMessages(history),
+      { role: 'user' as const, content: message },
     ];
 
-    // Call OpenAI with tool definitions — force tool usage so the model
-    // never responds with just text when it should be calling tools.
-    const completion = await this.openai.chat.completions.create({
-      model: CHAT_MODEL,
-      messages,
-      tools: AGENT_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
-      tool_choice: 'required',
-      temperature: 0.1,
-      max_tokens: MAX_OUTPUT_TOKENS,
-    });
+    // Persist the user message and call OpenAI in parallel — neither needs
+    // to wait on the other. The user-message INSERT typically completes well
+    // before OpenAI returns, but parallelizing shaves the round-trip time
+    // off the user-perceived latency.
+    const [, completion] = await Promise.all([
+      this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      }),
+      // Call OpenAI with tool definitions — force tool usage so the model
+      // never responds with just text when it should be calling tools.
+      this.openai.chat.completions.create({
+        model: CHAT_MODEL,
+        messages,
+        tools: AGENT_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
+        tool_choice: 'required',
+        temperature: 0.1,
+        max_tokens: MAX_OUTPUT_TOKENS,
+      }),
+    ]);
 
     const assistantMessage = completion.choices[0]?.message;
     if (!assistantMessage) throw new Error('No response from model');
@@ -343,14 +382,363 @@ export class AgentService {
       };
     }
 
-    // Execute tools immediately (no confirmation needed)
+    // Execute tools immediately (no confirmation needed). We pass the same
+    // `messages` array we just sent to OpenAI so the follow-up call can reuse
+    // it without re-fetching history from Postgres.
     return this.executeToolCalls(
       convo.id,
       toolCalls,
       assistantMessage.content,
       actor,
       completion.usage?.total_tokens,
+      messages,
     );
+  }
+
+  // ── Streaming chat (additive — old `chat` endpoint still works as JSON) ───
+
+  /**
+   * Streaming variant of `chat`. Mirrors the same orchestration but yields
+   * `AgentStreamEvent`s so the controller can pipe them to an SSE response.
+   *
+   * The big UX win is that the post-tool follow-up completion (which
+   * historically took 2–4 s of dead time) is streamed token-by-token, so the
+   * user sees the answer appear as it's generated. Time-to-first-token drops
+   * from a few seconds to a few hundred ms with **zero change in tokens
+   * billed** — same model, same temperature, same max_tokens.
+   *
+   * For non-streaming code paths (deterministic plan, no tool calls,
+   * confirmation needed), this method emits a single `done` event with the
+   * same shape as `AgentResponse` so the client can handle them uniformly.
+   */
+  async *chatStream(
+    message: string,
+    actor: RequestUser,
+    conversationId?: string,
+  ): AsyncGenerator<AgentStreamEvent, void, unknown> {
+    // Same parallel pre-LLM block as `chat()`. Quota check throws on overage.
+    const [, convo, directPlan] = await Promise.all([
+      this.checkQuota(actor),
+      conversationId
+        ? this.prisma.agentConversation.findUniqueOrThrow({
+            where: { id: conversationId },
+          })
+        : this.prisma.agentConversation.create({
+            data: { userId: actor.id },
+          }),
+      this.tryBuildCreateTicketPlan(message),
+    ]);
+
+    yield { type: 'start', conversationId: convo.id };
+
+    // Deterministic create-ticket fast path — no LLM call, no streaming.
+    if (directPlan) {
+      await this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      });
+
+      const saved = await this.prisma.agentMessage.create({
+        data: {
+          conversationId: convo.id,
+          role: 'assistant',
+          content: directPlan.summary,
+          mode: 'DO',
+          actionPlan: JSON.parse(JSON.stringify(directPlan)),
+        },
+      });
+
+      yield {
+        type: 'done',
+        payload: {
+          conversationId: convo.id,
+          messageId: saved.id,
+          mode: 'DO',
+          content: directPlan.summary,
+          actionPlan: { ...directPlan, requires_confirmation: true },
+        },
+      };
+      return;
+    }
+
+    // OpenAI not configured — graceful fallback (no LLM call, no streaming).
+    if (!this._openai) {
+      const fallbackContent =
+        'The AI Agent is not fully configured yet (missing OPENAI_API_KEY on the API server), ' +
+        'so I cannot run automated actions or advanced Q&A right now.\n\n' +
+        'You can still manage tickets directly in the UI. Once the API key is added, the agent will be able to search, summarize, and take actions for you.';
+
+      await this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      });
+
+      const saved = await this.prisma.agentMessage.create({
+        data: {
+          conversationId: convo.id,
+          role: 'assistant',
+          content: fallbackContent,
+          mode: 'ASK',
+        },
+      });
+
+      yield {
+        type: 'done',
+        payload: {
+          conversationId: convo.id,
+          messageId: saved.id,
+          mode: 'ASK',
+          content: fallbackContent,
+        },
+      };
+      return;
+    }
+
+    // Load PRIOR history (without the user message we're about to send) so we
+    // can persist that user message in parallel with the OpenAI call below.
+    const history = await this.prisma.agentMessage.findMany({
+      where: { conversationId: convo.id },
+      orderBy: { createdAt: 'asc' },
+      take: MAX_HISTORY,
+      select: { role: true, content: true, toolCalls: true, toolResults: true },
+    });
+
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...this.buildHistoryMessages(history),
+      { role: 'user' as const, content: message },
+    ];
+
+    // First call: forced tool use. Not streamed — it returns mostly tool calls
+    // with little or no text. Persist the user message in parallel.
+    const [, completion] = await Promise.all([
+      this.prisma.agentMessage.create({
+        data: { conversationId: convo.id, role: 'user', content: message },
+      }),
+      this.openai.chat.completions.create({
+        model: CHAT_MODEL,
+        messages,
+        tools: AGENT_TOOLS as OpenAI.Chat.Completions.ChatCompletionTool[],
+        tool_choice: 'required',
+        temperature: 0.1,
+        max_tokens: MAX_OUTPUT_TOKENS,
+      }),
+    ]);
+
+    const assistantMessage = completion.choices[0]?.message;
+    if (!assistantMessage) {
+      yield { type: 'error', message: 'No response from model' };
+      return;
+    }
+
+    // No tool calls (rare with tool_choice: 'required', but defensive).
+    if (!assistantMessage.tool_calls?.length) {
+      const text = this.resolveModelReply(assistantMessage.content, []);
+      const saved = await this.prisma.agentMessage.create({
+        data: {
+          conversationId: convo.id,
+          role: 'assistant',
+          content: text,
+          mode: 'ASK',
+          tokenCount: completion.usage?.total_tokens,
+        },
+      });
+      yield {
+        type: 'done',
+        payload: {
+          conversationId: convo.id,
+          messageId: saved.id,
+          mode: 'ASK',
+          content: text,
+        },
+      };
+      return;
+    }
+
+    const toolCalls = assistantMessage.tool_calls;
+    const needsConfirmation = this.requiresConfirmation(toolCalls, actor);
+
+    // Mutating action — return action plan, no streaming.
+    if (needsConfirmation) {
+      const rawSummary =
+        assistantMessage.content ?? 'The following actions will be performed:';
+      const plan: ActionPlan = {
+        summary: this.stripConfirmCancelPhrase(rawSummary),
+        actions: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
+          tool: tc.function.name,
+          args: JSON.parse(tc.function.arguments),
+        })),
+        risk_level: this.assessRisk(toolCalls),
+      };
+
+      const saved = await this.prisma.agentMessage.create({
+        data: {
+          conversationId: convo.id,
+          role: 'assistant',
+          content: plan.summary,
+          mode: 'DO',
+          toolCalls: JSON.parse(JSON.stringify(toolCalls)),
+          actionPlan: JSON.parse(JSON.stringify(plan)),
+          tokenCount: completion.usage?.total_tokens,
+        },
+      });
+
+      yield {
+        type: 'done',
+        payload: {
+          conversationId: convo.id,
+          messageId: saved.id,
+          mode: 'DO',
+          content: plan.summary,
+          actionPlan: { ...plan, requires_confirmation: true },
+        },
+      };
+      return;
+    }
+
+    // Read-only tools (search, get, knowledge_search, ...). Run them, then
+    // STREAM the follow-up completion token-by-token so the UI updates live.
+    yield { type: 'thinking', phase: 'tools' };
+
+    const results: Array<{ tool: string; result: unknown }> = [];
+    const toolMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
+      [];
+
+    for (const raw of toolCalls) {
+      const tc: any = raw;
+      const args = JSON.parse(tc.function.arguments);
+      const start = Date.now();
+      const result = await this.toolRouter.execute(
+        tc.function.name,
+        args,
+        actor,
+      );
+
+      await this.prisma.agentActionLog.create({
+        data: {
+          userId: actor.id,
+          conversationId: convo.id,
+          toolName: tc.function.name,
+          toolArgs: args,
+          resultSummary: result.success
+            ? JSON.stringify(result.data).slice(0, 500)
+            : null,
+          success: result.success,
+          errorMessage: result.error,
+          executionMs: Date.now() - start,
+        },
+      });
+
+      results.push({
+        tool: tc.function.name,
+        result: result.success ? result.data : { error: result.error },
+      });
+
+      toolMessages.push({
+        role: 'tool' as const,
+        tool_call_id: tc.id,
+        content: JSON.stringify(
+          result.success ? result.data : { error: result.error },
+        ),
+      });
+    }
+
+    yield { type: 'thinking', phase: 'compose' };
+
+    // Streaming follow-up call. Same exact request shape as the non-streaming
+    // path in `executeToolCalls` but with `stream: true`. Same model, same
+    // tokens, same billing — only the transport changes.
+    const followUpStream = await this.openai.chat.completions.create({
+      model: CHAT_MODEL,
+      messages: [
+        ...messages,
+        {
+          role: 'assistant' as const,
+          content: assistantMessage.content,
+          tool_calls: (toolCalls as ToolCallWithFunction[]).map((tc) => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: tc.function.name,
+              arguments: tc.function.arguments,
+            },
+          })),
+        },
+        ...toolMessages,
+        { role: 'system' as const, content: TOOL_FOLLOW_UP_DIRECTIVE },
+      ],
+      temperature: 0.1,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    let composedContent = '';
+    let followUpUsageTokens = 0;
+    for await (const chunk of followUpStream) {
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string' && delta.length > 0) {
+        composedContent += delta;
+        yield { type: 'delta', delta };
+      }
+      // The final chunk (when include_usage is set) carries token usage.
+      if (chunk.usage?.total_tokens) {
+        followUpUsageTokens = chunk.usage.total_tokens;
+      }
+    }
+
+    const finalContent = this.resolveModelReply(composedContent, results);
+    const mode = (toolCalls as ToolCallWithFunction[]).some((tc) =>
+      MUTATION_TOOLS.has(tc.function.name),
+    )
+      ? 'DO'
+      : 'ASK';
+
+    // Knowledge search citations (same logic as executeToolCalls).
+    const knowledgeResults = results.find((r) => r.tool === 'knowledge_search');
+    const rawKnowledge = (
+      knowledgeResults?.result as { chunks?: unknown } | undefined
+    )?.chunks;
+    const rawChunks = Array.isArray(rawKnowledge)
+      ? rawKnowledge.filter(
+          (c): c is {
+            documentId: string;
+            title: string;
+            text: string;
+            pageNumber: number | null;
+          } =>
+            typeof c === 'object' &&
+            c !== null &&
+            typeof (c as { documentId?: unknown }).documentId === 'string' &&
+            typeof (c as { title?: unknown }).title === 'string' &&
+            typeof (c as { text?: unknown }).text === 'string',
+        )
+      : [];
+    const sources =
+      rawChunks.length > 0 ? aggregateKnowledgeSources(rawChunks) : undefined;
+
+    const saved = await this.prisma.agentMessage.create({
+      data: {
+        conversationId: convo.id,
+        role: 'assistant',
+        content: finalContent,
+        mode,
+        toolCalls: JSON.parse(JSON.stringify(toolCalls)),
+        toolResults: results as any,
+        tokenCount:
+          (completion.usage?.total_tokens ?? 0) + followUpUsageTokens,
+      },
+    });
+
+    yield {
+      type: 'done',
+      payload: {
+        conversationId: convo.id,
+        messageId: saved.id,
+        mode,
+        content: finalContent,
+        toolResults: results,
+        sources,
+      },
+    };
   }
 
   // ── Confirm a pending action plan ─────────────────────────────────────────
@@ -441,7 +829,15 @@ export class AgentService {
     toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[],
     assistantContent: string | null,
     actor: RequestUser,
-    tokenCount?: number,
+    tokenCount: number | undefined,
+    /**
+     * The exact `messages` array we sent to the FIRST OpenAI call this turn —
+     * `[ {system: SYSTEM_PROMPT}, ...history, {user: <this turn's message>} ]`.
+     * Reused here so we (a) avoid a redundant Postgres round trip to refetch
+     * history and (b) keep the leading system message byte-identical to the
+     * first call so OpenAI's automatic prompt cache stays warm.
+     */
+    priorMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[],
   ): Promise<AgentResponse> {
     const results: Array<{ tool: string; result: unknown }> = [];
     const toolMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
@@ -486,24 +882,15 @@ export class AgentService {
       });
     }
 
-    // Call the model again with tool results so it can compose a natural-language response
-    const history = await this.prisma.agentMessage.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'asc' },
-      take: MAX_HISTORY,
-      select: { role: true, content: true },
-    });
-
+    // Call the model again with tool results so it can compose a natural-language response.
+    // Reuses `priorMessages` from the first call (no extra DB round trip), then appends
+    // the assistant tool-call message, the tool result messages, and finally the
+    // follow-up directive as its OWN trailing system message — keeping the leading
+    // SYSTEM_PROMPT byte-identical to the first call so prompt caching stays warm.
     const followUp = await this.openai.chat.completions.create({
       model: CHAT_MODEL,
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT + TOOL_FOLLOW_UP_DIRECTIVE },
-        ...history
-          .filter((h) => h.content)
-          .map((h) => ({
-            role: h.role as 'user' | 'assistant',
-            content: h.content!,
-          })),
+        ...priorMessages,
         {
           role: 'assistant' as const,
           content: assistantContent,
@@ -517,6 +904,7 @@ export class AgentService {
           })),
         },
         ...toolMessages,
+        { role: 'system' as const, content: TOOL_FOLLOW_UP_DIRECTIVE },
       ],
       temperature: 0.1,
       max_tokens: MAX_OUTPUT_TOKENS,

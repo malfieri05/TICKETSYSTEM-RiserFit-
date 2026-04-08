@@ -20,10 +20,28 @@ import {
 // OpenAI text-embedding-3-small: 1536 dimensions, cheap & accurate
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 
+/**
+ * Maximum entries in the per-process query embedding cache. The same FAQ-style
+ * questions ("how do I create a ticket?", "what is LeaseIQ?") get asked over
+ * and over — caching the embedding skips a 100–250 ms OpenAI round trip and
+ * also reduces embedding API spend. Bounded so memory stays predictable
+ * (1536 floats × 4 bytes ≈ 6 KB per entry → ~1.5 MB at full capacity).
+ */
+const QUERY_EMBEDDING_CACHE_MAX = 256;
+/** Don't cache pathologically long inputs — only short user queries. */
+const QUERY_EMBEDDING_CACHE_MAX_INPUT_CHARS = 512;
+
 @Injectable()
 export class IngestionService {
   private readonly logger = new Logger(IngestionService.name);
   private _openai: OpenAI | null = null;
+  /**
+   * LRU cache of single-text query embeddings, keyed by normalized query
+   * string. JS Map preserves insertion order, so we can implement a simple
+   * LRU by deleting + re-inserting on hit and shifting out the oldest entry
+   * when the cache is full.
+   */
+  private readonly queryEmbeddingCache = new Map<string, number[]>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -464,10 +482,53 @@ export class IngestionService {
     }
   }
 
-  /** Embed a single string */
+  /**
+   * Embed a single string. Cached in-memory by normalized query so repeat
+   * questions skip the OpenAI round trip entirely. Long inputs (e.g. full
+   * document chunks) bypass the cache to keep memory bounded — those are
+   * embedded by `embedBatch` directly during ingestion anyway.
+   */
   async embedOne(text: string): Promise<number[]> {
+    const normalized = this.normalizeQueryForCache(text);
+    if (
+      normalized &&
+      normalized.length <= QUERY_EMBEDDING_CACHE_MAX_INPUT_CHARS
+    ) {
+      const cached = this.queryEmbeddingCache.get(normalized);
+      if (cached) {
+        // LRU touch: re-insert so it becomes the most recently used.
+        this.queryEmbeddingCache.delete(normalized);
+        this.queryEmbeddingCache.set(normalized, cached);
+        return cached;
+      }
+    }
+
     const [embedding] = await this.embedBatch([text]);
+
+    if (
+      normalized &&
+      normalized.length <= QUERY_EMBEDDING_CACHE_MAX_INPUT_CHARS
+    ) {
+      this.queryEmbeddingCache.set(normalized, embedding);
+      // Evict oldest entry if over capacity. Map iteration order is
+      // insertion order, so the first key is the least recently used.
+      if (this.queryEmbeddingCache.size > QUERY_EMBEDDING_CACHE_MAX) {
+        const oldest = this.queryEmbeddingCache.keys().next().value;
+        if (oldest !== undefined) this.queryEmbeddingCache.delete(oldest);
+      }
+    }
+
     return embedding;
+  }
+
+  /**
+   * Normalize a query string for cache lookup. Trims, lowercases, and
+   * collapses internal whitespace so semantically identical questions hit
+   * the same cache entry. Empty strings disable caching for this call.
+   */
+  private normalizeQueryForCache(text: string): string {
+    if (typeof text !== 'string') return '';
+    return text.trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
   private generateId(): string {

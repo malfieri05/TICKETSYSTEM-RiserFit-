@@ -79,8 +79,11 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: 'var(--color-bg-page)' }}>
-      <div className="w-full max-w-sm space-y-6">
+    <div
+      className="flex min-h-dvh w-full items-center justify-center px-4"
+      data-auth-canvas
+    >
+        <div className="w-full max-w-sm space-y-6">
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
@@ -222,15 +225,18 @@ function LoginPageInner() {
         <p className="text-center text-xs text-[var(--color-text-muted)]">
           New accounts are by invitation only. If you need access, ask an administrator.
         </p>
-      </div>
+        </div>
     </div>
   );
 }
 
 function LoginFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center px-4" style={{ background: 'var(--color-bg-page)' }}>
-      <div className="flex flex-col items-center gap-4">
+    <div
+      className="flex min-h-dvh w-full items-center justify-center px-4"
+      data-auth-canvas
+    >
+        <div className="flex flex-col items-center gap-4">
         <BrandMark size="md" />
         <div
           className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-accent)] border-t-transparent"
@@ -239,7 +245,7 @@ function LoginFallback() {
         <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
           Loading…
         </p>
-      </div>
+        </div>
     </div>
   );
 }

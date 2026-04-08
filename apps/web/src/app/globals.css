@@ -236,6 +236,16 @@ body {
   background-attachment: fixed;
 }
 
+/* Auth / login: flat page only — fixed body gradient + html zoom can read as a darker horizontal band */
+html:has([data-auth-canvas]) {
+  background: var(--color-bg-page);
+}
+html:has([data-auth-canvas]) body {
+  background: var(--color-bg-page);
+  background-image: none;
+  background-attachment: scroll;
+}
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {

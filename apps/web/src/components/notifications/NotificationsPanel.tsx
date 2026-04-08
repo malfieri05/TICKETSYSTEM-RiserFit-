@@ -7,7 +7,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Bell, CheckCheck, X } from 'lucide-react';
 import { notificationsApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useNotificationCount, useNotifications } from '@/hooks/useNotifications';
 import { Button } from '@/components/ui/Button';
 import { POLISH_THEME } from '@/lib/polish';
 import {
@@ -32,6 +32,7 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
   const [tab, setTab] = useState<'unread' | 'read'>('unread');
   const leftInset = collapsed ? SIDEBAR_COLLAPSED_WIDTH_PX : SIDEBAR_EXPANDED_WIDTH_PX;
 
+  const { unreadCount } = useNotificationCount();
   const { data, isLoading } = useNotifications(listParams, { enabled: open });
   const notifications = data?.data?.data ?? [];
   const unread = notifications.filter((n) => !n.isRead);
@@ -170,7 +171,7 @@ export function NotificationsPanel({ open, onClose }: NotificationsPanelProps) {
             borderBottom: tab === 'unread' ? `2px solid var(--color-accent)` : '2px solid transparent',
           }}
         >
-          Unread
+          Unread ({unreadCount ?? 0})
         </button>
         <button
           type="button"

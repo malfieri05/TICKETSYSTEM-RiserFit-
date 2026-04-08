@@ -240,39 +240,98 @@ export function AiChatPanel({
       }
 
       const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: message };
-      const loadingMsg: Message = { id: `l-${Date.now()}`, role: 'assistant', content: '', isLoading: true };
+      const loadingId = `l-${Date.now()}`;
+      const loadingMsg: Message = { id: loadingId, role: 'assistant', content: '', isLoading: true };
 
       setMessages((prev) => [...prev, userMsg, loadingMsg]);
       setInput('');
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
       setIsLoading(true);
 
+      // Track whether we've started streaming yet so we can flip the bubble
+      // out of "Thinking…" mode on the very first delta.
+      let receivedAnyDelta = false;
+      // Buffer the streamed text locally so each delta updates the same
+      // message bubble in place (instead of replacing it).
+      let streamedContent = '';
+
       try {
-        const res = await agentApi.chat(
+        await agentApi.chatStream(
           message,
-          conversationId ?? undefined,
-          WEB_ACCESS_UI_DISABLED ? false : allowWebSearch,
+          (event) => {
+            switch (event.type) {
+              case 'start': {
+                if (!conversationId) setConversationId(event.conversationId);
+                break;
+              }
+              case 'thinking': {
+                // Optional: could surface "Searching docs…" etc. For now we
+                // just keep the existing "Thinking…" loader running.
+                break;
+              }
+              case 'delta': {
+                if (!receivedAnyDelta) {
+                  receivedAnyDelta = true;
+                }
+                streamedContent += event.delta;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === loadingId
+                      ? { ...m, content: streamedContent, isLoading: false }
+                      : m,
+                  ),
+                );
+                break;
+              }
+              case 'done': {
+                const data = event.payload;
+                if (!conversationId) setConversationId(data.conversationId);
+                const assistantMsg: Message = {
+                  id: data.messageId,
+                  role: 'assistant',
+                  // Prefer the server's authoritative final content (it has
+                  // already been resolveModelReply'd) over our locally
+                  // accumulated stream — they should match, but if the
+                  // backend post-processed anything we want that version.
+                  content: data.content,
+                  mode: data.mode,
+                  sources: data.sources,
+                  actionPlan: data.actionPlan,
+                  toolResults: data.toolResults,
+                  conversationId: data.conversationId,
+                  messageId: data.messageId,
+                };
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === loadingId ? assistantMsg : m)),
+                );
+                break;
+              }
+              case 'error': {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === loadingId
+                      ? {
+                          id: `err-${Date.now()}`,
+                          role: 'assistant',
+                          content: event.message || 'Something went wrong. Please try again.',
+                          isError: true,
+                        }
+                      : m,
+                  ),
+                );
+                break;
+              }
+            }
+          },
+          {
+            conversationId: conversationId ?? undefined,
+            allowWebSearch: WEB_ACCESS_UI_DISABLED ? false : allowWebSearch,
+          },
         );
-        const data = res.data;
-        if (!conversationId) setConversationId(data.conversationId);
-
-        const assistantMsg: Message = {
-          id: data.messageId,
-          role: 'assistant',
-          content: data.content,
-          mode: data.mode,
-          sources: data.sources,
-          actionPlan: data.actionPlan,
-          toolResults: data.toolResults,
-          conversationId: data.conversationId,
-          messageId: data.messageId,
-        };
-
-        setMessages((prev) => prev.map((m) => (m.isLoading ? assistantMsg : m)));
       } catch {
         setMessages((prev) =>
           prev.map((m) =>
-            m.isLoading
+            m.id === loadingId
               ? { id: `err-${Date.now()}`, role: 'assistant', content: 'Something went wrong. Please try again.', isError: true }
               : m,
           ),

@@ -570,9 +570,105 @@ export interface AgentResponse {
   }>;
 }
 
+/** One server-sent event from POST /agent/chat-stream. Mirrors the backend `AgentStreamEvent` union. */
+export type AgentStreamEvent =
+  | { type: 'start'; conversationId: string }
+  | { type: 'thinking'; phase: 'tools' | 'compose' }
+  | { type: 'delta'; delta: string }
+  | { type: 'done'; payload: AgentResponse }
+  | { type: 'error'; message: string };
+
 export const agentApi = {
   chat: (message: string, conversationId?: string, allowWebSearch?: boolean) =>
     api.post<AgentResponse>('/agent/chat', { message, conversationId, allowWebSearch }),
+
+  /**
+   * Streaming variant of `chat`. Calls POST /agent/chat-stream and parses
+   * the SSE response, invoking `onEvent` once per event. Resolves when the
+   * server closes the stream. Throws on network/HTTP failure.
+   *
+   * Uses `fetch` directly because axios doesn't expose the response body as
+   * a ReadableStream in browsers — we need byte-level access to parse SSE
+   * frames as they arrive. Auth header is read from the same localStorage
+   * key the axios interceptor uses.
+   */
+  chatStream: async (
+    message: string,
+    onEvent: (ev: AgentStreamEvent) => void,
+    opts?: { conversationId?: string; allowWebSearch?: boolean; signal?: AbortSignal },
+  ): Promise<void> => {
+    const token =
+      typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+    const res = await fetch(`${API_URL}/api/agent/chat-stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        message,
+        conversationId: opts?.conversationId,
+        allowWebSearch: opts?.allowWebSearch,
+      }),
+      signal: opts?.signal,
+    });
+
+    if (!res.ok) {
+      // Match axios behavior: 401 redirects to login.
+      if (res.status === 401 && typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        window.location.href = '/login';
+      }
+      throw new Error(`chat-stream failed: HTTP ${res.status}`);
+    }
+    if (!res.body) {
+      throw new Error('chat-stream failed: no response body');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE frames are separated by a blank line ("\n\n"). Parse complete
+        // frames out of the buffer; leave any partial trailing frame for the
+        // next chunk.
+        let sepIdx: number;
+        while ((sepIdx = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, sepIdx);
+          buffer = buffer.slice(sepIdx + 2);
+
+          // A frame is one or more lines like `data: ...`. We only emit
+          // events for `data:` lines (ignore comments / unrelated fields).
+          const dataLines = frame
+            .split('\n')
+            .filter((l) => l.startsWith('data:'))
+            .map((l) => l.slice(5).trimStart());
+          if (dataLines.length === 0) continue;
+
+          const json = dataLines.join('\n');
+          try {
+            const parsed = JSON.parse(json) as AgentStreamEvent;
+            onEvent(parsed);
+          } catch {
+            // Skip malformed frames silently — the stream is best-effort.
+          }
+        }
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* noop */
+      }
+    }
+  },
 
   confirm: (conversationId: string, messageId: string) =>
     api.post<AgentResponse>('/agent/confirm', { conversationId, messageId }),
