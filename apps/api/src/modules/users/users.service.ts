@@ -459,6 +459,71 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Reactivates a deactivated user and reapplies invite-shaped role / scopes (same transaction as accept).
+   */
+  async reactivateUserFromInvite(
+    tx: Prisma.TransactionClient,
+    args: {
+      userId: string;
+      email: string;
+      name: string;
+      passwordHash: string;
+      role: Role;
+      invitedByUserId: string;
+      departments: Department[];
+      defaultStudioId: string | null;
+      additionalStudioIds: string[];
+    },
+  ) {
+    await tx.userDepartment.deleteMany({ where: { userId: args.userId } });
+    await tx.userStudioScope.deleteMany({ where: { userId: args.userId } });
+
+    const user = await tx.user.update({
+      where: { id: args.userId },
+      data: {
+        email: args.email,
+        name: args.name,
+        passwordHash: args.passwordHash,
+        role: args.role,
+        studioId: args.role === Role.STUDIO_USER ? args.defaultStudioId : null,
+        marketId: null,
+        teamId: null,
+        isActive: true,
+      },
+    });
+
+    if (args.role === Role.DEPARTMENT_USER) {
+      await tx.userDepartment.createMany({
+        data: args.departments.map((department) => ({
+          userId: user.id,
+          department,
+          assignedBy: args.invitedByUserId,
+        })),
+      });
+    }
+
+    if (args.role === Role.STUDIO_USER && args.additionalStudioIds.length > 0) {
+      const extras = args.additionalStudioIds.filter(
+        (id) => id !== args.defaultStudioId,
+      );
+      if (extras.length > 0) {
+        await tx.userStudioScope.createMany({
+          data: extras.map((studioId) => ({
+            userId: user.id,
+            studioId,
+            grantedBy: args.invitedByUserId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    this.userCache.invalidate(user.id);
+
+    return user;
+  }
+
   // ─── PRIVATE HELPERS ─────────────────────────────────────────────────────────
 
   private async assertUserExists(userId: string) {

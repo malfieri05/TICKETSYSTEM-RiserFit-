@@ -158,11 +158,11 @@ export class InvitationsService {
     const emailNormalized = normalizeInviteEmail(dto.email);
     const spec = await this.validateCreatePayload(dto);
 
-    const existingUser = await this.prisma.user.findFirst({
-      where: { email: emailNormalized },
+    const activeUser = await this.prisma.user.findFirst({
+      where: { email: emailNormalized, isActive: true },
       select: { id: true },
     });
-    if (existingUser) {
+    if (activeUser) {
       throw new ConflictException({
         code: 'EMAIL_IN_USE',
         message: 'A user with this email already exists.',
@@ -408,14 +408,6 @@ export class InvitationsService {
           throw new Error('INVITE_INVALID');
         }
 
-        const existing = await tx.user.findFirst({
-          where: { email: inv.emailNormalized },
-          select: { id: true },
-        });
-        if (existing) {
-          throw new Error('INVITE_INVALID');
-        }
-
         const departments =
           inv.assignedRole === Role.DEPARTMENT_USER
             ? (inv.departmentsJson as Department[] | null) ?? []
@@ -433,7 +425,15 @@ export class InvitationsService {
               ].filter(Boolean) ?? [])
             : [];
 
-        const user = await this.usersService.provisionUserFromInvite(tx, {
+        const existing = await tx.user.findFirst({
+          where: { email: inv.emailNormalized },
+          select: { id: true, isActive: true },
+        });
+        if (existing?.isActive) {
+          throw new Error('INVITE_INVALID');
+        }
+
+        const invitePayload = {
           email: inv.emailNormalized,
           name: inv.seedName,
           passwordHash,
@@ -442,6 +442,20 @@ export class InvitationsService {
           departments,
           defaultStudioId: inv.defaultStudioId,
           additionalStudioIds,
+        };
+
+        const user = existing
+          ? await this.usersService.reactivateUserFromInvite(tx, {
+              userId: existing.id,
+              ...invitePayload,
+            })
+          : await this.usersService.provisionUserFromInvite(tx, invitePayload);
+
+        // `created_user_id` is unique: a prior ACCEPTED invite may still point at this user after
+        // deactivation + re-invite. Clear it so this acceptance can claim the row.
+        await tx.userInvitation.updateMany({
+          where: { createdUserId: user.id },
+          data: { createdUserId: null },
         });
 
         await tx.userInvitation.update({

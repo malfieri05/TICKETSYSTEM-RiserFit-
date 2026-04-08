@@ -35,7 +35,6 @@ import { DateFilterInput } from '@/components/ui/DateFilterInput';
 import { SlidingSegmentedControl } from '@/components/ui/SlidingSegmentedControl';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { TOOLTIP_PORTAL_Z_INDEX, TOOLTIP_VIEWPORT_MARGIN } from '@/lib/tooltip-layer';
 
 type Preset = 'today' | 'last7' | 'last30' | 'last90' | 'all';
 
@@ -234,20 +233,22 @@ function formatDashboardRangeCaption(from: string, to: string): string {
   return `${a.toLocaleDateString(undefined, opts(a, !sameYear))} – ${b.toLocaleDateString(undefined, opts(b, true))}`;
 }
 
-const TOOLTIP_W = 136; // px — used for left/right side placement
-const TOOLTIP_GAP = 14; // px gap between vertical rule and tooltip edge
-
 /** Minimum chart height used as skeleton placeholder and initial floor. */
 const DASHBOARD_VOLUME_CHART_MIN_H = 240;
 
-function VolumeLineChart({ data }: { data: { date: string; count: number; closed: number }[] }) {
+function VolumeLineChart({
+  data,
+  tipHostEl,
+}: {
+  data: { date: string; count: number; closed: number }[];
+  /** Header-right cell in the Ticket Volume card — hover metrics render here via portal. */
+  tipHostEl: HTMLDivElement | null;
+}) {
   const svgRef = useRef<SVGSVGElement>(null);
   const chartWrapRef = useRef<HTMLDivElement>(null);
-  const chartTipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ idx: number; x: number; y: number } | null>(null);
   const [svgWidth, setSvgWidth] = useState(0);
   const [svgHeight, setSvgHeight] = useState(DASHBOARD_VOLUME_CHART_MIN_H);
-  const [tipFixed, setTipFixed] = useState({ left: 0, top: 0 });
 
   /** Measure both width and height from the wrapper so the chart fills its flex parent. */
   useLayoutEffect(() => {
@@ -351,46 +352,6 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
   const gradId = 'vol-area-grad';
   const hoverPt = hover ? data[hover.idx] : null;
 
-  // Position tooltip to the RIGHT of the rule, unless that would overflow — then flip LEFT.
-  // Always maintain a gap between the rule and the tooltip edge.
-  const tooltipLeft: number = (() => {
-    if (!hover) return 0;
-    const rightPos = hover.x + TOOLTIP_GAP;
-    if (rightPos + TOOLTIP_W <= widthPx - PAD_R) return rightPos;
-    return hover.x - TOOLTIP_GAP - TOOLTIP_W;
-  })();
-
-  // Clamp tooltip vertically so it doesn't overflow above PAD_T
-  const tooltipTop = hover ? Math.max(PAD_T, Math.min(hover.y - 16, H - PAD_B - 80)) : 0;
-
-  useLayoutEffect(() => {
-    if (!hover || !hoverPt || typeof window === 'undefined') return;
-    const wrap = chartWrapRef.current;
-    const tip = chartTipRef.current;
-    const m = TOOLTIP_VIEWPORT_MARGIN;
-    const run = () => {
-      if (!wrap || !svgRef.current) return;
-      const wr = wrap.getBoundingClientRect();
-      const sr = svgRef.current.getBoundingClientRect();
-      const scaleX = widthPx > 0 ? sr.width / widthPx : 1;
-      const scaleY = H > 0 ? sr.height / H : 1;
-      let left = wr.left + tooltipLeft * scaleX;
-      let top = wr.top + tooltipTop * scaleY;
-      const w = tip?.getBoundingClientRect().width ?? TOOLTIP_W;
-      const h = tip?.getBoundingClientRect().height ?? 80;
-      left = Math.max(m, Math.min(window.innerWidth - m - w, left));
-      top = Math.max(m, Math.min(window.innerHeight - m - h, top));
-      setTipFixed({ left, top });
-    };
-    run();
-    const raf = requestAnimationFrame(run);
-    window.addEventListener('resize', run);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', run);
-    };
-  }, [hover, hoverPt, tooltipLeft, tooltipTop, widthPx]);
-
   const vbW = Math.max(widthPx, 1);
 
   return (
@@ -475,20 +436,17 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
       {hover &&
         hoverPt &&
         typeof document !== 'undefined' &&
+        tipHostEl &&
         createPortal(
           <div
-            ref={chartTipRef}
-            className="pointer-events-none fixed box-border min-w-[9rem] w-max max-w-[min(22rem,calc(100vw-1rem))] rounded-xl px-3.5 py-3 leading-snug shadow-[var(--shadow-panel)] break-words"
+            className="pointer-events-none absolute top-0 right-0 z-[1] box-border w-full min-w-0 rounded-xl px-3 py-2.5 leading-snug shadow-[var(--shadow-panel)] break-words"
             style={{
-              left: tipFixed.left,
-              top: tipFixed.top,
-              zIndex: TOOLTIP_PORTAL_Z_INDEX,
               background: 'var(--color-bg-surface-raised)',
               border: '1px solid var(--color-border-default)',
               color: 'var(--color-text-primary)',
             }}
           >
-            <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2">
+            <p className="text-xs font-semibold text-[var(--color-text-secondary)] mb-1.5">
               {formatDateLabel(hoverPt.date)}
             </p>
             <div className="space-y-1">
@@ -506,7 +464,7 @@ function VolumeLineChart({ data }: { data: { date: string; count: number; closed
               </div>
             </div>
           </div>,
-          document.body,
+          tipHostEl,
         )}
     </div>
   );
@@ -645,6 +603,8 @@ export default function DashboardPage() {
   });
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  /** Ticket Volume header: right column where chart hover metrics are portaled. */
+  const [volumeTipHostEl, setVolumeTipHostEl] = useState<HTMLDivElement | null>(null);
 
   const volume = volumeRes?.data ?? [];
   const resolutionTime = resolutionRes?.data ?? [];
@@ -953,27 +913,39 @@ export default function DashboardPage() {
                   className="dashboard-card flex min-h-[260px] animate-pulse flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0 xl:flex-1"
                   style={{ background: 'var(--color-bg-surface-inset)' }}
                 >
-                  <div className="mb-4 h-3 w-28 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
-                  <div className="mb-6 flex flex-wrap items-baseline gap-3 shrink-0">
-                    <div className="h-10 w-24 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
-                    <div className="h-5 w-40 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_40%,transparent)]" />
+                  <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div className="h-3 w-28 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
+                      <div className="flex flex-wrap items-baseline gap-3">
+                        <div className="h-10 w-24 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_55%,transparent)]" />
+                        <div className="h-5 w-40 shrink-0 rounded-md bg-[color-mix(in_srgb,var(--color-border-default)_40%,transparent)]" />
+                      </div>
+                    </div>
+                    <div className="h-[4.5rem] w-[10.75rem] shrink-0 rounded-xl bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
                   </div>
                   <div className="w-full flex-1 min-h-0 rounded-lg bg-[color-mix(in_srgb,var(--color-border-default)_35%,transparent)]" />
                 </div>
               ) : (
                 <div className="dashboard-card flex w-full min-w-0 min-h-[260px] flex-col rounded-xl px-6 pt-5 pb-4 xl:min-h-0 xl:flex-1">
-                  <div className="mb-1 min-w-0 shrink-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
-                      Ticket Volume
-                    </p>
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="text-4xl font-bold text-[var(--color-text-primary)]">
-                        {volume.reduce((s, d) => s + d.count, 0).toLocaleString()}
-                      </span>
-                      <span className="text-sm text-[var(--color-text-muted)]">
-                        {formatDashboardRangeCaption(rangeFrom, rangeTo)}
-                      </span>
+                  <div className="mb-1 flex min-w-0 shrink-0 items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[var(--color-text-muted)] mb-1">
+                        Ticket Volume
+                      </p>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="text-4xl font-bold text-[var(--color-text-primary)]">
+                          {volume.reduce((s, d) => s + d.count, 0).toLocaleString()}
+                        </span>
+                        <span className="text-sm text-[var(--color-text-muted)]">
+                          {formatDashboardRangeCaption(rangeFrom, rangeTo)}
+                        </span>
+                      </div>
                     </div>
+                    <div
+                      ref={setVolumeTipHostEl}
+                      className="relative w-[10.75rem] min-h-[4.5rem] shrink-0"
+                      aria-live="polite"
+                    />
                   </div>
                   <div className="mt-4 w-full min-w-0 flex-1 min-h-0">
                     {volume.length === 0 ? (
@@ -981,7 +953,7 @@ export default function DashboardPage() {
                         No ticket data yet.
                       </div>
                     ) : (
-                      <VolumeLineChart data={volume} />
+                      <VolumeLineChart data={volume} tipHostEl={volumeTipHostEl} />
                     )}
                   </div>
                 </div>

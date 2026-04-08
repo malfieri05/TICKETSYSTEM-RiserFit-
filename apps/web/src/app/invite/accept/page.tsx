@@ -94,11 +94,14 @@ export default function InviteAcceptPage() {
   );
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10" style={{ background: 'var(--color-bg-page)' }}>
+    <div
+      className="flex min-h-dvh w-full items-center justify-center px-4 py-10"
+      data-auth-canvas
+    >
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <h1 className="text-xl font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-            Accept invitation
+            Accept Invitation
           </h1>
           <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>
             Set your password to finish creating your account.
