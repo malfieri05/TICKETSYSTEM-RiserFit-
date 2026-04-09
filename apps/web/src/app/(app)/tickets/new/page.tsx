@@ -20,6 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { UploadDropzone } from '@/components/uploads/UploadDropzone';
 import { formatTicketId } from '@/components/tickets/TicketRow';
 import { POLISH_THEME } from '@/lib/polish';
+import { playTicketSuccessSound, primeTicketSuccessAudio } from '@/lib/ticket-success-sound';
 
 const panel = { background: 'var(--color-bg-surface-raised)', border: '1px solid var(--color-border-default)' };
 
@@ -277,6 +278,7 @@ export default function NewTicketPage() {
       payload.formResponses = { ...formResponses };
     }
 
+    primeTicketSuccessAudio();
     setIsSubmittingFlow(true);
     try {
       const res = await mutation.mutateAsync(payload);
@@ -311,6 +313,7 @@ export default function NewTicketPage() {
 
       resetFormAfterSuccessfulSubmit();
       setSuccessTicketId(ticketId);
+      playTicketSuccessSound();
     } catch {
       // error already handled in mutation onError
     } finally {

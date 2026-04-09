@@ -10,6 +10,31 @@ import { BrandMark } from '@/components/layout/BrandMark';
 
 type Mode = 'login' | 'register';
 
+function ArkSolutionsCredit() {
+  return (
+    <a
+      href="https://www.arksolutions.ai/"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="ARK Solutions — visit website"
+      className="fixed z-10 flex items-center gap-1.5 text-[13.75px] italic leading-none text-[var(--color-text-muted)] underline-offset-[3px] transition-colors hover:text-[var(--color-text-secondary)] hover:underline"
+      style={{
+        bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))',
+        right: 'max(1rem, env(safe-area-inset-right, 0px))',
+      }}
+    >
+      <span>Built by ARK Solutions</span>
+      <img
+        src="/favicon.png"
+        alt=""
+        width={18}
+        height={18}
+        className="h-[17.5px] w-[17.5px] shrink-0 rounded-[2.5px] opacity-90"
+      />
+    </a>
+  );
+}
+
 function LoginPageInner() {
   const { login } = useAuth();
   const router = useRouter();
@@ -80,10 +105,10 @@ function LoginPageInner() {
 
   return (
     <div
-      className="flex min-h-dvh w-full items-center justify-center px-4"
+      className="flex min-h-dvh w-full flex-col items-center justify-center px-4 pb-16"
       data-auth-canvas
     >
-        <div className="w-full max-w-sm space-y-6">
+        <div className="w-full max-w-sm translate-y-[clamp(2.5rem,12.5vh,8rem)] space-y-6">
 
         {/* Logo */}
         <div className="flex flex-col items-center gap-3 text-center">
@@ -226,6 +251,8 @@ function LoginPageInner() {
           New accounts are by invitation only. If you need access, ask an administrator.
         </p>
         </div>
+
+      <ArkSolutionsCredit />
     </div>
   );
 }
@@ -233,10 +260,10 @@ function LoginPageInner() {
 function LoginFallback() {
   return (
     <div
-      className="flex min-h-dvh w-full items-center justify-center px-4"
+      className="flex min-h-dvh w-full flex-col items-center justify-center px-4 pb-16"
       data-auth-canvas
     >
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-center gap-4 translate-y-[clamp(2.5rem,12.5vh,8rem)]">
         <BrandMark size="md" />
         <div
           className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--color-accent)] border-t-transparent"
@@ -246,6 +273,7 @@ function LoginFallback() {
           Loading…
         </p>
         </div>
+      <ArkSolutionsCredit />
     </div>
   );
 }

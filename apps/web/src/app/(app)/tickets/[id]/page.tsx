@@ -22,6 +22,7 @@ import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
 import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
+import { LeaseIqHelpPopover } from '@/components/tickets/LeaseIqHelpPopover';
 
 const VALID_TRANSITIONS: Record<TicketStatus, TicketStatus[]> = {
   NEW: ['TRIAGED', 'CLOSED'],
@@ -319,9 +320,7 @@ export default function TicketDetailPage() {
                   >
                     {ticket.leaseIqResult.suggestedResponsibility.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-xs" style={{ color: POLISH_THEME.metaDim }}>
-                    ({ticket.leaseIqResult.confidence} confidence)
-                  </span>
+                  <LeaseIqHelpPopover direction="up" />
                   {canManage && (
                     <button
                       type="button"

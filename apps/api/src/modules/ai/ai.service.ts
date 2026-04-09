@@ -14,6 +14,9 @@ const RAG_FALLBACK_TOP_K = 8;
 // Model to use for chat completions
 const CHAT_MODEL = 'gpt-4o-mini';
 
+/** Appended to every assistant system prompt: who built the platform and how to reach them. */
+const ARK_SOLUTIONS_KNOWLEDGE = `Platform vendor: This system was built by ARK Solutions. When the user asks who built or developed the software, who to contact for vendor issues, large changes, new features, or hands-on implementation help, answer with: ARK Solutions — 503-764-5097 (text or call) or mike@arksolutions.ai.`;
+
 interface ChunkRow {
   id: string;
   content: string;
@@ -185,13 +188,17 @@ Answer the user's question using ONLY the context provided below.
 If the answer cannot be found in the context, say so clearly and suggest they contact their manager or team for help.
 Keep answers concise and professional. Never suggest submitting a ticket.
 
+${ARK_SOLUTIONS_KNOWLEDGE}
+
 CONTEXT:
 ${contextBlocks}`;
     } else {
       systemPrompt = `You are a helpful internal support assistant for the company's ticketing system.
 You don't have specific documentation for this question.
 Provide a general helpful answer, and suggest they contact their manager or team if they need further assistance.
-Keep answers concise and professional. Never suggest submitting a ticket.`;
+Keep answers concise and professional. Never suggest submitting a ticket.
+
+${ARK_SOLUTIONS_KNOWLEDGE}`;
     }
 
     // Step 4: Call GPT
@@ -283,10 +290,14 @@ Keep answers concise and professional. Never suggest submitting a ticket.`;
         .join('\n\n---\n\n');
       systemPrompt = `You are a helpful assistant. Answer the user's question using ONLY the company handbook context below. If the answer cannot be found in the context, say so clearly. Keep answers concise and professional.
 
+${ARK_SOLUTIONS_KNOWLEDGE}
+
 CONTEXT:
 ${contextBlocks}`;
     } else {
-      systemPrompt = `You are a helpful assistant for company handbook questions. You don't have relevant handbook content for this question. Say so and suggest they contact their manager or team. Never suggest submitting a ticket.`;
+      systemPrompt = `You are a helpful assistant for company handbook questions. You don't have relevant handbook content for this question. Say so and suggest they contact their manager or team. Never suggest submitting a ticket.
+
+${ARK_SOLUTIONS_KNOWLEDGE}`;
     }
 
     const completion = await this.openai.chat.completions.create({

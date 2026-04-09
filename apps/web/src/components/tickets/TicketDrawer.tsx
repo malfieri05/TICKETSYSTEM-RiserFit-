@@ -21,16 +21,10 @@ import { TicketTagCapsule, TicketTagHoverMetaContent } from '@/components/ticket
 import { CommentThread } from '@/components/tickets/CommentThread';
 import { DispatchRecommendationPanel } from '@/components/dispatch/DispatchRecommendationPanel';
 import { LocationLink } from '@/components/ui/LocationLink';
-import { InfoPopover } from '@/components/ui/InfoPopover';
+import { LeaseIqHelpPopover } from '@/components/tickets/LeaseIqHelpPopover';
 import { cn } from '@/lib/utils';
 import { measureThumbInsideContainer } from '@/lib/measure-thumb-in-container';
 import { RequesterAvatar, FeedDueDateCell } from '@/components/tickets/TicketRow';
-
-function leaseIqConfidenceLabel(confidence: string): string {
-  if (confidence === 'HIGH') return 'High';
-  if (confidence === 'MEDIUM') return 'Medium';
-  return 'Low';
-}
 
 interface Props {
   ticketId: string | null;
@@ -687,18 +681,8 @@ export function TicketDrawer({
                         >
                           {resp.replace(/_/g, ' ')}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: 'var(--color-text-primary)' }}>
-                          {leaseIqConfidenceLabel(ticket.leaseIqResult.confidence)} confidence
-                        </span>
                       </button>
-                      <InfoPopover ariaLabel="How confidence is calculated" direction="up">
-                        <p className="font-semibold mb-2" style={{ color: 'var(--color-accent)' }}>Confidence levels</p>
-                        <ul className="space-y-1.5">
-                          <li><span className="font-semibold">High:</span> Strong match — category and priority terms both point clearly to one party.</li>
-                          <li><span className="font-semibold">Medium:</span> Partial match — either a category or priority signal was found, but not both.</li>
-                          <li><span className="font-semibold">Low:</span> Weak match — only general keywords matched, or signals conflicted.</li>
-                        </ul>
-                      </InfoPopover>
+                      <LeaseIqHelpPopover direction="up" />
                     </div>
                     {canManage && (
                       <button
