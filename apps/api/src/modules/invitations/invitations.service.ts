@@ -89,13 +89,26 @@ export class InvitationsService {
   }
 
   private async enqueueMail(data: InviteEmailJobData): Promise<void> {
-    if (process.env.INVITE_EMAIL_SYNC_DEV === 'true') {
+    const sendInline = async () => {
       const { InviteMailService } = await import('./invite-mail.service');
       const m = new InviteMailService();
       await m.sendInvite(data);
+    };
+    if (
+      process.env.INVITE_EMAIL_SYNC_DEV === 'true' ||
+      process.env.INVITE_EMAIL_SEND_SYNC === 'true'
+    ) {
+      await sendInline();
       return;
     }
-    await this.inviteEmailQueue.add('send', data, INVITE_EMAIL_JOB_OPTIONS);
+    try {
+      await this.inviteEmailQueue.add('send', data, INVITE_EMAIL_JOB_OPTIONS);
+    } catch (e) {
+      this.logger.warn(
+        `Invite email queue unavailable (${(e as Error).message}); sending inline.`,
+      );
+      await sendInline();
+    }
   }
 
   private async validateCreatePayload(dto: CreateInvitationDto): Promise<{

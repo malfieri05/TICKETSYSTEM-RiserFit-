@@ -9,17 +9,21 @@ const ALGO = 'aes-256-gcm';
 const IV_LEN = 12;
 const TAG_LEN = 16;
 
-/** 32-byte key: INVITE_TOKEN_WRAP_KEY as 64-char hex, or dev fallback from JWT_SECRET. */
+/**
+ * 32-byte key: prefer INVITE_TOKEN_WRAP_KEY (64 hex chars).
+ * If unset, derive from JWT_SECRET so production deploys (e.g. Vercel) work without a second secret;
+ * set INVITE_TOKEN_WRAP_KEY for stronger key separation when you can.
+ */
 export function getInviteWrapKey(): Buffer {
   const hex = process.env.INVITE_TOKEN_WRAP_KEY;
   if (hex && /^[0-9a-fA-F]{64}$/.test(hex)) {
     return Buffer.from(hex, 'hex');
   }
-  if (process.env.NODE_ENV !== 'production' && process.env.JWT_SECRET) {
+  if (process.env.JWT_SECRET) {
     return createHash('sha256').update(process.env.JWT_SECRET).digest();
   }
   throw new Error(
-    'INVITE_TOKEN_WRAP_KEY must be set (64 hex chars = 32 bytes) or JWT_SECRET in non-production for dev fallback.',
+    'INVITE_TOKEN_WRAP_KEY (64 hex chars) or JWT_SECRET must be set to wrap invitation tokens.',
   );
 }
 
