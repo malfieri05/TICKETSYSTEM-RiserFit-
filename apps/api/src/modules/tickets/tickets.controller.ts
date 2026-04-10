@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  StreamableFile,
 } from '@nestjs/common';
 import { TicketsService } from './tickets.service';
 import { CommentsService } from '../comments/comments.service';
@@ -68,6 +69,58 @@ export class TicketsController {
   @Roles(Role.DEPARTMENT_USER, Role.ADMIN)
   getInboxFolders(@CurrentUser() user: RequestUser) {
     return this.ticketsService.getInboxFolders(user);
+  }
+
+  // GET /api/tickets/tags — tags on visible tickets (feed filter; before :id routes)
+  @Get('tags')
+  listFilterTags(@CurrentUser() user: RequestUser) {
+    return this.ticketsService.listTagsForFilter(user);
+  }
+
+  // GET /api/tickets/export/csv — admin CSV for Google Sheets import (before :id)
+  @Get('export/csv')
+  @Roles(Role.ADMIN)
+  async exportTicketsCsv(
+    @Query() filters: TicketFiltersDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<StreamableFile> {
+    const buffer = await this.ticketsService.exportTicketsCsv(filters, user);
+    return new StreamableFile(buffer, {
+      type: 'text/csv; charset=utf-8',
+      disposition: 'attachment; filename="tickets-export.csv"',
+    });
+  }
+
+  // GET /api/tickets/export/google-sheet/status — admin: is Sheets push-export configured?
+  @Get('export/google-sheet/status')
+  @Roles(Role.ADMIN)
+  getGoogleSheetsExportStatus() {
+    return this.ticketsService.ticketsGoogleSheetsExportStatus();
+  }
+
+  // POST /api/tickets/export/google-sheet — admin: create populated Google Sheet (before :id)
+  @Post('export/google-sheet')
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  async createGoogleSheetExport(
+    @Query() filters: TicketFiltersDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.ticketsService.exportTicketsToGoogleSheets(filters, user);
+  }
+
+  // GET /api/tickets/export — admin Excel export (same query params as list; before :id)
+  @Get('export')
+  @Roles(Role.ADMIN)
+  async exportTicketsExcel(
+    @Query() filters: TicketFiltersDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<StreamableFile> {
+    const buffer = await this.ticketsService.exportTicketsExcel(filters, user);
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="tickets-export.xlsx"',
+    });
   }
 
   // GET /api/tickets?status=&ticketClassId=&supportTopicId=&maintenanceCategoryId=&page=&limit=

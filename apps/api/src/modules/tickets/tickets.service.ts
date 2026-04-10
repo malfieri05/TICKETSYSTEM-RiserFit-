@@ -5,7 +5,12 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import { existsSync, readFileSync } from 'node:fs';
+import ExcelJS from 'exceljs';
+import { google } from 'googleapis';
+import { JWT } from 'google-auth-library';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AuditLogService } from '../../common/audit-log/audit-log.service';
 import { DomainEventsService } from '../events/domain-events.service';
@@ -45,6 +50,12 @@ import {
   TICKET_TAG_LABEL_MAX_LEN,
   TICKET_MAX_TAGS_PER_TICKET,
 } from './ticket-tag.utils';
+
+/** RFC 4180 CSV field (always quoted for consistency with commas in titles). */
+function escapeCsvField(value: string | number | null | undefined): string {
+  const s = value === null || value === undefined ? '' : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
 
 /** New tickets: due 7 calendar days from this instant (matches migration backfill). */
 function defaultTicketDueDate(from: Date = new Date()): Date {
@@ -166,6 +177,152 @@ const TICKET_LIST_SELECT_LIGHT = {
   },
   tags: TICKET_TAGS_LIST_SELECT,
 } satisfies Prisma.TicketSelect;
+
+/** Minimal relations for admin Excel export (batched findMany). */
+const TICKET_EXPORT_SELECT = {
+  id: true,
+  title: true,
+  status: true,
+  priority: true,
+  createdAt: true,
+  updatedAt: true,
+  resolvedAt: true,
+  closedAt: true,
+  dueDate: true,
+  ...TAXONOMY_SELECT,
+  studio: { select: { name: true } },
+  market: { select: { name: true } },
+  requester: { select: { name: true, email: true } },
+  owner: { select: { name: true, email: true } },
+  tags: {
+    orderBy: { createdAt: 'asc' as const },
+    take: TICKET_MAX_TAGS_PER_TICKET,
+    select: { tag: { select: { name: true } } },
+  },
+} satisfies Prisma.TicketSelect;
+
+type TicketExportRow = Prisma.TicketGetPayload<{
+  select: typeof TICKET_EXPORT_SELECT;
+}>;
+
+const TICKET_EXPORT_HEADERS = [
+  'ID',
+  'Title',
+  'Status',
+  'Priority',
+  'Class',
+  'Department',
+  'Support topic',
+  'Maintenance category',
+  'Market',
+  'Studio',
+  'Requester',
+  'Owner',
+  'Tags',
+  'Created',
+  'Updated',
+  'Resolved',
+  'Closed',
+  'Due',
+] as const;
+
+const TICKET_EXPORT_COL_WIDTHS = [
+  30, 50, 14, 12, 18, 18, 28, 28, 22, 24, 32, 32, 40, 22, 22, 22, 22, 22,
+];
+
+function mapTicketExportToCells(t: TicketExportRow): string[] {
+  const tagNames = t.tags?.map((x) => x.tag.name).filter(Boolean) ?? [];
+  return [
+    t.id,
+    t.title,
+    t.status,
+    t.priority,
+    t.ticketClass?.name ?? '',
+    t.department?.name ?? '',
+    t.supportTopic?.name ?? '',
+    t.maintenanceCategory?.name ?? '',
+    t.market?.name ?? '',
+    t.studio?.name ?? '',
+    t.requester ? `${t.requester.name} <${t.requester.email}>` : '',
+    t.owner
+      ? `${t.owner.name}${t.owner.email ? ` <${t.owner.email}>` : ''}`
+      : '',
+    tagNames.join('; '),
+    t.createdAt.toISOString(),
+    t.updatedAt.toISOString(),
+    t.resolvedAt?.toISOString() ?? '',
+    t.closedAt?.toISOString() ?? '',
+    t.dueDate?.toISOString() ?? '',
+  ];
+}
+
+type GoogleServiceAccountKey = {
+  client_email: string;
+  private_key: string;
+};
+
+function parseGoogleServiceAccountJson(
+  raw: string,
+  label: string,
+): GoogleServiceAccountKey {
+  try {
+    const o = JSON.parse(raw) as GoogleServiceAccountKey;
+    if (!o.client_email || !o.private_key) {
+      throw new BadRequestException(
+        `${label} must include client_email and private_key`,
+      );
+    }
+    return o;
+  } catch (e) {
+    if (e instanceof BadRequestException) throw e;
+    throw new BadRequestException(`${label} is not valid JSON`);
+  }
+}
+
+/** Service account for creating shared Google Sheets (optional). */
+function loadTicketsSheetsCredentials(): GoogleServiceAccountKey | null {
+  const inline =
+    process.env.GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_JSON?.trim();
+  if (inline) {
+    return parseGoogleServiceAccountJson(
+      inline,
+      'GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_JSON',
+    );
+  }
+  const p =
+    process.env.GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_PATH?.trim();
+  if (p) {
+    if (!existsSync(p)) {
+      throw new BadRequestException(
+        `GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_PATH not found: ${p}`,
+      );
+    }
+    return parseGoogleServiceAccountJson(
+      readFileSync(p, 'utf8'),
+      'GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_PATH file',
+    );
+  }
+  return null;
+}
+
+/** True when JSON/path is set and parses (ignores invalid JSON for UI). */
+function isTicketsSheetsExportConfigured(): boolean {
+  try {
+    return loadTicketsSheetsCredentials() !== null;
+  } catch {
+    return false;
+  }
+}
+
+function columnIndexToA1Letter(zeroBased: number): string {
+  let n = zeroBased;
+  let s = '';
+  while (n >= 0) {
+    s = String.fromCharCode(65 + (n % 26)) + s;
+    n = Math.floor(n / 26) - 1;
+  }
+  return s;
+}
 
 const TICKET_DETAIL_SELECT = {
   ...TICKET_LIST_SELECT,
@@ -600,14 +757,13 @@ export class TicketsService {
 
   // ─── LIST ───────────────────────────────────────────────────────────────────
 
-  async findAll(filters: TicketFiltersDto, actor: RequestUser) {
-    const listDecision = this.policy.evaluate(TICKET_LIST_INBOX, actor, null);
-    if (!listDecision.allowed) {
-      throw new ForbiddenException(
-        'You do not have permission to list tickets',
-      );
-    }
-    filters.normalize();
+  /**
+   * Shared Prisma `where` for ticket list and admin export. Caller must call `filters.normalize()` first.
+   */
+  private buildTicketListWhereForQuery(
+    filters: TicketFiltersDto,
+    actor: RequestUser,
+  ): Prisma.TicketWhereInput {
     const {
       status,
       statusGroup,
@@ -620,22 +776,16 @@ export class TicketsService {
       priority,
       ownerId,
       requesterId,
+      tagId,
       search,
       searchInTitleOnly,
-      includeCounts = true,
       actionableForMe = false,
       createdAfter,
       createdBefore,
-      page = 1,
-      limit = 25,
     } = filters;
-
-    // Stage 30: server-side page size clamp (max 100); applies even if DTO validation is bypassed.
-    const limitClamped = Math.min(limit, 100);
 
     const scopeWhere = this.visibility.buildWhereClause(actor);
 
-    // Stage 23: STUDIO_USER may only filter by a studio they are allowed to view; otherwise 403
     if (actor.role === Role.STUDIO_USER && studioId) {
       const allowedStudioIds = [
         actor.studioId,
@@ -648,7 +798,6 @@ export class TicketsService {
       }
     }
 
-    // statusGroup takes precedence over individual status
     const resolvedStatusFilter: Prisma.TicketWhereInput =
       statusGroup === 'active'
         ? { status: { notIn: ['RESOLVED', 'CLOSED'] as TicketStatus[] } }
@@ -658,7 +807,6 @@ export class TicketsService {
             ? { status }
             : {};
 
-    // Search: support ID lookup alongside title/description
     const searchFilter: Prisma.TicketWhereInput | undefined = search
       ? (() => {
           const searchConditions: Prisma.TicketWhereInput[] =
@@ -668,7 +816,6 @@ export class TicketsService {
                   { title: { contains: search, mode: 'insensitive' } },
                   { description: { contains: search, mode: 'insensitive' } },
                 ];
-          // Search by ticket ID: exact match or prefix (startsWith)
           searchConditions.push({ id: { equals: search } });
           if (search.length >= 4) {
             searchConditions.push({ id: { startsWith: search } });
@@ -688,6 +835,7 @@ export class TicketsService {
       ...(priority && { priority }),
       ...(ownerId && { ownerId }),
       ...(requesterId && { requesterId }),
+      ...(tagId && { tags: { some: { tagId } } }),
       ...(createdAfter || createdBefore
         ? {
             createdAt: {
@@ -699,8 +847,6 @@ export class TicketsService {
       ...(searchFilter && searchFilter),
     };
 
-    // Actionable filter (spec §9.1): tickets with at least one incomplete subtask
-    // (status not DONE/SKIPPED) assigned to the user OR for a department the user is responsible for.
     if (
       actionableForMe &&
       (actor.role === 'DEPARTMENT_USER' || actor.role === 'ADMIN')
@@ -724,11 +870,30 @@ export class TicketsService {
       });
     }
 
-    // Merge scope restriction with user-supplied filters using AND
-    const where: Prisma.TicketWhereInput =
-      Object.keys(scopeWhere).length === 0
-        ? filterWhere
-        : { AND: [scopeWhere, filterWhere] };
+    return Object.keys(scopeWhere).length === 0
+      ? filterWhere
+      : { AND: [scopeWhere, filterWhere] };
+  }
+
+  async findAll(filters: TicketFiltersDto, actor: RequestUser) {
+    const listDecision = this.policy.evaluate(TICKET_LIST_INBOX, actor, null);
+    if (!listDecision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to list tickets',
+      );
+    }
+    filters.normalize();
+    const {
+      includeCounts = true,
+      actionableForMe = false,
+      page = 1,
+      limit = 25,
+    } = filters;
+
+    const where = this.buildTicketListWhereForQuery(filters, actor);
+
+    // Stage 30: server-side page size clamp (max 100); applies even if DTO validation is bypassed.
+    const limitClamped = Math.min(limit, 100);
 
     const skip = (page - 1) * limitClamped;
     const select =
@@ -836,6 +1001,284 @@ export class TicketsService {
       limit: limitClamped,
       totalPages: Math.ceil(total / limitClamped),
     };
+  }
+
+  private static readonly EXPORT_MAX_ROWS = 25_000;
+
+  /** Shared admin export preflight: list permission, where clause, row cap. */
+  private async prepareAdminTicketExport(
+    filters: TicketFiltersDto,
+    actor: RequestUser,
+  ): Promise<{ where: Prisma.TicketWhereInput; total: number }> {
+    if (actor.role !== Role.ADMIN) {
+      throw new ForbiddenException('Only administrators can export tickets');
+    }
+    const listDecision = this.policy.evaluate(TICKET_LIST_INBOX, actor, null);
+    if (!listDecision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to list tickets',
+      );
+    }
+    filters.normalize();
+    const where = this.buildTicketListWhereForQuery(filters, actor);
+    const total = await this.prisma.ticket.count({ where });
+    if (total > TicketsService.EXPORT_MAX_ROWS) {
+      throw new BadRequestException(
+        `Export is limited to ${TicketsService.EXPORT_MAX_ROWS.toLocaleString()} rows; this filter matches ${total.toLocaleString()} tickets. Narrow your filters and try again.`,
+      );
+    }
+    return { where, total };
+  }
+
+  /** Admin-only: Excel workbook for all tickets matching the same filters as the feed (no pagination). */
+  async exportTicketsExcel(
+    filters: TicketFiltersDto,
+    actor: RequestUser,
+  ): Promise<Buffer> {
+    const { where, total } = await this.prepareAdminTicketExport(
+      filters,
+      actor,
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Ticketing System';
+    const sheet = workbook.addWorksheet('Tickets', {
+      views: [{ state: 'frozen', ySplit: 1 }],
+    });
+    sheet.addRow([...TICKET_EXPORT_HEADERS]);
+    sheet.getRow(1).font = { bold: true };
+    TICKET_EXPORT_COL_WIDTHS.forEach((w, i) => {
+      sheet.getColumn(i + 1).width = w;
+    });
+
+    const BATCH = 500;
+    let skip = 0;
+    while (skip < total) {
+      const rows = await this.prisma.ticket.findMany({
+        where,
+        select: TICKET_EXPORT_SELECT,
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: BATCH,
+      });
+      for (const t of rows) {
+        sheet.addRow(mapTicketExportToCells(t));
+      }
+      skip += rows.length;
+      if (rows.length < BATCH) break;
+    }
+
+    const buf = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buf);
+  }
+
+  /** Admin-only: UTF-8 CSV (BOM) for the same filtered set — import into Google Sheets via File → Import. */
+  async exportTicketsCsv(
+    filters: TicketFiltersDto,
+    actor: RequestUser,
+  ): Promise<Buffer> {
+    const { where, total } = await this.prepareAdminTicketExport(
+      filters,
+      actor,
+    );
+
+    const lines: string[] = [
+      [...TICKET_EXPORT_HEADERS].map(escapeCsvField).join(','),
+    ];
+
+    const BATCH = 500;
+    let skip = 0;
+    while (skip < total) {
+      const rows = await this.prisma.ticket.findMany({
+        where,
+        select: TICKET_EXPORT_SELECT,
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: BATCH,
+      });
+      for (const t of rows) {
+        lines.push(
+          mapTicketExportToCells(t).map(escapeCsvField).join(','),
+        );
+      }
+      skip += rows.length;
+      if (rows.length < BATCH) break;
+    }
+
+    const body = lines.join('\n');
+    return Buffer.from(`\ufeff${body}`, 'utf8');
+  }
+
+  /** Admin UI: whether env is set so “Open in Google Sheets” can work. */
+  ticketsGoogleSheetsExportStatus(): { enabled: boolean } {
+    return { enabled: isTicketsSheetsExportConfigured() };
+  }
+
+  /**
+   * Admin-only: create a Google Sheet with the same filtered rows (service account required).
+   * Sheet is shared “anyone with the link can view” so the admin can open it immediately.
+   */
+  async exportTicketsToGoogleSheets(
+    filters: TicketFiltersDto,
+    actor: RequestUser,
+  ): Promise<{ url: string }> {
+    const creds = loadTicketsSheetsCredentials();
+    if (!creds) {
+      throw new ServiceUnavailableException(
+        'Google Sheets export is not configured. Set GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_JSON (full service account JSON) or GOOGLE_TICKETS_EXPORT_SERVICE_ACCOUNT_PATH on the API, and enable the Google Sheets API and Google Drive API for that key.',
+      );
+    }
+
+    const { where, total } = await this.prepareAdminTicketExport(
+      filters,
+      actor,
+    );
+
+    const values: string[][] = [[...TICKET_EXPORT_HEADERS]];
+    const BATCH = 500;
+    let skip = 0;
+    while (skip < total) {
+      const rows = await this.prisma.ticket.findMany({
+        where,
+        select: TICKET_EXPORT_SELECT,
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+        skip,
+        take: BATCH,
+      });
+      for (const t of rows) {
+        values.push(mapTicketExportToCells(t));
+      }
+      skip += rows.length;
+      if (rows.length < BATCH) break;
+    }
+
+    const auth = new JWT({
+      email: creds.client_email,
+      key: creds.private_key,
+      scopes: [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file',
+      ],
+    });
+    const sheets = google.sheets({ version: 'v4', auth });
+    const drive = google.drive({ version: 'v3', auth });
+
+    let spreadsheetId: string;
+    let sheetId: number;
+    try {
+      const title = `Tickets export ${new Date().toISOString().slice(0, 19)}`;
+      const createRes = await sheets.spreadsheets.create({
+        requestBody: {
+          properties: { title },
+          sheets: [
+            {
+              properties: {
+                title: 'Tickets',
+                gridProperties: {
+                  rowCount: Math.min(Math.max(values.length + 10, 100), 50_001),
+                  columnCount: TICKET_EXPORT_HEADERS.length + 2,
+                  frozenRowCount: 1,
+                },
+              },
+            },
+          ],
+        },
+      });
+      spreadsheetId = createRes.data.spreadsheetId!;
+      sheetId = createRes.data.sheets?.[0]?.properties?.sheetId ?? 0;
+
+      const lastCol = columnIndexToA1Letter(TICKET_EXPORT_HEADERS.length - 1);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `Tickets!A1:${lastCol}${values.length}`,
+        valueInputOption: 'RAW',
+        requestBody: { values },
+      });
+
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              repeatCell: {
+                range: {
+                  sheetId,
+                  startRowIndex: 0,
+                  endRowIndex: 1,
+                  startColumnIndex: 0,
+                  endColumnIndex: TICKET_EXPORT_HEADERS.length,
+                },
+                cell: {
+                  userEnteredFormat: {
+                    textFormat: { bold: true },
+                  },
+                },
+                fields: 'userEnteredFormat.textFormat.bold',
+              },
+            },
+            {
+              autoResizeDimensions: {
+                dimensions: {
+                  sheetId,
+                  dimension: 'COLUMNS',
+                  startIndex: 0,
+                  endIndex: TICKET_EXPORT_HEADERS.length,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      await drive.permissions.create({
+        fileId: spreadsheetId,
+        requestBody: {
+          type: 'anyone',
+          role: 'reader',
+        },
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.logger.warn(`Google Sheets export failed: ${msg}`);
+      throw new BadRequestException(
+        `Could not create Google Sheet (check API enablement and credentials): ${msg}`,
+      );
+    }
+
+    return {
+      url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+    };
+  }
+
+  /**
+   * Distinct tags that appear on at least one ticket visible to the actor (feed filter dropdown).
+   */
+  async listTagsForFilter(actor: RequestUser) {
+    const listDecision = this.policy.evaluate(TICKET_LIST_INBOX, actor, null);
+    if (!listDecision.allowed) {
+      throw new ForbiddenException(
+        'You do not have permission to list tickets',
+      );
+    }
+    const scopeWhere = this.visibility.buildWhereClause(actor);
+    const ticketTagWhere: Prisma.TicketTagWhereInput =
+      Object.keys(scopeWhere).length === 0
+        ? {}
+        : { ticket: scopeWhere };
+
+    const grouped = await this.prisma.ticketTag.groupBy({
+      by: ['tagId'],
+      where: ticketTagWhere,
+    });
+
+    if (!grouped.length) return [];
+
+    const tagIds = grouped.map((g) => g.tagId);
+    return this.prisma.tag.findMany({
+      where: { id: { in: tagIds } },
+      select: { id: true, name: true, color: true },
+      orderBy: { name: 'asc' },
+    });
   }
 
   // ─── GET BY ID ───────────────────────────────────────────────────────────────

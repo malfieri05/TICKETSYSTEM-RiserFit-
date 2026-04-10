@@ -19,9 +19,10 @@ import { TicketFeedColgroup, TicketFeedThead } from '@/components/tickets/Ticket
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
 import { TicketFeedSearchField } from '@/components/tickets/TicketFeedSearchField';
 import { FeedPaginationBar } from '@/components/tickets/FeedPaginationBar';
+import { TicketExportMenu } from '@/components/tickets/TicketExportMenu';
 import { TicketFeedSelectionRail } from '@/components/tickets/TicketFeedSelectionRail';
 import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
-import { useTicketListQuery } from '@/hooks/useTicketListQuery';
+import { buildListParams, useTicketListQuery } from '@/hooks/useTicketListQuery';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useAuth } from '@/hooks/useAuth';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
@@ -34,6 +35,7 @@ type ViewTab = 'active' | 'completed';
 
 const FILTER_KEYS: (keyof TicketFilters)[] = [
   'departmentId', 'ticketClass', 'supportTopicId', 'maintenanceCategoryId', 'studioId', 'state',
+  'tagId',
   'createdAfter', 'createdBefore',
 ];
 
@@ -128,6 +130,12 @@ export default function TicketsPage() {
     queryFn: () => adminApi.listMarkets(),
   });
   const markets = marketsData?.data ?? [];
+
+  const { data: filterTagsData } = useQuery({
+    queryKey: ['ticket-filter-tags'],
+    queryFn: () => ticketsApi.listFilterTags(),
+  });
+  const filterTagOptions = filterTagsData?.data ?? [];
 
   const supportClass = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT');
   const maintenanceClass = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE');
@@ -229,6 +237,7 @@ export default function TicketsPage() {
       ticketsApi.addTag(ticketId, { label, color }),
     onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket-filter-tags'] });
       const body = res.data;
       updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
         ...t,
@@ -258,6 +267,7 @@ export default function TicketsPage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket-filter-tags'] });
       updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
         ...t,
         tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
@@ -274,6 +284,8 @@ export default function TicketsPage() {
 
   const hasActiveFilters = FILTER_KEYS.some((k) => filters[k]) || search;
 
+  const isAdmin = user?.role === 'ADMIN';
+
   const listParams = {
     page: filters.page ?? 1,
     limit: PAGE_SIZE,
@@ -286,6 +298,7 @@ export default function TicketsPage() {
     maintenanceCategoryId: filters.maintenanceCategoryId,
     studioId: filters.studioId,
     state: filters.state,
+    tagId: filters.tagId,
     createdAfter: filters.createdAfter,
     createdBefore: filters.createdBefore,
   };
@@ -311,6 +324,7 @@ export default function TicketsPage() {
     maintenanceCategoryId: filters.maintenanceCategoryId,
     studioId: filters.studioId,
     state: filters.state,
+    tagId: filters.tagId,
     createdAfter: filters.createdAfter,
     createdBefore: filters.createdBefore,
   };
@@ -322,6 +336,12 @@ export default function TicketsPage() {
   const { total: completedTotal } = useTicketListQuery('list', {
     ...countParamsBase,
     statusGroup: 'completed',
+  });
+
+  const exportMenuParams = buildListParams({
+    ...listParams,
+    page: 1,
+    limit: PAGE_SIZE,
   });
 
   const currentPage = filters.page ?? 1;
@@ -424,6 +444,14 @@ export default function TicketsPage() {
                 onChange={handleLocationChange}
                 elevated
                 className="w-48"
+              />
+              <ComboBox
+                placeholder="All tags"
+                options={filterTagOptions.map((t) => ({ value: t.id, label: t.name }))}
+                value={filters.tagId ?? ''}
+                onChange={(v) => updateFilter('tagId', v)}
+                elevated
+                className="w-44"
               />
               <div className="flex items-center gap-2">
                 <DateFilterInput
@@ -536,7 +564,7 @@ export default function TicketsPage() {
             </div>
           }
           pagination={
-            totalPages > 1 ? (
+            tickets.length > 0 && (totalPages > 1 || isAdmin) ? (
               <FeedPaginationBar
                 className="pr-24"
                 page={filters.page ?? 1}
@@ -545,6 +573,14 @@ export default function TicketsPage() {
                 isBusy={isFetching}
                 onPrev={() => setFilters((f) => ({ ...f, page: Math.max(1, (f.page ?? 1) - 1) }))}
                 onNext={() => setFilters((f) => ({ ...f, page: Math.min(totalPages, (f.page ?? 1) + 1) }))}
+                trailing={
+                  isAdmin ? (
+                    <TicketExportMenu
+                      exportParams={exportMenuParams}
+                      disabled={isFetching || total === 0}
+                    />
+                  ) : undefined
+                }
               />
             ) : null
           }

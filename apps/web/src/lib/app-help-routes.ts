@@ -17,7 +17,6 @@ export const APP_HELP_STATIC_PATHS: readonly string[] = [
   '/notifications',
   '/dashboard',
   '/assistant',
-  '/handbook',
   '/inbox',
   '/portal',
   '/tickets',

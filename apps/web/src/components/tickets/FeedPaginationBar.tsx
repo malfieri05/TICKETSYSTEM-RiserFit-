@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { POLISH_THEME } from '@/lib/polish';
@@ -13,6 +14,8 @@ export type FeedPaginationBarProps = {
   onNext: () => void;
   /** e.g. while list query is fetching */
   isBusy?: boolean;
+  /** Rendered on the right side of the bar (e.g. admin Export). */
+  trailing?: ReactNode;
   className?: string;
 };
 
@@ -27,6 +30,7 @@ export function FeedPaginationBar({
   onPrev,
   onNext,
   isBusy = false,
+  trailing,
   className,
 }: FeedPaginationBarProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -38,13 +42,13 @@ export function FeedPaginationBar({
 
   return (
     <div
-      className={cn('flex items-center px-4 py-3', className)}
+      className={cn('flex w-full min-w-0 items-center justify-between gap-4 px-4 py-3', className)}
       style={{
         borderTop: `1px solid ${POLISH_THEME.listBorder}`,
         background: POLISH_THEME.feedTheadBg,
       }}
     >
-      <div className="flex min-w-0 items-center gap-6">
+      <div className="flex min-w-0 flex-1 items-center gap-6">
         <div className="flex shrink-0 items-center gap-0.5" role="group" aria-label="Pagination">
           <button
             type="button"
@@ -91,6 +95,9 @@ export function FeedPaginationBar({
             : `${start}\u2013${end} of ${total.toLocaleString()}`}
         </p>
       </div>
+      {trailing != null ? (
+        <div className="flex shrink-0 items-center gap-2">{trailing}</div>
+      ) : null}
     </div>
   );
 }

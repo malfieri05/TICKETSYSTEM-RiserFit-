@@ -118,15 +118,15 @@
       "id": "handbook-001",
       "question": "Where is the company handbook?",
       "role": "STUDIO_USER",
-      "expected_slugs": ["handbook"],
-      "expected_routes": ["/handbook"]
+      "expected_slugs": ["assistant"],
+      "expected_routes": ["/assistant"]
     },
     {
       "id": "handbook-002",
       "question": "What's the difference between the Assistant and the Handbook?",
       "role": "ANY",
-      "expected_slugs": ["assistant", "handbook"],
-      "expected_routes": ["/assistant", "/handbook"]
+      "expected_slugs": ["assistant"],
+      "expected_routes": ["/assistant"]
     },
     {
       "id": "workflow-templates-001",

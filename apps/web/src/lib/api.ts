@@ -99,6 +99,18 @@ export const ticketsApi = {
     api.get<import('@/types').ScopeSummaryResponse>('/tickets/scope-summary'),
   inboxFolders: () =>
     api.get<import('@/types').InboxFoldersResponse>('/tickets/inbox-folders'),
+  listFilterTags: () =>
+    api.get<{ id: string; name: string; color: string | null }[]>('/tickets/tags'),
+  /** Admin only: same filter query params as `list`; response is XLSX binary. */
+  exportTicketsExcel: (params?: import('@/types').TicketFilters) =>
+    api.get<ArrayBuffer>('/tickets/export', { params, responseType: 'arraybuffer' }),
+  /** Admin only: UTF-8 CSV (with BOM) for the same filters — import into Google Sheets. */
+  exportTicketsCsv: (params?: import('@/types').TicketFilters) =>
+    api.get<ArrayBuffer>('/tickets/export/csv', { params, responseType: 'arraybuffer' }),
+  googleSheetsExportStatus: () =>
+    api.get<{ enabled: boolean }>('/tickets/export/google-sheet/status'),
+  createGoogleSheetExport: (params?: import('@/types').TicketFilters) =>
+    api.post<{ url: string }>('/tickets/export/google-sheet', null, { params }),
   list: (params?: import('@/types').TicketFilters) =>
     api.get<import('@/types').PaginatedResponse<import('@/types').TicketListItem>>('/tickets', { params }),
   get: (id: string) => api.get<import('@/types').TicketDetail>(`/tickets/${id}`),
@@ -341,30 +353,19 @@ export interface DashboardSummaryResponse {
   maintenanceByLocation: { locationId: string; locationName: string; count: number }[];
 }
 
-export interface StudioDashboardSummaryResponse {
-  openTickets: number;
-  completedTickets: number;
-  avgCompletionHours: number | null;
-  avgFirstResponseHours: number | null;
-  byLocation: { locationId: string; locationName: string; count: number }[];
-}
-
 export const dashboardApi = {
   summary: (
     studioId?: string,
     kpiRange?: { from: string; to: string },
   ) =>
-    api.get<DashboardSummaryResponse | StudioDashboardSummaryResponse>(
-      '/dashboard/summary',
-      {
-        params: {
-          ...(studioId ? { studioId } : {}),
-          ...(kpiRange?.from && kpiRange?.to
-            ? { from: kpiRange.from, to: kpiRange.to }
-            : {}),
-        },
+    api.get<DashboardSummaryResponse>('/dashboard/summary', {
+      params: {
+        ...(studioId ? { studioId } : {}),
+        ...(kpiRange?.from && kpiRange?.to
+          ? { from: kpiRange.from, to: kpiRange.to }
+          : {}),
       },
-    ),
+    }),
 };
 
 // ─── Reporting ─────────────────────────────────────────────────────────────
@@ -394,13 +395,15 @@ export const reportingApi = {
     }>('/reporting/summary'),
 
   /** Pass days=0 to request all-time data (no date filter). */
-  volumeByDay: (days = 30) =>
-    api.get<{ date: string; count: number; closed: number }[]>(`/reporting/volume?days=${days}`),
+  volumeByDay: (days = 30, studioId?: string) =>
+    api.get<{ date: string; count: number; closed: number }[]>('/reporting/volume', {
+      params: { days, ...(studioId ? { studioId } : {}) },
+    }),
 
   /** Inclusive calendar range — matches dashboard KPI timeframe. */
-  volumeByDateRange: (from: string, to: string) =>
+  volumeByDateRange: (from: string, to: string, studioId?: string) =>
     api.get<{ date: string; count: number; closed: number }[]>('/reporting/volume', {
-      params: { from, to },
+      params: { from, to, ...(studioId ? { studioId } : {}) },
     }),
 
   byStatus: () =>
@@ -419,18 +422,22 @@ export const reportingApi = {
       '/reporting/by-market',
     ),
 
-  resolutionTime: () =>
+  resolutionTime: (studioId?: string) =>
     api.get<{ categoryName: string; avgHours: number; ticketCount: number }[]>(
       '/reporting/resolution-time',
+      { params: studioId ? { studioId } : {} },
     ),
 
-  completionByOwner: () =>
+  completionByOwner: (studioId?: string) =>
     api.get<{ userId: string; userName: string; avgHours: number | null; closedCount: number }[]>(
       '/reporting/completion-time/owners',
+      { params: studioId ? { studioId } : {} },
     ),
 
-  workflowTiming: () =>
-    api.get<{ workflows: WorkflowTimingEntry[] }>('/reporting/workflow-timing'),
+  workflowTiming: (studioId?: string) =>
+    api.get<{ workflows: WorkflowTimingEntry[] }>('/reporting/workflow-timing', {
+      params: studioId ? { studioId } : {},
+    }),
 
   byLocation: () =>
     api.get<{ marketId: string | null; marketName: string; count: number }[]>(

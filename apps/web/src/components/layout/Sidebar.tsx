@@ -71,7 +71,7 @@ const navItemsDefault: NavItem[] = [
 
 const navItemsStudioUser: NavItem[] = [
   { href: '/portal', label: 'Home', icon: Home, tab: 'my' },
-  { href: '/portal', label: 'Dashboard', icon: LayoutDashboard, tab: 'dashboard' },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/notifications', label: 'Notifications', icon: Bell },
 ];
 
@@ -410,30 +410,6 @@ export function Sidebar() {
                 <Fragment key={href}>{row}</Fragment>
               );
             })}
-
-          {user?.studioId &&
-            (collapsed ? (
-              <InstantTooltip content="Handbook" compact placement="above" preventPlacementFlip className="block min-w-0">
-                <Link
-                  href="/handbook"
-                  data-active={pathname === '/handbook' ? 'true' : undefined}
-                  className={linkBase(pathname === '/handbook')}
-                  aria-label="Handbook"
-                >
-                  <BookMarked className="h-4 w-4 shrink-0" aria-hidden />
-                </Link>
-              </InstantTooltip>
-            ) : (
-              <Link
-                href="/handbook"
-                data-active={pathname === '/handbook' ? 'true' : undefined}
-                className={linkBase(pathname === '/handbook')}
-                aria-label="Handbook"
-              >
-                <BookMarked className="h-4 w-4 shrink-0" aria-hidden />
-                <SidebarLabel>Handbook</SidebarLabel>
-              </Link>
-            ))}
 
           {isAdmin && !collapsed && (
             <div

@@ -77,6 +77,11 @@ export class TicketFiltersDto {
   @IsString()
   requesterId?: string;
 
+  /** Filter to tickets that have this tag (global tag id). */
+  @IsOptional()
+  @IsString()
+  tagId?: string;
+
   @IsOptional()
   @IsString()
   search?: string;

@@ -58,7 +58,6 @@ export function getNavHeaderIcon(
   if (pathname.startsWith('/notifications')) return Bell;
   if (pathname === '/inbox') return Inbox;
   if (pathname.startsWith('/assistant')) return Bot;
-  if (pathname === '/handbook') return BookMarked;
 
   if (pathname.startsWith('/locations/')) return MapPin;
 

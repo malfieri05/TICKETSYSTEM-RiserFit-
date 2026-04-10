@@ -249,6 +249,8 @@ export interface TicketFilters {
   maintenanceCategoryId?: string;
   ownerId?: string;
   requesterId?: string;
+  /** Filter to tickets that include this global tag id. */
+  tagId?: string;
   search?: string;
   page?: number;
   limit?: number;

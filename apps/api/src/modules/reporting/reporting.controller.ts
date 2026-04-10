@@ -11,25 +11,29 @@ import { ReportingService } from './reporting.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { DispatchFiltersDto } from './dto/dispatch-filters.dto';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { RequestUser } from '../auth/strategies/jwt.strategy';
 
 @Controller('reporting')
-@Roles(Role.ADMIN, Role.DEPARTMENT_USER)
 export class ReportingController {
   constructor(private readonly reportingService: ReportingService) {}
 
   // GET /api/reporting/summary
-  // Total tickets, open, resolved, avg resolution time
   @Get('summary')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getSummary() {
     return this.reportingService.getSummary();
   }
 
   // GET /api/reporting/volume?days=30  OR  ?from=YYYY-MM-DD&to=YYYY-MM-DD (dashboard timeframe)
   @Get('volume')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER, Role.STUDIO_USER)
   getVolumeByDay(
+    @CurrentUser() user: RequestUser,
     @Query('days') days?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('studioId') studioId?: string,
   ) {
     if (from || to) {
       if (!from || !to) {
@@ -37,64 +41,74 @@ export class ReportingController {
           'Query params "from" and "to" must both be provided (YYYY-MM-DD) for a date range.',
         );
       }
-      return this.reportingService.getVolumeByDayInRange(from, to);
+      return this.reportingService.getVolumeByDayInRange(user, from, to, studioId);
     }
-    return this.reportingService.getVolumeByDay(days ? parseInt(days, 10) : 30);
+    return this.reportingService.getVolumeByDay(
+      user,
+      days ? parseInt(days, 10) : 30,
+      studioId,
+    );
   }
 
-  // GET /api/reporting/by-status
   @Get('by-status')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getByStatus() {
     return this.reportingService.getByStatus();
   }
 
-  // GET /api/reporting/by-priority
   @Get('by-priority')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getByPriority() {
     return this.reportingService.getByPriority();
   }
 
-  // GET /api/reporting/by-category
   @Get('by-category')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getByCategory() {
     return this.reportingService.getByCategory();
   }
 
-  // GET /api/reporting/by-market
   @Get('by-market')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getByMarket() {
     return this.reportingService.getByMarket();
   }
 
-  // GET /api/reporting/resolution-time
-  // Average resolution time in hours, broken down by category
   @Get('resolution-time')
-  getResolutionTimeByCategory() {
-    return this.reportingService.getResolutionTimeByCategory();
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER, Role.STUDIO_USER)
+  getResolutionTimeByCategory(
+    @CurrentUser() user: RequestUser,
+    @Query('studioId') studioId?: string,
+  ) {
+    return this.reportingService.getResolutionTimeByCategory(user, studioId);
   }
 
-  // GET /api/reporting/completion-time/owners
-  // Average completion time (created -> closed/resolved) grouped by ticket owner
   @Get('completion-time/owners')
-  getCompletionTimeByOwner() {
-    return this.reportingService.getCompletionTimeByOwner();
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER, Role.STUDIO_USER)
+  getCompletionTimeByOwner(
+    @CurrentUser() user: RequestUser,
+    @Query('studioId') studioId?: string,
+  ) {
+    return this.reportingService.getCompletionTimeByOwner(user, studioId);
   }
 
-  // GET /api/reporting/workflow-timing
   @Get('workflow-timing')
-  getWorkflowTiming() {
-    return this.reportingService.getWorkflowTiming();
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER, Role.STUDIO_USER)
+  getWorkflowTiming(
+    @CurrentUser() user: RequestUser,
+    @Query('studioId') studioId?: string,
+  ) {
+    return this.reportingService.getWorkflowTiming(user, studioId);
   }
 
-  // GET /api/reporting/by-location (alias for by-market)
   @Get('by-location')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   getByLocation() {
     return this.reportingService.getByMarket();
   }
 
-  // GET /api/reporting/export
-  // Download all tickets as a CSV file
   @Get('export')
+  @Roles(Role.ADMIN, Role.DEPARTMENT_USER)
   @Header('Content-Type', 'text/csv')
   @Header('Content-Disposition', 'attachment; filename="tickets-export.csv"')
   async exportCsv(@Res() res: Response) {
@@ -102,7 +116,6 @@ export class ReportingController {
     res.send(csv);
   }
 
-  // ── Dispatch: open maintenance only (Stage 13, ADMIN only) ─────────────────
   @Get('dispatch/by-studio')
   @Roles(Role.ADMIN)
   getDispatchByStudio(@Query() filters: DispatchFiltersDto) {

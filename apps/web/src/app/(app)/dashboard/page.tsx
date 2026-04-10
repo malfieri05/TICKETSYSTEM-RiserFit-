@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import type { ElementType, ReactNode } from 'react';
 import {
   useCallback,
@@ -11,6 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
@@ -24,10 +24,12 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import {
+  adminApi,
   dashboardApi,
   reportingApi,
   type DashboardSummaryResponse,
 } from '@/lib/api';
+import { buildTicketsFeedHref } from '@/lib/tickets-deep-link';
 import { Header } from '@/components/layout/Header';
 import { InstantTooltip } from '@/components/tickets/TicketTagCapsule';
 import { ComboBox } from '@/components/ui/ComboBox';
@@ -150,18 +152,22 @@ function HorizontalBar({
   count,
   max,
   color = '#6366f1',
+  href,
 }: {
   label: string;
   count: number;
   max: number;
   color?: string;
+  /** When set, row opens the Tickets feed with matching filters. */
+  href?: string;
 }) {
   const pct = max > 0 ? Math.max(2, Math.round((count / max) * 100)) : 0;
-  return (
-    <div className="flex items-center gap-3 text-sm">
+  const rowClass = 'flex items-center gap-3 text-sm min-w-0';
+  const inner = (
+    <>
       <span className="w-36 text-[var(--color-text-secondary)] truncate shrink-0">{label}</span>
       <div
-        className="flex-1 rounded-full h-2.5 overflow-hidden"
+        className="min-w-0 flex-1 rounded-full h-2.5 overflow-hidden"
         style={{ background: 'var(--color-border-default)' }}
       >
         <div
@@ -170,8 +176,25 @@ function HorizontalBar({
         />
       </div>
       <span className="w-8 shrink-0 text-right text-[var(--color-text-muted)] font-medium">{count}</span>
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(
+          rowClass,
+          'rounded-md -mx-1 px-1 py-0.5 -my-0.5',
+          'transition-colors hover:bg-[color-mix(in_srgb,var(--color-bg-surface-inset)_88%,transparent)]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-bg-surface)]',
+        )}
+        aria-label={`View tickets filtered by ${label}`}
+      >
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={rowClass}>{inner}</div>;
 }
 
 /**
@@ -548,8 +571,6 @@ export default function DashboardPage() {
     return Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1;
   }, [rangeFrom, rangeTo]);
 
-  const skipForStudio = user?.role === 'STUDIO_USER';
-
   const {
     data,
     isPending: summaryIsPending,
@@ -560,7 +581,7 @@ export default function DashboardPage() {
     queryKey: ['dashboard-summary', rangeFrom, rangeTo],
     queryFn: () =>
       dashboardApi.summary(undefined, { from: rangeFrom, to: rangeTo }),
-    enabled: !skipForStudio && rangeValid,
+    enabled: Boolean(user) && rangeValid,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
@@ -572,7 +593,7 @@ export default function DashboardPage() {
   const { data: volumeRes, isPending: volumeIsPending } = useQuery({
     queryKey: ['dashboard', 'reporting-volume', rangeFrom, rangeTo],
     queryFn: () => reportingApi.volumeByDateRange(rangeFrom, rangeTo),
-    enabled: !skipForStudio && rangeValid,
+    enabled: Boolean(user) && rangeValid,
     refetchOnWindowFocus: false,
     placeholderData: keepPreviousData,
   });
@@ -584,23 +605,32 @@ export default function DashboardPage() {
   const { data: resolutionRes } = useQuery({
     queryKey: ['dashboard', 'reporting-resolution-time'],
     queryFn: () => reportingApi.resolutionTime(),
-    enabled: !skipForStudio,
+    enabled: Boolean(user),
     refetchOnWindowFocus: false,
   });
 
   const { data: completionOwnerRes } = useQuery({
     queryKey: ['dashboard', 'reporting-completion-owners'],
     queryFn: () => reportingApi.completionByOwner(),
-    enabled: !skipForStudio,
+    enabled: Boolean(user),
     refetchOnWindowFocus: false,
   });
 
   const { data: workflowTimingRes } = useQuery({
     queryKey: ['dashboard', 'reporting-workflow-timing'],
     queryFn: () => reportingApi.workflowTiming(),
-    enabled: !skipForStudio,
+    enabled: Boolean(user),
     refetchOnWindowFocus: false,
   });
+
+  const { data: taxonomyData } = useQuery({
+    queryKey: ['ticket-taxonomy'],
+    queryFn: () => adminApi.getTicketTaxonomy(),
+    enabled: Boolean(user),
+  });
+  const taxonomy = taxonomyData?.data;
+  const supportClassId = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT')?.id;
+  const maintenanceClassId = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE')?.id;
 
   const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
   /** Ticket Volume header: right column where chart hover metrics are portaled. */
@@ -625,25 +655,6 @@ export default function DashboardPage() {
   );
   const maxResolution = Math.max(...resolutionTime.map((r) => r.avgHours), 1);
 
-  if (skipForStudio) {
-    return (
-      <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
-        <Header title="Dashboard" />
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 p-6 text-center">
-          <p className="text-[var(--color-text-secondary)] max-w-md">
-            Studio dashboard metrics live on the portal. Use the Dashboard tab there for your scoped summary.
-          </p>
-          <Link
-            href="/portal?tab=dashboard"
-            className="text-sm font-medium text-[var(--color-accent)] hover:underline"
-          >
-            Open portal dashboard
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="Dashboard" />
@@ -656,7 +667,8 @@ export default function DashboardPage() {
         )}
 
         {rangeValid && (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-stretch">
+          <>
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:items-stretch">
             {/* Left: KPI grid — intrinsic height drives row; right chart uses fixed H (no ResizeObserver→height) */}
             <div className="flex min-h-0 w-full min-w-0 flex-col">
               {topSectionSkeleton ? (
@@ -960,6 +972,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          </>
         )}
 
         {summary && rangeValid ? (
@@ -990,6 +1003,10 @@ export default function DashboardPage() {
                           count={row.count}
                           max={maxSupportDept}
                           color="#6366f1"
+                          href={buildTicketsFeedHref(
+                            { departmentId: row.deptId },
+                            { from: rangeFrom, to: rangeTo },
+                          )}
                         />
                       ))}
                     </BreakdownPanelScrollBody>
@@ -1013,6 +1030,13 @@ export default function DashboardPage() {
                           count={row.count}
                           max={maxSupportType}
                           color="#6366f1"
+                          href={buildTicketsFeedHref(
+                            {
+                              supportTopicId: row.typeId,
+                              ...(supportClassId ? { ticketClass: supportClassId } : {}),
+                            },
+                            { from: rangeFrom, to: rangeTo },
+                          )}
                         />
                       ))}
                     </BreakdownPanelScrollBody>
@@ -1047,6 +1071,13 @@ export default function DashboardPage() {
                           count={row.count}
                           max={maxMaintenanceLoc}
                           color="#0ea5e9"
+                          href={buildTicketsFeedHref(
+                            {
+                              studioId: row.locationId,
+                              ...(maintenanceClassId ? { ticketClass: maintenanceClassId } : {}),
+                            },
+                            { from: rangeFrom, to: rangeTo },
+                          )}
                         />
                       ))}
                     </BreakdownPanelScrollBody>
@@ -1069,6 +1100,13 @@ export default function DashboardPage() {
                           count={row.count}
                           max={maxMaintenanceCat}
                           color="#0ea5e9"
+                          href={buildTicketsFeedHref(
+                            {
+                              maintenanceCategoryId: row.categoryId,
+                              ...(maintenanceClassId ? { ticketClass: maintenanceClassId } : {}),
+                            },
+                            { from: rangeFrom, to: rangeTo },
+                          )}
                         />
                       ))}
                     </BreakdownPanelScrollBody>

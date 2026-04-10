@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
 import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
@@ -29,14 +29,6 @@ export interface DashboardSummaryDto {
   }[];
 }
 
-export interface StudioDashboardSummaryDto {
-  openTickets: number;
-  completedTickets: number;
-  avgCompletionHours: number | null;
-  avgFirstResponseHours: number | null;
-  byLocation: { locationId: string; locationName: string; count: number }[];
-}
-
 @Injectable()
 export class DashboardService {
   constructor(
@@ -49,11 +41,33 @@ export class DashboardService {
     studioId?: string,
     fromStr?: string,
     toStr?: string,
-  ): Promise<DashboardSummaryDto | StudioDashboardSummaryDto> {
-    if (actor.role === Role.STUDIO_USER) {
-      return this.getStudioSummary(actor, studioId);
+  ): Promise<DashboardSummaryDto> {
+    const baseWhere = this.buildSummaryBaseWhere(actor, studioId);
+    return this.computeDashboardSummary(baseWhere, fromStr, toStr);
+  }
+
+  /**
+   * Visibility scope plus optional studio narrowing (validated for non-admin users).
+   */
+  private buildSummaryBaseWhere(
+    actor: RequestUser,
+    studioId?: string,
+  ): Prisma.TicketWhereInput {
+    let where = this.visibility.buildWhereClause(actor);
+    if (!studioId?.trim()) {
+      return where;
     }
-    return this.getAdminOrDeptSummary(actor, fromStr, toStr);
+    const sid = studioId.trim();
+    if (actor.role === Role.ADMIN) {
+      return { AND: [where, { studioId: sid }] };
+    }
+    const allowed: string[] = [];
+    if (actor.studioId) allowed.push(actor.studioId);
+    allowed.push(...(actor.scopeStudioIds ?? []));
+    if (!allowed.includes(sid)) {
+      throw new ForbiddenException('Not allowed to filter dashboard by this location.');
+    }
+    return { AND: [where, { studioId: sid }] };
   }
 
   /** Narrow dashboard breakdowns to tickets created in the KPI window. */
@@ -179,13 +193,11 @@ export class DashboardService {
     };
   }
 
-  private async getAdminOrDeptSummary(
-    actor: RequestUser,
+  private async computeDashboardSummary(
+    where: Prisma.TicketWhereInput,
     fromStr?: string,
     toStr?: string,
   ): Promise<DashboardSummaryDto> {
-    const where = this.visibility.buildWhereClause(actor);
-
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -257,78 +269,29 @@ export class DashboardService {
     };
   }
 
-  private async getStudioSummary(
-    actor: RequestUser,
-    studioId?: string,
-  ): Promise<StudioDashboardSummaryDto> {
-    let where = this.visibility.buildWhereClause(actor);
-
-    if (studioId) {
-      const allowedStudioIds: string[] = [];
-      if (actor.studioId) allowedStudioIds.push(actor.studioId);
-      allowedStudioIds.push(...actor.scopeStudioIds);
-      if (!allowedStudioIds.includes(studioId)) {
-        return {
-          openTickets: 0,
-          completedTickets: 0,
-          avgCompletionHours: null,
-          avgFirstResponseHours: null,
-          byLocation: [],
-        };
-      }
-      where = { ...where, studioId };
-    }
-
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const [openTickets, completedTickets, avgResult, avgFirstResponse, byLocation] =
-      await Promise.all([
-        this.prisma.ticket.count({
-          where: {
-            ...where,
-            status: { notIn: ['RESOLVED', 'CLOSED'] },
-          },
-        }),
-        this.prisma.ticket.count({
-          where: { ...where, status: { in: ['RESOLVED', 'CLOSED'] } },
-        }),
-        this.computeAvgCompletion(where, thirtyDaysAgo),
-        this.computeAvgFirstResponse(where, thirtyDaysAgo),
-        this.computeByLocation(where),
-      ]);
-
-    return {
-      openTickets,
-      completedTickets,
-      avgCompletionHours: avgResult,
-      avgFirstResponseHours: avgFirstResponse,
-      byLocation,
-    };
-  }
-
   private async computeAvgCompletion(
-    baseWhere: Record<string, unknown>,
+    baseWhere: Prisma.TicketWhereInput,
     since: Date,
   ): Promise<number | null> {
-    const rows = await this.prisma.$queryRawUnsafe<
-      [{ avg_hours: number | null }]
-    >(
-      `
-      SELECT ROUND(
-        AVG(EXTRACT(EPOCH FROM (t."resolvedAt" - t."createdAt")) / 3600)::numeric,
-        1
-      )::float AS avg_hours
-      FROM tickets t
-      WHERE t.status IN ('RESOLVED', 'CLOSED')
-        AND t."resolvedAt" IS NOT NULL
-        AND t."resolvedAt" >= $1
-    `,
-      since,
-    );
-
-    const val = rows?.[0]?.avg_hours;
-    return val != null ? Number(val) : null;
+    const rows = await this.prisma.ticket.findMany({
+      where: {
+        AND: [
+          baseWhere,
+          { status: { in: ['RESOLVED', 'CLOSED'] } },
+          { resolvedAt: { not: null, gte: since } },
+        ],
+      },
+      select: { createdAt: true, resolvedAt: true },
+    });
+    if (rows.length === 0) return null;
+    const totalHours =
+      rows.reduce(
+        (acc, t) =>
+          acc +
+          (t.resolvedAt!.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60),
+        0,
+      ) / rows.length;
+    return Math.round(totalHours * 10) / 10;
   }
 
   /** Among tickets created in the last window, average hours from creation to first response (when set). */
@@ -338,9 +301,11 @@ export class DashboardService {
   ): Promise<number | null> {
     const rows = await this.prisma.ticket.findMany({
       where: {
-        ...baseWhere,
-        createdAt: { gte: since },
-        firstResponseAt: { not: null },
+        AND: [
+          baseWhere,
+          { createdAt: { gte: since } },
+          { firstResponseAt: { not: null } },
+        ],
       },
       select: { createdAt: true, firstResponseAt: true },
     });
@@ -461,39 +426,6 @@ export class DashboardService {
         maintenanceCategoryId: { not: null },
         studioId: { not: null },
       },
-      _count: { _all: true },
-      orderBy: { _count: { studioId: 'desc' } },
-    });
-
-    const studioIds = rows
-      .map((r) => r.studioId)
-      .filter((id): id is string => id != null);
-
-    if (studioIds.length === 0) return [];
-
-    const studios = await this.prisma.studio.findMany({
-      where: { id: { in: studioIds } },
-      select: { id: true, name: true },
-    });
-    const nameMap = Object.fromEntries(studios.map((s) => [s.id, s.name]));
-
-    return rows
-      .filter((r) => r.studioId != null)
-      .map((r) => ({
-        locationId: r.studioId!,
-        locationName: nameMap[r.studioId!] ?? 'Unknown',
-        count: r._count._all,
-      }));
-  }
-
-  private async computeByLocation(
-    baseWhere: Record<string, unknown>,
-  ): Promise<
-    { locationId: string; locationName: string; count: number }[]
-  > {
-    const rows = await this.prisma.ticket.groupBy({
-      by: ['studioId'],
-      where: { ...baseWhere, studioId: { not: null } },
       _count: { _all: true },
       orderBy: { _count: { studioId: 'desc' } },
     });

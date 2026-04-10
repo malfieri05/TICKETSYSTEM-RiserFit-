@@ -1,11 +1,39 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../common/database/prisma.service';
+import { TicketVisibilityService } from '../../common/permissions/ticket-visibility.service';
+import { RequestUser } from '../auth/strategies/jwt.strategy';
 import type { DispatchFiltersDto } from './dto/dispatch-filters.dto';
 
 @Injectable()
 export class ReportingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private visibility: TicketVisibilityService,
+  ) {}
+
+  /** Dashboard/reporting: visibility + optional location filter (validated). */
+  private reportingTicketWhere(
+    user: RequestUser,
+    studioId?: string,
+  ): Prisma.TicketWhereInput {
+    const base: Prisma.TicketWhereInput =
+      user.role === Role.ADMIN ? {} : this.visibility.buildWhereClause(user);
+    if (!studioId?.trim()) {
+      return base;
+    }
+    const sid = studioId.trim();
+    if (user.role === Role.ADMIN) {
+      return { AND: [base, { studioId: sid }] };
+    }
+    const allowed: string[] = [];
+    if (user.studioId) allowed.push(user.studioId);
+    allowed.push(...(user.scopeStudioIds ?? []));
+    if (!allowed.includes(sid)) {
+      throw new ForbiddenException('Not allowed to filter reporting by this location.');
+    }
+    return { AND: [base, { studioId: sid }] };
+  }
 
   /** Build where clause for OPEN maintenance tickets only (Stage 13 dispatch). */
   buildOpenMaintenanceWhere(
@@ -84,57 +112,99 @@ export class ReportingService {
   }
 
   // ── Ticket volume over last N days (days=0 → all time) ───────────────────
-  async getVolumeByDay(days = 30) {
+  async getVolumeByDay(user: RequestUser, days = 30, studioId?: string) {
     const since =
       days > 0 ? new Date(Date.now() - days * 86_400_000) : null;
 
-    // Created per day
-    const createdRows: { day: Date; count: bigint }[] = since
-      ? await this.prisma.$queryRaw`
-          SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
-          FROM tickets
-          WHERE "createdAt" >= ${since}
-          GROUP BY day ORDER BY day`
-      : await this.prisma.$queryRaw`
-          SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
-          FROM tickets
-          GROUP BY day ORDER BY day`;
+    if (user.role === Role.ADMIN && !studioId?.trim()) {
+      const createdRows: { day: Date; count: bigint }[] = since
+        ? await this.prisma.$queryRaw`
+            SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+            FROM tickets
+            WHERE "createdAt" >= ${since}
+            GROUP BY day ORDER BY day`
+        : await this.prisma.$queryRaw`
+            SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+            FROM tickets
+            GROUP BY day ORDER BY day`;
 
-    // Closed/resolved per day (use resolvedAt when set, else closedAt)
-    const closedRows: { day: Date; count: bigint }[] = since
-      ? await this.prisma.$queryRaw`
-          SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
-                 COUNT(*) AS count
-          FROM tickets
-          WHERE status IN ('RESOLVED', 'CLOSED')
-            AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
-            AND COALESCE("resolvedAt", "closedAt") >= ${since}
-          GROUP BY day ORDER BY day`
-      : await this.prisma.$queryRaw`
-          SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
-                 COUNT(*) AS count
-          FROM tickets
-          WHERE status IN ('RESOLVED', 'CLOSED')
-            AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
-          GROUP BY day ORDER BY day`;
+      const closedRows: { day: Date; count: bigint }[] = since
+        ? await this.prisma.$queryRaw`
+            SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+                   COUNT(*) AS count
+            FROM tickets
+            WHERE status IN ('RESOLVED', 'CLOSED')
+              AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+              AND COALESCE("resolvedAt", "closedAt") >= ${since}
+            GROUP BY day ORDER BY day`
+        : await this.prisma.$queryRaw`
+            SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+                   COUNT(*) AS count
+            FROM tickets
+            WHERE status IN ('RESOLVED', 'CLOSED')
+              AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+            GROUP BY day ORDER BY day`;
 
-    // Merge into a single date-keyed map
+      const map = new Map<string, { count: number; closed: number }>();
+      for (const r of createdRows) {
+        const key = r.day.toISOString().slice(0, 10);
+        const entry = map.get(key) ?? { count: 0, closed: 0 };
+        entry.count = Number(r.count);
+        map.set(key, entry);
+      }
+      for (const r of closedRows) {
+        const key = r.day.toISOString().slice(0, 10);
+        const entry = map.get(key) ?? { count: 0, closed: 0 };
+        entry.closed = Number(r.count);
+        map.set(key, entry);
+      }
+      return Array.from(map.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, { count, closed }]) => ({ date, count, closed }));
+    }
+
+    const where = this.reportingTicketWhere(user, studioId);
+    const createdWhere: Prisma.TicketWhereInput = since
+      ? { AND: [where, { createdAt: { gte: since } }] }
+      : where;
+    const closedAnd: Prisma.TicketWhereInput[] = [
+      where,
+      { status: { in: ['RESOLVED', 'CLOSED'] } },
+      {
+        OR: since
+          ? [
+              { resolvedAt: { gte: since } },
+              { AND: [{ resolvedAt: null }, { closedAt: { gte: since } }] },
+            ]
+          : [{ resolvedAt: { not: null } }, { closedAt: { not: null } }],
+      },
+    ];
+    const [createdTickets, closedTickets] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: createdWhere,
+        select: { createdAt: true },
+      }),
+      this.prisma.ticket.findMany({
+        where: { AND: closedAnd },
+        select: { resolvedAt: true, closedAt: true },
+      }),
+    ]);
     const map = new Map<string, { count: number; closed: number }>();
-
-    for (const r of createdRows) {
-      const key = r.day.toISOString().slice(0, 10);
-      const entry = map.get(key) ?? { count: 0, closed: 0 };
-      entry.count = Number(r.count);
-      map.set(key, entry);
+    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+    for (const t of createdTickets) {
+      const key = dayKey(t.createdAt);
+      const e = map.get(key) ?? { count: 0, closed: 0 };
+      e.count += 1;
+      map.set(key, e);
     }
-
-    for (const r of closedRows) {
-      const key = r.day.toISOString().slice(0, 10);
-      const entry = map.get(key) ?? { count: 0, closed: 0 };
-      entry.closed = Number(r.count);
-      map.set(key, entry);
+    for (const t of closedTickets) {
+      const end = t.resolvedAt ?? t.closedAt;
+      if (!end) continue;
+      const key = dayKey(end);
+      const e = map.get(key) ?? { count: 0, closed: 0 };
+      e.closed += 1;
+      map.set(key, e);
     }
-
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, { count, closed }]) => ({ date, count, closed }));
@@ -158,48 +228,101 @@ export class ReportingService {
   }
 
   /** Ticket volume per day for tickets created / closed in an inclusive calendar range (aligns with dashboard KPI timeframe). */
-  async getVolumeByDayInRange(fromStr: string, toStr: string) {
+  async getVolumeByDayInRange(
+    user: RequestUser,
+    fromStr: string,
+    toStr: string,
+    studioId?: string,
+  ) {
     const fromStart = this.parseVolumeDayBoundary(fromStr, false);
     const toEnd = this.parseVolumeDayBoundary(toStr, true);
     if (fromStart.getTime() > toEnd.getTime()) {
       throw new BadRequestException('"from" must be on or before "to"');
     }
 
-    const createdRows: { day: Date; count: bigint }[] = await this.prisma
-      .$queryRaw`
-      SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
-      FROM tickets
-      WHERE "createdAt" >= ${fromStart}
-        AND "createdAt" <= ${toEnd}
-      GROUP BY day ORDER BY day`;
+    if (user.role === Role.ADMIN && !studioId?.trim()) {
+      const createdRows: { day: Date; count: bigint }[] = await this.prisma
+        .$queryRaw`
+        SELECT date_trunc('day', "createdAt") AS day, COUNT(*) AS count
+        FROM tickets
+        WHERE "createdAt" >= ${fromStart}
+          AND "createdAt" <= ${toEnd}
+        GROUP BY day ORDER BY day`;
 
-    const closedRows: { day: Date; count: bigint }[] = await this.prisma
-      .$queryRaw`
-      SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
-             COUNT(*) AS count
-      FROM tickets
-      WHERE status IN ('RESOLVED', 'CLOSED')
-        AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
-        AND COALESCE("resolvedAt", "closedAt") >= ${fromStart}
-        AND COALESCE("resolvedAt", "closedAt") <= ${toEnd}
-      GROUP BY day ORDER BY day`;
+      const closedRows: { day: Date; count: bigint }[] = await this.prisma
+        .$queryRaw`
+        SELECT date_trunc('day', COALESCE("resolvedAt", "closedAt")) AS day,
+               COUNT(*) AS count
+        FROM tickets
+        WHERE status IN ('RESOLVED', 'CLOSED')
+          AND COALESCE("resolvedAt", "closedAt") IS NOT NULL
+          AND COALESCE("resolvedAt", "closedAt") >= ${fromStart}
+          AND COALESCE("resolvedAt", "closedAt") <= ${toEnd}
+        GROUP BY day ORDER BY day`;
 
+      const map = new Map<string, { count: number; closed: number }>();
+      for (const r of createdRows) {
+        const key = r.day.toISOString().slice(0, 10);
+        const entry = map.get(key) ?? { count: 0, closed: 0 };
+        entry.count = Number(r.count);
+        map.set(key, entry);
+      }
+      for (const r of closedRows) {
+        const key = r.day.toISOString().slice(0, 10);
+        const entry = map.get(key) ?? { count: 0, closed: 0 };
+        entry.closed = Number(r.count);
+        map.set(key, entry);
+      }
+      return Array.from(map.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, { count, closed }]) => ({ date, count, closed }));
+    }
+
+    const where = this.reportingTicketWhere(user, studioId);
+    const [createdTickets, closedTickets] = await Promise.all([
+      this.prisma.ticket.findMany({
+        where: {
+          AND: [where, { createdAt: { gte: fromStart, lte: toEnd } }],
+        },
+        select: { createdAt: true },
+      }),
+      this.prisma.ticket.findMany({
+        where: {
+          AND: [
+            where,
+            { status: { in: ['RESOLVED', 'CLOSED'] } },
+            {
+              OR: [
+                { resolvedAt: { gte: fromStart, lte: toEnd } },
+                {
+                  AND: [
+                    { resolvedAt: null },
+                    { closedAt: { gte: fromStart, lte: toEnd } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        select: { resolvedAt: true, closedAt: true },
+      }),
+    ]);
     const map = new Map<string, { count: number; closed: number }>();
-
-    for (const r of createdRows) {
-      const key = r.day.toISOString().slice(0, 10);
-      const entry = map.get(key) ?? { count: 0, closed: 0 };
-      entry.count = Number(r.count);
-      map.set(key, entry);
+    const dayKey = (d: Date) => d.toISOString().slice(0, 10);
+    for (const t of createdTickets) {
+      const key = dayKey(t.createdAt);
+      const e = map.get(key) ?? { count: 0, closed: 0 };
+      e.count += 1;
+      map.set(key, e);
     }
-
-    for (const r of closedRows) {
-      const key = r.day.toISOString().slice(0, 10);
-      const entry = map.get(key) ?? { count: 0, closed: 0 };
-      entry.closed = Number(r.count);
-      map.set(key, entry);
+    for (const t of closedTickets) {
+      const end = t.resolvedAt ?? t.closedAt;
+      if (!end) continue;
+      const key = dayKey(end);
+      const e = map.get(key) ?? { count: 0, closed: 0 };
+      e.closed += 1;
+      map.set(key, e);
     }
-
     return Array.from(map.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, { count, closed }]) => ({ date, count, closed }));
@@ -326,63 +449,154 @@ export class ReportingService {
   }
 
   // ── Resolution time by taxonomy (avg hours) ─────────────────────────────
-  async getResolutionTimeByCategory() {
-    const rows = await this.prisma.$queryRaw<
-      { taxonomy_name: string; avg_hours: number; ticket_count: bigint }[]
-    >`
-      SELECT
-        COALESCE(m.name, s.name, 'Uncategorized') AS taxonomy_name,
-        ROUND(
-          AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
-          1
-        )::float AS avg_hours,
-        COUNT(*)::bigint AS ticket_count
-      FROM tickets t
-      LEFT JOIN maintenance_categories m ON m.id = t.maintenance_category_id
-      LEFT JOIN support_topics s ON s.id = t.support_topic_id
-      WHERE t.resolved_at IS NOT NULL
-        AND t.status IN ('RESOLVED', 'CLOSED')
-      GROUP BY m.name, s.name
-      ORDER BY avg_hours ASC
-    `;
+  async getResolutionTimeByCategory(user: RequestUser, studioId?: string) {
+    if (user.role === Role.ADMIN && !studioId?.trim()) {
+      const rows = await this.prisma.$queryRaw<
+        { taxonomy_name: string; avg_hours: number; ticket_count: bigint }[]
+      >`
+        SELECT
+          COALESCE(m.name, s.name, 'Uncategorized') AS taxonomy_name,
+          ROUND(
+            AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+            1
+          )::float AS avg_hours,
+          COUNT(*)::bigint AS ticket_count
+        FROM tickets t
+        LEFT JOIN maintenance_categories m ON m.id = t.maintenance_category_id
+        LEFT JOIN support_topics s ON s.id = t.support_topic_id
+        WHERE t.resolved_at IS NOT NULL
+          AND t.status IN ('RESOLVED', 'CLOSED')
+        GROUP BY m.name, s.name
+        ORDER BY avg_hours ASC
+      `;
 
-    return rows.map((r) => ({
-      categoryName: r.taxonomy_name,
-      avgHours: Number(r.avg_hours),
-      ticketCount: Number(r.ticket_count),
-    }));
+      return rows.map((r) => ({
+        categoryName: r.taxonomy_name,
+        avgHours: Number(r.avg_hours),
+        ticketCount: Number(r.ticket_count),
+      }));
+    }
+
+    const where = this.reportingTicketWhere(user, studioId);
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        AND: [
+          where,
+          { status: { in: ['RESOLVED', 'CLOSED'] } },
+          { resolvedAt: { not: null } },
+        ],
+      },
+      select: {
+        createdAt: true,
+        resolvedAt: true,
+        maintenanceCategory: { select: { name: true } },
+        supportTopic: { select: { name: true } },
+      },
+    });
+
+    const byKey = new Map<string, { sum: number; n: number }>();
+    for (const t of tickets) {
+      const name =
+        t.maintenanceCategory?.name ??
+        t.supportTopic?.name ??
+        'Uncategorized';
+      const hours =
+        (t.resolvedAt!.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60);
+      const cur = byKey.get(name) ?? { sum: 0, n: 0 };
+      cur.sum += hours;
+      cur.n += 1;
+      byKey.set(name, cur);
+    }
+
+    return [...byKey.entries()]
+      .map(([categoryName, { sum, n }]) => ({
+        categoryName,
+        avgHours: Math.round((sum / n) * 10) / 10,
+        ticketCount: n,
+      }))
+      .sort((a, b) => a.avgHours - b.avgHours);
   }
 
   // ── Completion time by owner (avg hours) ───────────────────────────────────
-  async getCompletionTimeByOwner() {
-    const rows = await this.prisma.$queryRaw<
-      {
-        user_id: string;
-        user_name: string;
-        avg_hours: number | null;
-        closed_count: bigint;
-      }[]
-    >`
-      SELECT
-        u.id                                        AS user_id,
-        u.name                                      AS user_name,
-        AVG(EXTRACT(EPOCH FROM (COALESCE(t.closed_at, t.resolved_at) - t.created_at)) / 3600)
-          FILTER (WHERE t.closed_at IS NOT NULL OR t.resolved_at IS NOT NULL) AS avg_hours,
-        COUNT(*) FILTER (WHERE t.status IN ('RESOLVED','CLOSED'))             AS closed_count
-      FROM tickets t
-      JOIN users   u ON u.id = t.owner_id
-      GROUP BY u.id, u.name
-      ORDER BY avg_hours NULLS LAST
-    `;
+  async getCompletionTimeByOwner(user: RequestUser, studioId?: string) {
+    if (user.role === Role.ADMIN && !studioId?.trim()) {
+      const rows = await this.prisma.$queryRaw<
+        {
+          user_id: string;
+          user_name: string;
+          avg_hours: number | null;
+          closed_count: bigint;
+        }[]
+      >`
+        SELECT
+          u.id                                        AS user_id,
+          u.name                                      AS user_name,
+          AVG(EXTRACT(EPOCH FROM (COALESCE(t.closed_at, t.resolved_at) - t.created_at)) / 3600)
+            FILTER (WHERE t.closed_at IS NOT NULL OR t.resolved_at IS NOT NULL) AS avg_hours,
+          COUNT(*) FILTER (WHERE t.status IN ('RESOLVED','CLOSED'))             AS closed_count
+        FROM tickets t
+        JOIN users   u ON u.id = t.owner_id
+        GROUP BY u.id, u.name
+        ORDER BY avg_hours NULLS LAST
+      `;
 
-    return rows
-      .filter((r) => r.avg_hours !== null)
-      .map((r) => ({
-        userId: r.user_id,
-        userName: r.user_name,
-        avgHours: r.avg_hours ? Number(r.avg_hours.toFixed(1)) : null,
-        closedCount: Number(r.closed_count),
-      }));
+      return rows
+        .filter((r) => r.avg_hours !== null)
+        .map((r) => ({
+          userId: r.user_id,
+          userName: r.user_name,
+          avgHours: r.avg_hours ? Number(r.avg_hours.toFixed(1)) : null,
+          closedCount: Number(r.closed_count),
+        }));
+    }
+
+    const where = this.reportingTicketWhere(user, studioId);
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        AND: [
+          where,
+          { status: { in: ['RESOLVED', 'CLOSED'] } },
+          { ownerId: { not: null } },
+        ],
+      },
+      select: {
+        createdAt: true,
+        resolvedAt: true,
+        closedAt: true,
+        owner: { select: { id: true, name: true } },
+      },
+    });
+
+    const byOwner = new Map<
+      string,
+      { name: string; sum: number; n: number; closed: number }
+    >();
+    for (const t of tickets) {
+      if (!t.owner) continue;
+      const end = t.resolvedAt ?? t.closedAt;
+      if (!end) continue;
+      const hours = (end.getTime() - t.createdAt.getTime()) / (1000 * 60 * 60);
+      const cur = byOwner.get(t.owner.id) ?? {
+        name: t.owner.name,
+        sum: 0,
+        n: 0,
+        closed: 0,
+      };
+      cur.sum += hours;
+      cur.n += 1;
+      cur.closed += 1;
+      byOwner.set(t.owner.id, cur);
+    }
+
+    return [...byOwner.entries()]
+      .map(([userId, { name, sum, n, closed }]) => ({
+        userId,
+        userName: name,
+        avgHours: n > 0 ? Math.round((sum / n) * 10) / 10 : null,
+        closedCount: closed,
+      }))
+      .filter((r) => r.avgHours !== null)
+      .sort((a, b) => (a.avgHours ?? 0) - (b.avgHours ?? 0));
   }
 
   // ── Dispatch: open maintenance only (Stage 13) ─────────────────────────────
@@ -575,7 +789,7 @@ export class ReportingService {
   }
 
   // ── Workflow / subtask completion timing ────────────────────────────────────
-  async getWorkflowTiming() {
+  async getWorkflowTiming(user: RequestUser, studioId?: string) {
     const templates = await this.prisma.subtaskWorkflowTemplate.findMany({
       where: { isActive: true },
       select: {
@@ -598,53 +812,122 @@ export class ReportingService {
       t.subtaskTemplates.map((st) => st.id),
     );
 
-    // ── Two batched queries replace N + N*M individual queries ──────────────
+    let ticketAvgRows: { workflow_template_id: string; avg_hours: number | null }[];
+    let stepTimingRows: {
+      subtask_template_id: string;
+      avg_completion_hours: number | null;
+      avg_active_hours: number | null;
+    }[];
 
-    // 1. Ticket completion averages per workflow template (one query)
-    const ticketAvgRows = await this.prisma.$queryRaw<
-      { workflow_template_id: string; avg_hours: number | null }[]
-    >`
-      SELECT
-        st.workflow_template_id,
-        ROUND(
-          AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
-          1
-        )::float AS avg_hours
-      FROM tickets t
-      JOIN subtasks s ON s.ticket_id = t.id
-      JOIN subtask_templates st ON st.id = s.subtask_template_id
-      WHERE t.status IN ('RESOLVED', 'CLOSED')
-        AND t.resolved_at IS NOT NULL
-        AND t.resolved_at >= ${thirtyDaysAgo}
-        AND st.workflow_template_id = ANY(${allTemplateIds})
-      GROUP BY st.workflow_template_id
-    `;
+    if (user.role === Role.ADMIN && !studioId?.trim()) {
+      ticketAvgRows = await this.prisma.$queryRaw<
+        { workflow_template_id: string; avg_hours: number | null }[]
+      >`
+        SELECT
+          st.workflow_template_id,
+          ROUND(
+            AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+            1
+          )::float AS avg_hours
+        FROM tickets t
+        JOIN subtasks s ON s.ticket_id = t.id
+        JOIN subtask_templates st ON st.id = s.subtask_template_id
+        WHERE t.status IN ('RESOLVED', 'CLOSED')
+          AND t.resolved_at IS NOT NULL
+          AND t.resolved_at >= ${thirtyDaysAgo}
+          AND st.workflow_template_id = ANY(${allTemplateIds})
+        GROUP BY st.workflow_template_id
+      `;
 
-    // 2. Step timings for all subtask templates (one query)
-    const stepTimingRows = await this.prisma.$queryRaw<
-      {
-        subtask_template_id: string;
-        avg_completion_hours: number | null;
-        avg_active_hours: number | null;
-      }[]
-    >`
-      SELECT
-        s.subtask_template_id,
-        ROUND(
-          AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
-          1
-        )::float AS avg_completion_hours,
-        ROUND(
-          AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
-          1
-        )::float AS avg_active_hours
-      FROM subtasks s
-      WHERE s.subtask_template_id = ANY(${allSubtaskTemplateIds})
-        AND s.completed_at IS NOT NULL
-        AND s.available_at IS NOT NULL
-        AND s.completed_at >= ${thirtyDaysAgo}
-      GROUP BY s.subtask_template_id
-    `;
+      stepTimingRows = await this.prisma.$queryRaw<
+        {
+          subtask_template_id: string;
+          avg_completion_hours: number | null;
+          avg_active_hours: number | null;
+        }[]
+      >`
+        SELECT
+          s.subtask_template_id,
+          ROUND(
+            AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
+            1
+          )::float AS avg_completion_hours,
+          ROUND(
+            AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
+            1
+          )::float AS avg_active_hours
+        FROM subtasks s
+        WHERE s.subtask_template_id = ANY(${allSubtaskTemplateIds})
+          AND s.completed_at IS NOT NULL
+          AND s.available_at IS NOT NULL
+          AND s.completed_at >= ${thirtyDaysAgo}
+        GROUP BY s.subtask_template_id
+      `;
+    } else {
+      const where = this.reportingTicketWhere(user, studioId);
+      const visibleTickets = await this.prisma.ticket.findMany({
+        where: {
+          AND: [
+            where,
+            { status: { in: ['RESOLVED', 'CLOSED'] } },
+            { resolvedAt: { gte: thirtyDaysAgo } },
+          ],
+        },
+        select: { id: true },
+      });
+      const ids = visibleTickets.map((t) => t.id);
+      if (ids.length === 0) {
+        ticketAvgRows = [];
+        stepTimingRows = [];
+      } else {
+        ticketAvgRows = await this.prisma.$queryRaw<
+          { workflow_template_id: string; avg_hours: number | null }[]
+        >`
+          SELECT
+            st.workflow_template_id,
+            ROUND(
+              AVG(EXTRACT(EPOCH FROM (t.resolved_at - t.created_at)) / 3600)::numeric,
+              1
+            )::float AS avg_hours
+          FROM tickets t
+          JOIN subtasks s ON s.ticket_id = t.id
+          JOIN subtask_templates st ON st.id = s.subtask_template_id
+          WHERE t.status IN ('RESOLVED', 'CLOSED')
+            AND t.resolved_at IS NOT NULL
+            AND t.resolved_at >= ${thirtyDaysAgo}
+            AND st.workflow_template_id = ANY(${allTemplateIds})
+            AND t.id = ANY(${ids}::uuid[])
+          GROUP BY st.workflow_template_id
+        `;
+
+        stepTimingRows = await this.prisma.$queryRaw<
+          {
+            subtask_template_id: string;
+            avg_completion_hours: number | null;
+            avg_active_hours: number | null;
+          }[]
+        >`
+          SELECT
+            s.subtask_template_id,
+            ROUND(
+              AVG(EXTRACT(EPOCH FROM (s.completed_at - s.available_at)) / 3600)::numeric,
+              1
+            )::float AS avg_completion_hours,
+            ROUND(
+              AVG(EXTRACT(EPOCH FROM (s.completed_at - s.started_at)) / 3600)::numeric,
+              1
+            )::float AS avg_active_hours
+          FROM subtasks s
+          JOIN tickets t ON t.id = s.ticket_id
+          WHERE s.subtask_template_id = ANY(${allSubtaskTemplateIds})
+            AND s.completed_at IS NOT NULL
+            AND s.available_at IS NOT NULL
+            AND s.completed_at >= ${thirtyDaysAgo}
+            AND t.id = ANY(${ids}::uuid[])
+          GROUP BY s.subtask_template_id
+        `;
+      }
+    }
 
     // ── Assemble in memory ───────────────────────────────────────────────────
 

@@ -2,16 +2,9 @@
 
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket, CheckCircle2, Clock, MapPin, MessageCircle } from 'lucide-react';
-import {
-  ticketsApi,
-  dashboardApi,
-  adminApi,
-  updateTicketRowInListCaches,
-  type StudioDashboardSummaryResponse,
-} from '@/lib/api';
+import { ticketsApi, adminApi, updateTicketRowInListCaches } from '@/lib/api';
 import { Header } from '@/components/layout/Header';
 import { TicketFeedLayout } from '@/components/tickets/TicketFeedLayout';
 import { TicketFeedSearchField } from '@/components/tickets/TicketFeedSearchField';
@@ -35,68 +28,23 @@ import { TicketsTableSkeletonRows } from '@/components/inbox/ListSkeletons';
 import { POLISH_THEME, POLISH_CLASS } from '@/lib/polish';
 import { useTicketFeedIdColumnVisible } from '@/hooks/useTicketFeedIdColumnVisible';
 
-const panel = { background: POLISH_THEME.listBg, border: `1px solid ${POLISH_THEME.listBorder}` };
 const PAGE_SIZE = 20;
 
 type TabId = 'my' | 'studio' | 'dashboard';
 
-function StatCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  iconStyle,
-}: {
-  label: string;
-  value: number | string;
-  sub?: string;
-  icon: React.ElementType;
-  iconStyle: React.CSSProperties;
-}) {
-  return (
-    <div className="dashboard-card rounded-xl p-5 flex items-start gap-4" style={panel}>
-      <div className="rounded-lg p-2.5 shrink-0" style={iconStyle}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p
-          className="text-xs font-semibold uppercase tracking-wide"
-          style={{ color: POLISH_THEME.theadText }}
-        >
-          {label}
-        </p>
-        <p className="text-2xl font-bold text-[var(--color-text-primary)] mt-0.5">{value}</p>
-        {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--color-text-muted)' }}>{sub}</p>}
-      </div>
-    </div>
-  );
-}
-
-function formatHoursLabel(h: number | null): string {
-  if (h == null) return '—';
-  if (h < 1) return `${Math.round(h * 60)} min`;
-  if (h < 24) return `${h.toFixed(1)} h`;
-  return `${(h / 24).toFixed(1)} d`;
-}
-
-function BreakdownBar({ label, count, max, color }: { label: string; count: number; max: number; color?: string }) {
-  const pct = max > 0 ? Math.max(3, Math.round((count / max) * 100)) : 0;
-  return (
-    <div className="flex items-center gap-3 text-sm">
-      <span className="w-36 truncate shrink-0" style={{ color: 'var(--color-text-muted)' }}>{label}</span>
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border-default)' }}>
-        <div className="h-1.5 rounded-full transition-all" style={{ width: `${pct}%`, background: color ?? 'var(--color-accent)' }} />
-      </div>
-      <span className="w-8 text-right text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>{count}</span>
-    </div>
-  );
-}
-
 export default function PortalPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const qc = useQueryClient();
   const activeTab = (searchParams.get('tab') as TabId) ?? 'my';
+
+  useEffect(() => {
+    if (activeTab === 'dashboard') {
+      router.replace('/dashboard');
+    }
+  }, [activeTab, router]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showTicketIdColumn, toggleTicketIdColumn] = useTicketFeedIdColumnVisible();
   const handleSelect = useCallback((id: string) => {
@@ -110,6 +58,7 @@ export default function PortalPage() {
       ticketsApi.addTag(ticketId, { label }),
     onSuccess: (res, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket-filter-tags'] });
       const body = res.data;
       updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
         ...t,
@@ -138,6 +87,7 @@ export default function PortalPage() {
       ticketsApi.removeTag(ticketId, tagId),
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ['ticket', variables.ticketId] });
+      qc.invalidateQueries({ queryKey: ['ticket-filter-tags'] });
       updateTicketRowInListCaches(qc, variables.ticketId, (t) => ({
         ...t,
         tags: (t.tags ?? []).filter((x) => x.id !== variables.tagId),
@@ -165,6 +115,12 @@ export default function PortalPage() {
   });
   const taxonomy = taxonomyData?.data;
 
+  const { data: filterTagsData } = useQuery({
+    queryKey: ['ticket-filter-tags'],
+    queryFn: () => ticketsApi.listFilterTags(),
+  });
+  const filterTagOptions = filterTagsData?.data ?? [];
+
   // ─── My Tickets tab state ───────────────────────────────────────────────────
   const [myPage, setMyPage] = useState(1);
   const [mySearch, setMySearch] = useState('');
@@ -175,6 +131,7 @@ export default function PortalPage() {
   const [myStudioId, setMyStudioId] = useState<string>('');
   const [myCreatedAfter, setMyCreatedAfter] = useState<string>('');
   const [myCreatedBefore, setMyCreatedBefore] = useState<string>('');
+  const [myTagId, setMyTagId] = useState<string>('');
 
   const mySupportClass = taxonomy?.ticketClasses?.find((c) => c.code === 'SUPPORT');
   const myMaintenanceClass = taxonomy?.ticketClasses?.find((c) => c.code === 'MAINTENANCE');
@@ -204,7 +161,7 @@ export default function PortalPage() {
 
   useEffect(() => {
     setMyPage(1);
-  }, [myDebouncedSearch, myTicketClass, mySupportTopicId, myMaintenanceCategoryId, myStudioId, myCreatedAfter, myCreatedBefore]);
+  }, [myDebouncedSearch, myTicketClass, mySupportTopicId, myMaintenanceCategoryId, myStudioId, myTagId, myCreatedAfter, myCreatedBefore]);
 
   const {
     tickets: myTickets,
@@ -223,6 +180,7 @@ export default function PortalPage() {
       supportTopicId: mySupportTopicId || undefined,
       maintenanceCategoryId: myMaintenanceCategoryId || undefined,
       studioId: myStudioId || undefined,
+      tagId: myTagId || undefined,
       createdAfter: myCreatedAfter ? `${myCreatedAfter}T00:00:00.000Z` : undefined,
       createdBefore: myCreatedBefore ? `${myCreatedBefore}T23:59:59.999Z` : undefined,
     },
@@ -230,13 +188,14 @@ export default function PortalPage() {
   );
 
   const myHasTickets = myTickets.length > 0;
-  const myHasFilters = !!myDebouncedSearch || !!myTicketClass || !!mySupportTopicId || !!myMaintenanceCategoryId || !!myStudioId || !!myCreatedAfter || !!myCreatedBefore;
+  const myHasFilters = !!myDebouncedSearch || !!myTicketClass || !!mySupportTopicId || !!myMaintenanceCategoryId || !!myStudioId || !!myTagId || !!myCreatedAfter || !!myCreatedBefore;
 
   const clearMyFilters = () => {
     setMyTicketClass('');
     setMySupportTopicId('');
     setMyMaintenanceCategoryId('');
     setMyStudioId('');
+    setMyTagId('');
     setMyCreatedAfter('');
     setMyCreatedBefore('');
     setMyPage(1);
@@ -290,6 +249,14 @@ export default function PortalPage() {
         onChange={setMyStudioId}
         elevated
         className="w-48"
+      />
+      <ComboBox
+        placeholder="All tags"
+        options={filterTagOptions.map((t) => ({ value: t.id, label: t.name }))}
+        value={myTagId}
+        onChange={setMyTagId}
+        elevated
+        className="w-44"
       />
       <div className="flex items-center gap-2">
         <DateFilterInput
@@ -402,12 +369,13 @@ export default function PortalPage() {
   // ─── By Studio(s) tab state ────────────────────────────────────────────────
   const [studioPage, setStudioPage] = useState(1);
   const [studioFilter, setStudioFilter] = useState<string>('');
+  const [studioTagId, setStudioTagId] = useState<string>('');
   const [studioSearch, setStudioSearch] = useState('');
   const studioDebouncedSearch = useDebouncedValue(studioSearch, 300);
 
   useEffect(() => {
     setStudioPage(1);
-  }, [studioDebouncedSearch, studioFilter]);
+  }, [studioDebouncedSearch, studioFilter, studioTagId]);
 
   const {
     tickets: studioTickets,
@@ -423,12 +391,13 @@ export default function PortalPage() {
       search: studioDebouncedSearch || undefined,
       requesterId: user?.id ?? undefined,
       ...(studioFilter && { studioId: studioFilter }),
+      ...(studioTagId && { tagId: studioTagId }),
     },
     { enabled: !!user && activeTab === 'studio' },
   );
 
   const studioHasTickets = studioTickets.length > 0;
-  const studioHasFilters = !!studioFilter || !!studioDebouncedSearch;
+  const studioHasFilters = !!studioFilter || !!studioTagId || !!studioDebouncedSearch;
 
   const studioPagination =
     studioTotalPages > 1 ? (
@@ -466,6 +435,14 @@ export default function PortalPage() {
         onChange={setStudioSearch}
         elevated
         className="w-56"
+      />
+      <ComboBox
+        placeholder="All tags"
+        options={filterTagOptions.map((t) => ({ value: t.id, label: t.name }))}
+        value={studioTagId}
+        onChange={setStudioTagId}
+        elevated
+        className="w-44"
       />
     </div>
   );
@@ -548,24 +525,6 @@ export default function PortalPage() {
     </table>
   );
 
-  // ─── Dashboard tab content (Stage 5: summary-only via /api/dashboard/summary)
-  const [dashboardStudioFilter, setDashboardStudioFilter] = useState<string>('');
-
-  const { data: dashSummaryData, isLoading: dashSummaryLoading } = useQuery({
-    queryKey: ['dashboard-summary', dashboardStudioFilter],
-    queryFn: () => dashboardApi.summary(dashboardStudioFilter || undefined),
-    enabled: activeTab === 'dashboard',
-  });
-
-  const dashSummary = dashSummaryData?.data as StudioDashboardSummaryResponse | undefined;
-
-  const selectedStudioName = useMemo(() => {
-    if (!dashboardStudioFilter) {
-      return allowedStudios.length === 1 ? allowedStudios[0]?.name : 'All locations';
-    }
-    return allowedStudios.find((s) => s.id === dashboardStudioFilter)?.name ?? 'Location';
-  }, [dashboardStudioFilter, allowedStudios]);
-
   const portalFeedTicketIds = useMemo(() => {
     if (activeTab === 'my') return myTickets.map((t) => t.id);
     if (activeTab === 'studio') return studioTickets.map((t) => t.id);
@@ -575,6 +534,12 @@ export default function PortalPage() {
   return (
     <div className="flex flex-col h-full" style={{ background: 'var(--color-bg-page)' }}>
       <Header title="My Tickets" />
+      {activeTab === 'dashboard' ? (
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-[var(--color-text-muted)]">
+          Opening dashboard…
+        </div>
+      ) : (
+        <>
       {/* Tab bodies controlled by ?tab=… from sidebar navigation */}
       {activeTab === 'my' && (
         <TicketFeedLayout
@@ -605,126 +570,9 @@ export default function PortalPage() {
           initialSkeleton={studioTableSkeleton}
         />
       )}
-
-      {activeTab === 'dashboard' && (
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className={`max-w-5xl mx-auto ${POLISH_CLASS.sectionGap}`}>
-            {/* Location header */}
-            <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-              {selectedStudioName}
-            </h2>
-
-            {/* Location filter when multiple allowed studios */}
-            {allowedStudios.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className="text-xs font-semibold uppercase tracking-wide"
-                  style={{ color: POLISH_THEME.metaMuted }}
-                >
-                  Location:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setDashboardStudioFilter('')}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                  style={{
-                    background: !dashboardStudioFilter ? 'var(--color-accent)' : 'transparent',
-                    color: !dashboardStudioFilter ? '#ffffff' : 'var(--color-text-muted)',
-                    border: `1px solid ${
-                      !dashboardStudioFilter ? 'var(--color-accent)' : 'var(--color-border-default)'
-                    }`,
-                  }}
-                >
-                  All
-                </button>
-                {allowedStudios.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setDashboardStudioFilter(s.id)}
-                    className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-                    style={{
-                      background: dashboardStudioFilter === s.id ? 'var(--color-accent)' : 'transparent',
-                      color: dashboardStudioFilter === s.id ? '#ffffff' : 'var(--color-text-muted)',
-                      border: `1px solid ${
-                        dashboardStudioFilter === s.id ? 'var(--color-accent)' : 'var(--color-border-default)'
-                      }`,
-                    }}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Summary cards */}
-            {dashSummaryLoading ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin h-8 w-8 rounded-full border-4 border-[var(--color-accent)] border-t-transparent" />
-              </div>
-            ) : !dashSummary ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3" style={{ color: 'var(--color-text-muted)' }}>
-                <Ticket className="h-10 w-10" />
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>No data available</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <StatCard
-                    label="Open Tickets"
-                    value={dashSummary.openTickets}
-                    icon={Clock}
-                    iconStyle={{ background: 'rgba(251,191,36,0.15)', color: '#d97706' }}
-                  />
-                  <StatCard
-                    label="Completed"
-                    value={dashSummary.completedTickets}
-                    icon={CheckCircle2}
-                    iconStyle={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
-                  />
-                  <StatCard
-                    label="Avg First Response"
-                    value={formatHoursLabel(dashSummary.avgFirstResponseHours)}
-                    sub="Last 30 days"
-                    icon={MessageCircle}
-                    iconStyle={{ background: 'rgba(14,165,233,0.14)', color: '#0284c7' }}
-                  />
-                  <StatCard
-                    label="Avg Completion"
-                    value={formatHoursLabel(dashSummary.avgCompletionHours)}
-                    sub="Last 30 days"
-                    icon={Clock}
-                    iconStyle={{ background: 'rgba(99,102,241,0.15)', color: '#818cf8' }}
-                  />
-                </div>
-
-                {/* By Location breakdown */}
-                {dashSummary.byLocation.length > 0 && (
-                  <div className="dashboard-card rounded-xl p-5" style={panel}>
-                    <div className="flex items-center gap-2 mb-4">
-                      <MapPin className="h-4 w-4" style={{ color: 'var(--color-text-muted)' }} />
-                      <h3 className="text-sm font-semibold" style={{ color: 'var(--color-text-primary)' }}>
-                        Tickets by Location
-                      </h3>
-                    </div>
-                    <div className="space-y-3">
-                      {dashSummary.byLocation.map((row) => (
-                        <BreakdownBar
-                          key={row.locationId}
-                          label={row.locationName}
-                          count={row.count}
-                          max={Math.max(...dashSummary.byLocation.map((r) => r.count), 1)}
-                          color="#0ea5e9"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        </>
       )}
+
       <TicketDrawer
         ticketId={selectedId}
         onClose={handleClose}
