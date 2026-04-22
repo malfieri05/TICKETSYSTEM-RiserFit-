@@ -72,7 +72,7 @@ function LoginPageInner() {
       if (role === 'DEPARTMENT_USER') {
         router.push('/tickets');
       } else if (role === 'STUDIO_USER') {
-        router.push('/portal');
+        router.push('/assistant');
       } else {
         router.push('/tickets');
       }

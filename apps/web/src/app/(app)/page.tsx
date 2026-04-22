@@ -4,14 +4,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
-/** Root app redirect: STUDIO_USER → /portal, others → /tickets. */
+/** Root app redirect: STUDIO_USER → /assistant (default hub), others → /tickets. */
 export default function HomePage() {
   const router = useRouter();
   const { user } = useAuth();
 
   useEffect(() => {
     if (user?.role === 'STUDIO_USER') {
-      router.replace('/portal');
+      router.replace('/assistant');
     } else if (user) {
       router.replace('/tickets');
     }

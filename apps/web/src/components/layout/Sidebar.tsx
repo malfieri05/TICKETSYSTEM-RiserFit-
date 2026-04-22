@@ -257,6 +257,36 @@ export function Sidebar() {
             {!collapsed ? <SidebarLabel>New Ticket</SidebarLabel> : null}
           </button>
 
+          {isStudioUser &&
+            (collapsed ? (
+              <InstantTooltip
+                content="AI Assistant"
+                compact
+                placement="above"
+                preventPlacementFlip
+                className="mb-0.5 block min-w-0"
+              >
+                <Link
+                  href="/assistant"
+                  data-active={pathname === '/assistant' ? 'true' : undefined}
+                  className={linkBase(pathname === '/assistant')}
+                  aria-label="AI Assistant"
+                >
+                  <Bot className="h-4 w-4 shrink-0" aria-hidden />
+                </Link>
+              </InstantTooltip>
+            ) : (
+              <Link
+                href="/assistant"
+                data-active={pathname === '/assistant' ? 'true' : undefined}
+                className={cn(linkBase(pathname === '/assistant'), 'mb-0.5')}
+                aria-label="AI Assistant"
+              >
+                <Bot className="h-4 w-4 shrink-0" aria-hidden />
+                <SidebarLabel>AI Assistant</SidebarLabel>
+              </Link>
+            ))}
+
           {navItems.map((item) => {
             const { href, label, icon: Icon, tab } = item;
             const isPortal = href === '/portal';
@@ -486,6 +516,7 @@ export function Sidebar() {
           )}
 
           {!isAdmin &&
+            !isStudioUser &&
             (collapsed ? (
               <InstantTooltip content="AI Assistant" compact placement="above" preventPlacementFlip className="block min-w-0">
                 <Link
